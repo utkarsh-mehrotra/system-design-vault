@@ -4,7 +4,6 @@
     "Scaling",
     "Latency",
     "Databases",
-    "Sharding",
     "Migration",
     "Caching",
     "Consistency",
@@ -15,11 +14,8 @@
     "Observability",
     "Operations",
     "Architecture",
-    "Leadership",
     "Cost & compliance",
-    "Security",
-    "AI",
-    "Infrastructure"
+    "Security"
   ],
   "categories": [
     {
@@ -457,7 +453,6 @@
         "High cardinality, even access, aligned with the dominant query, and stable over time. Avoid monotonically increasing keys that create a hot tail."
       ],
       "tags": [
-        "Sharding",
         "Databases"
       ],
       "legacy": [
@@ -480,9 +475,8 @@
         "Choose a well-distributed key, salt or split heavy keys, cache hot reads, and monitor per-partition load so skew is seen before it becomes an outage."
       ],
       "tags": [
-        "Sharding",
-        "Operations",
-        "Databases"
+        "Databases",
+        "Operations"
       ],
       "legacy": [
         7,
@@ -501,7 +495,6 @@
         "Shard on the dimension most queries filter by and that spreads load evenly. Cover cross-shard queries, rebalancing, and tenant or region affinity for locality and compliance."
       ],
       "tags": [
-        "Sharding",
         "Databases"
       ],
       "legacy": [
@@ -520,7 +513,6 @@
         "Secondary indexes in a sharded system are either local to each shard (cheap writes, scatter-gather reads) or global and partitioned by the indexed value (single-shard reads, cross-shard writes that are typically asynchronous). Choose by query frequency and how fresh the index must be."
       ],
       "tags": [
-        "Sharding",
         "Databases"
       ],
       "legacy": []
@@ -644,7 +636,7 @@
         "Row-level with tenant id on every query and enforced in the data layer, schema per tenant, or database per tenant. Trade isolation strength against cost and operational load. Plan noisy-neighbor controls and tenant export."
       ],
       "tags": [
-        "Sharding",
+        "Databases",
         "Reliability"
       ],
       "legacy": [
@@ -2318,8 +2310,7 @@
         "The incident commander's job is coordination, not debugging: establish roles and communication, keep the team focused on restoring service rather than finding root cause, make decisions with incomplete information, and keep stakeholders informed on a predictable cadence."
       ],
       "tags": [
-        "Operations",
-        "Leadership"
+        "Operations"
       ],
       "legacy": []
     },
@@ -2335,7 +2326,6 @@
         "Deployment strategies trade blast radius, speed and cost. Rolling replaces instances gradually; blue-green switches all traffic between two environments; canary exposes a small slice first and expands on healthy metrics. None of them protect against incompatible data changes."
       ],
       "tags": [
-        "Infrastructure",
         "Reliability"
       ],
       "legacy": []
@@ -2352,7 +2342,6 @@
         "Dynamic configuration, feature flags, routing rules and data files can change the behaviour of every server at once, so they need the same safety as code: review, validation, staged rollout across failure domains, automatic rollback and fail-safe loading."
       ],
       "tags": [
-        "Infrastructure",
         "Reliability"
       ],
       "legacy": []
@@ -2369,7 +2358,6 @@
         "Autoscaling reacts in minutes to the metric you choose, so it fails when the metric isn't the bottleneck, the spike is faster than scaling, new instances start cold, or more instances overwhelm a shared dependency. Combine it with headroom, the right signals, warm-up and load shedding."
       ],
       "tags": [
-        "Infrastructure",
         "Scaling"
       ],
       "legacy": []
@@ -2386,7 +2374,6 @@
         "Serverless functions scale out to many concurrent instances, each with its own connections, which overwhelms relational databases built for a modest number of long-lived connections. Use connection proxies, concurrency caps and connection reuse, or data stores designed for this access pattern."
       ],
       "tags": [
-        "Infrastructure",
         "Databases"
       ],
       "legacy": []
@@ -2403,7 +2390,6 @@
         "Active-active means serving production traffic from multiple regions at once, which can deliver very high availability and lower latency, but at the cost of roughly doubled infrastructure, complex data replication or partitioning, and much harder operations. Justify it with the cost of downtime, not as a default."
       ],
       "tags": [
-        "Infrastructure",
         "Reliability"
       ],
       "legacy": []
@@ -2420,8 +2406,7 @@
         "Good estimates make every assumption explicit: users to actions, actions to requests (including fan-out), average to peak, items to bytes (including metadata, indexes and replication), and today to the planning horizon. Round numbers are fine; missing factors aren't."
       ],
       "tags": [
-        "Scaling",
-        "Infrastructure"
+        "Scaling"
       ],
       "legacy": []
     },
@@ -2437,7 +2422,6 @@
         "RAG quality is mostly retrieval quality. Chunk by document structure, combine keyword and semantic search, rerank, filter by the user's permissions, keep the index fresh, ground answers with citations, and measure retrieval and answer quality with an evaluation set."
       ],
       "tags": [
-        "AI",
         "Architecture"
       ],
       "legacy": []
@@ -2454,7 +2438,6 @@
         "Vector search at scale uses approximate nearest-neighbour (ANN) indexes that trade recall, latency, memory and update cost. Size memory explicitly, choose the index type to fit, measure recall against exact search, and design metadata filtering so it doesn't silently destroy result quality."
       ],
       "tags": [
-        "AI",
         "Databases"
       ],
       "legacy": []
@@ -2471,7 +2454,6 @@
         "LLM cost and latency scale with tokens processed and generated, and with serving efficiency. Reduce input and output tokens, route requests to the smallest model that meets quality, stream to cut perceived latency, reuse work with caching, and batch where latency allows, all measured against a quality bar."
       ],
       "tags": [
-        "AI",
         "Scaling"
       ],
       "legacy": []
@@ -2488,7 +2470,6 @@
         "LLM outputs can be cached, but the cache key must capture everything that affects the answer: model, prompt version, parameters, retrieved context and user-specific data. Exact-match and prefix caching are safe; semantic caching saves more but risks wrong or leaked answers and needs strict scoping."
       ],
       "tags": [
-        "AI",
         "Caching"
       ],
       "legacy": []
@@ -2505,7 +2486,6 @@
         "External LLM APIs have rate limits on requests and tokens, variable latency and occasional outages. Treat them like any critical third-party dependency: centralised quota management, prioritisation, timeouts, careful retries, pre-tested fallbacks with their own prompts, and degraded experiences when nothing is available."
       ],
       "tags": [
-        "AI",
         "Reliability"
       ],
       "legacy": []
@@ -2522,7 +2502,6 @@
         "Treat prompts and model versions like code: version them, test them against representative evaluation sets with clear graders, roll them out gradually behind flags, and monitor quality, safety, cost and latency online with the ability to roll back."
       ],
       "tags": [
-        "AI",
         "Reliability"
       ],
       "legacy": []
@@ -2539,7 +2518,6 @@
         "LLMs can't reliably distinguish instructions from data, so any untrusted content they read can manipulate them. Defend by design: least-privilege tools, enforce authorisation outside the model, require confirmation for consequential actions, treat model output as untrusted input, filter and monitor, and rate-limit abuse."
       ],
       "tags": [
-        "AI",
         "Security"
       ],
       "legacy": []
@@ -2635,8 +2613,7 @@
         "Clear extension points, stable contracts, isolation so one team's plugin cannot take down others, and ownership documented per component."
       ],
       "tags": [
-        "Architecture",
-        "Leadership"
+        "Architecture"
       ],
       "legacy": [
         77
@@ -2713,7 +2690,6 @@
         "State requirements and constraints, show alternatives with costs, say what you are giving up, and name the signal that would make you reverse the decision."
       ],
       "tags": [
-        "Leadership",
         "Architecture"
       ],
       "legacy": [
@@ -2736,7 +2712,7 @@
         "Understand the goal first, ask questions about failure and scale, separate must-fix from preference, suggest alternatives, and acknowledge what is solid."
       ],
       "tags": [
-        "Leadership"
+        "Architecture"
       ],
       "legacy": [
         46,
@@ -2755,7 +2731,7 @@
         "Start from the problem and one request path, add pieces only as the problem demands them, use a single diagram, and check understanding by asking them to predict a failure."
       ],
       "tags": [
-        "Leadership"
+        "Architecture"
       ],
       "legacy": [
         85
@@ -2776,7 +2752,6 @@
         "Complexity without a current requirement, abstractions with one user, more services than teams, and anything you cannot explain the need for in a sentence."
       ],
       "tags": [
-        "Leadership",
         "Architecture"
       ],
       "legacy": [
@@ -2799,7 +2774,6 @@
         "No failure handling for known risks, no capacity estimate, no rollback or recovery path, unclear ownership, and a single point of failure on a critical path."
       ],
       "tags": [
-        "Leadership",
         "Reliability"
       ],
       "legacy": [
@@ -2819,7 +2793,6 @@
         "List the guarantees that must hold, remove components that do not protect one, merge things that always change together, and prove the invariants still hold."
       ],
       "tags": [
-        "Leadership",
         "Reliability"
       ],
       "legacy": [
@@ -2838,7 +2811,6 @@
         "Choose proven components, minimize moving parts, prefer simple failure modes, and spend novelty budget only where it creates real advantage."
       ],
       "tags": [
-        "Leadership",
         "Reliability"
       ],
       "legacy": [
@@ -2857,7 +2829,6 @@
         "Tie each feature to a present requirement or measured risk, defer what is cheap to add later, and write the non-goals down."
       ],
       "tags": [
-        "Leadership",
         "Architecture"
       ],
       "legacy": [
@@ -2876,8 +2847,7 @@
         "Small blast radius, progressive rollout, reversible changes, backups and restore tests, feature flags, and guardrails on destructive operations."
       ],
       "tags": [
-        "Reliability",
-        "Leadership"
+        "Reliability"
       ],
       "legacy": [
         139
@@ -2898,7 +2868,7 @@
         "Record context, goals and non-goals, alternatives considered, decisions and their reasons, and known risks. Date it, link follow-ups, and keep diagrams simple."
       ],
       "tags": [
-        "Leadership"
+        "Architecture"
       ],
       "legacy": [
         45,
@@ -2917,7 +2887,6 @@
         "Documented runbooks, shared on-call, boring technology, clear ownership boundaries, and no component only one person understands."
       ],
       "tags": [
-        "Leadership",
         "Operations"
       ],
       "legacy": [
@@ -2936,7 +2905,6 @@
         "Driving work across teams you don't manage is about reducing their cost and increasing their reasons: make migration nearly free with tooling and hands-on help, explain the benefit in their terms, create visible momentum, and reserve escalation for the end."
       ],
       "tags": [
-        "Leadership",
         "Migration"
       ],
       "legacy": []
@@ -2953,7 +2921,6 @@
         "Pushing back works when it gives decision-makers better choices, not just objections. Understand the goal behind the deadline, quantify the risk, offer concrete options trading scope, time and risk, and once a decision is made, commit and record it."
       ],
       "tags": [
-        "Leadership",
         "Architecture"
       ],
       "legacy": []
@@ -2970,7 +2937,6 @@
         "Own it quickly and plainly, prioritise mitigation, communicate impact honestly, and then fix the system that allowed the mistake, not just your own carefulness. Blameless postmortems work only if the person who made the change is open about it."
       ],
       "tags": [
-        "Leadership",
         "Operations"
       ],
       "legacy": []
@@ -2987,7 +2953,6 @@
         "Tech debt gets prioritised when it's expressed as business cost and risk, tied to goals people already care about, and delivered incrementally with visible results. Treat it like a product backlog with a return on investment, not a moral argument."
       ],
       "tags": [
-        "Leadership",
         "Architecture"
       ],
       "legacy": []
@@ -3004,7 +2969,6 @@
         "Standardisation reduces organisational costs (operations, security, hiring, shared tooling); local optimisation captures fit-for-purpose benefits. Decide by who bears the cost of variety, and make exceptions deliberate, owned and documented rather than forbidden or invisible."
       ],
       "tags": [
-        "Leadership",
         "Architecture"
       ],
       "legacy": []
@@ -3021,7 +2985,6 @@
         "Decide what success means before the change: specific outcome metrics tied to the problem it was meant to solve, with baselines. Measure after rollout over comparable periods, account for confounding changes and costs, and report results honestly, including disappointments."
       ],
       "tags": [
-        "Leadership",
         "Observability"
       ],
       "legacy": []
