@@ -19,3 +19,7 @@ Staff-level system design question index: 93 questions in 10 categories, each wi
 ## Deploy
 
 Vercel: `npx vercel --prod` from this folder (static, no framework).
+
+## Roadmap
+
+See `docs/answer-plan.md` for the plan to add in-depth answers (and the debate on whether they are worth it).
