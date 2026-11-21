@@ -1,0 +1,66 @@
+{
+  "thesis": "Tie every feature and component to a present requirement or a measured risk, defer what's cheap to add later, and write the non-goals down so the decision survives the next planning meeting. Saying no is a design activity, not an absence of one.",
+  "pitch": "I'd sort candidate features into three groups. Must have now: needed for the core use case, legal or safety requirements, or protection against a known, costly risk. Cheap to add later: features whose absence doesn't lock in anything, like extra reports, more configuration, or another integration; these are deferred without guilt. Expensive to add later: things that shape data models, public APIs or security boundaries; these deserve discussion now, even if the decision is to keep a seam rather than build the feature. Then I'd write explicit non-goals in the design doc, such as 'we won't support multi-currency in v1' and 'we won't build our own notification system', so scope creep has to argue against a written decision. I'd also look at the cost side: every feature adds code to maintain, test surface, documentation, support load and failure modes, so 'nice to have' needs to be worth that ongoing cost.",
+  "points": [
+    {
+      "h": "Requirement or risk test",
+      "d": "Each feature must trace to a current user need, legal requirement, or measured risk. 'Someone might want it' isn't enough."
+    },
+    {
+      "h": "Reversibility test",
+      "d": "Defer features that are cheap to add later; discuss now the ones that would force data model, API or security changes later."
+    },
+    {
+      "h": "Keep seams, not features",
+      "d": "For likely future needs, make the design not preclude them (an id format, a currency field) without building the feature."
+    },
+    {
+      "h": "Write non-goals",
+      "d": "Explicit non-goals in the design doc stop scope creep and make trade-offs visible to stakeholders."
+    },
+    {
+      "h": "Count the ongoing cost",
+      "d": "Maintenance, testing, documentation, support and operational load for every feature, forever."
+    },
+    {
+      "h": "Use evidence to add later",
+      "d": "Usage data, customer requests and incidents decide when a deferred feature becomes a requirement."
+    }
+  ],
+  "decision": "Build what the core use case and known risks require; keep cheap seams for likely needs; defer everything else with written non-goals and triggers for reconsideration.",
+  "numbers": [
+    "Rough heuristic: the lifetime cost of a feature is often several times its build cost once maintenance, support and the drag on future changes are counted."
+  ],
+  "pitfalls": [
+    "Building configurability for imagined future customers.",
+    "Deferring something that's expensive to retrofit (like multi-tenancy or audit logging in a regulated domain).",
+    "Non-goals not written down, so they're relitigated every month.",
+    "Saying no without explaining the trade-off, which damages trust with stakeholders."
+  ],
+  "followups": [
+    {
+      "q": "A stakeholder insists on a feature you think is unnecessary. What do you do?",
+      "a": "Ask for the underlying need and evidence, estimate the full cost, propose a cheaper way to meet the need or a trigger to revisit, and escalate to the product owner if needed."
+    },
+    {
+      "q": "How do you decide what's expensive to add later?",
+      "a": "Anything that changes the shape of stored data, public APIs, security or tenancy boundaries, or requires migrating many clients."
+    },
+    {
+      "q": "How do non-goals help later?",
+      "a": "They record why something was excluded, so future teams can tell whether circumstances have changed rather than guessing."
+    }
+  ],
+  "example": "For a new lending product, the team deferred co-borrower support, custom report builders and a partner API, but stored amounts with currency codes and kept applicant data in a structure that could hold multiple applicants. When co-borrowers were added a year later, no migration was needed.",
+  "related": [
+    "tell-design-over-engineered",
+    "design-something-mvp-first-still",
+    "write-design-doc-still-useful"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Yagni",
+      "url": "https://martinfowler.com/bliki/Yagni.html"
+    }
+  ]
+}

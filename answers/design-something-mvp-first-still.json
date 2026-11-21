@@ -1,0 +1,75 @@
+{
+  "thesis": "Build the cheapest thing that meets today's load, but invest early in the few seams that are expensive to retrofit: identifiers, data ownership and boundaries, API contracts, and observability. Everything else can be replaced later because those stay stable.",
+  "pitch": "For an MVP I'd pick boring, managed components: one deployable, one relational database, a managed queue if needed, and no custom infrastructure. The time saved goes into four things that are painful to change later. Identifiers: globally unique, non-sequential ids from day one, because renumbering is miserable. Data ownership: clear modules that own their tables, even inside a monolith, so later splits follow existing lines. API contracts: versionable, additive-friendly public APIs with consistent error formats, because external clients are the hardest thing to migrate. Observability: structured logs, basic metrics and tracing hooks, because you can't scale what you can't see. I'd also keep the infrastructure as code from the start. Then I'd write down the known scaling limits and the trigger for each, like 'move search out of Postgres when queries exceed X', so growth is planned rather than an emergency.",
+  "points": [
+    {
+      "h": "Boring, managed, single deployable",
+      "d": "A monolith on managed services lets a small team ship fast. Complexity is added only when a measured need appears."
+    },
+    {
+      "h": "Seam 1: identifiers",
+      "d": "Use UUIDv7 or similar globally unique ids everywhere. Sequential integers leak volume and make merging, sharding and multi-region painful."
+    },
+    {
+      "h": "Seam 2: data ownership",
+      "d": "Modules own their tables; no cross-module joins or writes. This keeps a later split or extraction mechanical."
+    },
+    {
+      "h": "Seam 3: API contracts",
+      "d": "Consistent resource design, pagination via cursors, error formats, idempotency keys on writes, and versioning rules. External clients lock these in quickly."
+    },
+    {
+      "h": "Seam 4: observability",
+      "d": "Structured logs with request ids, RED metrics and trace propagation from the first version."
+    },
+    {
+      "h": "Infrastructure as code",
+      "d": "Even small setups in code, so environments can be recreated and changes reviewed."
+    },
+    {
+      "h": "Write down the limits",
+      "d": "Known bottlenecks with the metric and threshold that trigger the next step. Makes scaling a planned project."
+    }
+  ],
+  "decision": "Spend complexity budget only on seams that are expensive to change later; keep everything else as simple as possible. Revisit the limits list monthly as usage grows.",
+  "numbers": [
+    "A single modern relational database and a handful of app instances can typically serve thousands of requests per second, far beyond most MVPs' first year."
+  ],
+  "pitfalls": [
+    "Microservices, Kubernetes and event sourcing for a product with no users yet.",
+    "Sequential ids exposed in URLs and APIs.",
+    "Shared tables across modules, making later splits a rewrite.",
+    "No logging or metrics, so the first scaling problem is diagnosed blind."
+  ],
+  "followups": [
+    {
+      "q": "What would you deliberately not build?",
+      "a": "Multi-region, custom caching layers, a plugin system, and generic configurability, until there's a measured need."
+    },
+    {
+      "q": "How do you avoid the MVP becoming permanent technical debt?",
+      "a": "Keep a visible list of shortcuts with their triggers, and budget time each cycle to address the ones approaching their limits."
+    },
+    {
+      "q": "Which decision is hardest to reverse?",
+      "a": "Public API shapes and data models with external dependents. Spend design time there."
+    }
+  ],
+  "example": "A lending startup launched on one Rails app and Postgres, with UUIDs, module-owned tables, cursor pagination and idempotency keys on payment endpoints. Two years later, extracting underwriting into a service took weeks, not months, because its tables and APIs were already separate.",
+  "related": [
+    "splitting-monolith-pay-itself",
+    "decide-not-build-system",
+    "generate-unique-ids-across-regions",
+    "tell-design-over-engineered"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Monolith first",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    },
+    {
+      "title": "Dan McKinley: Choose boring technology",
+      "url": "https://mcfunley.com/choose-boring-technology"
+    }
+  ]
+}

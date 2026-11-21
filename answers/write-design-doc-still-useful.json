@@ -1,0 +1,75 @@
+{
+  "thesis": "Write down what will still matter when the code has changed: the context and constraints, the goals and non-goals, the alternatives considered, and the decisions with their reasons. Reasons age well; diagrams and implementation details don't. Date it, keep it short, and link decisions to follow-up records as things change.",
+  "pitch": "In three years, nobody will need the class diagram, because the code shows that. They'll need to know why: what problem we were solving, which constraints we had, such as team size, deadline, regulation or traffic, which options we considered and why we rejected them, and what we explicitly chose not to do. So I'd structure the doc as context, goals and non-goals, the proposed design at the level of components and data flows, alternatives considered with honest trade-offs, risks and open questions, and a decision record. I'd keep diagrams simple and high-level so they stay true longer. The doc gets a date, an author and a status. When decisions change later, I'd add short architecture decision records that link back, rather than silently editing history, so the trail of reasoning survives. And I'd store it next to the code or in a searchable place people actually look.",
+  "points": [
+    {
+      "h": "Context and constraints",
+      "d": "The problem, the users, and the forces at the time: scale, deadline, team, regulation. Future readers judge the decision against these."
+    },
+    {
+      "h": "Goals and non-goals",
+      "d": "What success means and what was deliberately excluded. Non-goals prevent future readers from assuming omissions were oversights."
+    },
+    {
+      "h": "Design at the right altitude",
+      "d": "Components, data ownership, flows and key interfaces. Skip details that the code expresses better and that will change quickly."
+    },
+    {
+      "h": "Alternatives considered",
+      "d": "Two or three real options with trade-offs, including why the chosen one won. This is the most valuable section later."
+    },
+    {
+      "h": "Risks and open questions",
+      "d": "Known weaknesses and assumptions, so future teams know what to watch and what might have changed."
+    },
+    {
+      "h": "Dated, owned, with status",
+      "d": "Draft, approved, superseded. A reader should know immediately whether it's current."
+    },
+    {
+      "h": "Decision records for changes",
+      "d": "Short ADRs for later decisions, linked from the original doc, preserve the reasoning trail without rewriting history."
+    }
+  ],
+  "decision": "Design docs for significant or hard-to-reverse decisions; ADRs for smaller decisions and changes. Store them where the code lives or in a well-indexed repository.",
+  "numbers": [
+    "Length guide: most design docs are clearer at a handful of pages; if it's much longer, split decisions into separate ADRs or appendices."
+  ],
+  "pitfalls": [
+    "Docs that describe implementation details already in the code.",
+    "No alternatives section, so readers can't tell whether options were considered.",
+    "Editing the original doc to match current reality, losing the history of why.",
+    "Docs stored where nobody can find them."
+  ],
+  "followups": [
+    {
+      "q": "How do you keep docs from going stale?",
+      "a": "Don't try to keep them current in detail; mark status, link superseding ADRs, and keep living reference docs (runbooks, API docs) separate."
+    },
+    {
+      "q": "What's an ADR?",
+      "a": "A short record of one decision: context, decision, status and consequences. Michael Nygard popularised the format."
+    },
+    {
+      "q": "Who should review a design doc?",
+      "a": "People who will build it, operate it, depend on it, and someone outside the team for a fresh view on assumptions."
+    }
+  ],
+  "example": "A 2023 doc explaining why the team chose a single Postgres instance over a distributed database (team of five, 2,000 writes/s peak, regulator-mandated simplicity) saved a later team weeks of debate: they saw the constraints had changed, wrote an ADR superseding it, and moved to partitioning with the original reasoning as a baseline.",
+  "related": [
+    "defend-design-trade-off-skeptical",
+    "review-peer-s-design-deeply",
+    "decide-not-build-system",
+    "design-systems-owned-teams-not"
+  ],
+  "sources": [
+    {
+      "title": "Michael Nygard: Documenting architecture decisions",
+      "url": "https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions"
+    },
+    {
+      "title": "ADR GitHub organisation: Architecture decision records",
+      "url": "https://adr.github.io/"
+    }
+  ]
+}

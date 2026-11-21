@@ -1,0 +1,75 @@
+{
+  "thesis": "A design is dangerously under-engineered when it has no answer for failures you can already name: no plan for a dependency outage, no capacity numbers, no way to roll back or recover data, a single point of failure on a critical path, or only one person who understands it.",
+  "pitch": "The test is whether the design has an answer for foreseeable problems, not exotic ones. I'd ask: what happens when each dependency is down or slow; is there a timeout, a fallback, or at least a clear failure mode? What are the expected and peak loads, and has anyone checked the design handles them with headroom? How do we roll back a bad deploy, and how do we recover if data is corrupted; are there tested backups? Is there a single component whose failure takes down a critical path with no redundancy? Can we tell it's broken before customers tell us, meaning monitoring and alerts? Who owns it and who else understands it? And for money or personal data: are there idempotency, audit and access controls? A missing answer to any of these on a critical system is a real risk, not a nice-to-have. The fix is targeted: add the specific safeguard, not a platform.",
+  "points": [
+    {
+      "h": "No failure handling for known risks",
+      "d": "No timeouts, retries, fallbacks or failure modes defined for dependencies that will certainly fail sometimes."
+    },
+    {
+      "h": "No capacity estimate",
+      "d": "Nobody has estimated peak load or checked limits (connections, throughput, storage growth)."
+    },
+    {
+      "h": "No rollback or recovery path",
+      "d": "Deploys can't be reverted safely, migrations are one-way, backups are untested or missing."
+    },
+    {
+      "h": "Single points of failure on critical paths",
+      "d": "One instance, one zone, one manual step, one credential that everything depends on."
+    },
+    {
+      "h": "No observability",
+      "d": "No metrics, logs or alerts that would reveal problems before customers report them."
+    },
+    {
+      "h": "Bus factor of one",
+      "d": "Only one person understands or can operate it; no docs or runbooks."
+    },
+    {
+      "h": "Missing domain safeguards",
+      "d": "No idempotency for payments, no audit trail for regulated actions, no access controls for personal data."
+    }
+  ],
+  "decision": "Critical systems must have answers for dependency failure, capacity, rollback, recovery, observability and ownership before launch. Add the specific missing safeguard; don't use under-engineering as a reason for a rewrite.",
+  "numbers": [
+    "Minimum bar example for a critical service: at least two instances across zones, timeouts on every call, tested backup restore, an SLO with alerting, and a runbook."
+  ],
+  "pitfalls": [
+    "Calling necessary safeguards 'over-engineering' to ship faster.",
+    "Assuming the cloud provider handles availability for you.",
+    "Untested backups counted as a recovery plan.",
+    "Launching with the only expert about to go on leave."
+  ],
+  "followups": [
+    {
+      "q": "How do you prioritise which gaps to fix first?",
+      "a": "By likelihood times impact: dependency failures and bad deploys are frequent; data loss is rare but catastrophic. Fix cheap, high-impact gaps (timeouts, backups, rollback) first."
+    },
+    {
+      "q": "How do you raise this without blocking a launch unreasonably?",
+      "a": "List specific risks with concrete failure scenarios and the minimal fix for each, and agree which must be done before launch and which can follow with dates."
+    },
+    {
+      "q": "Over- vs under-engineering in the same design?",
+      "a": "Common: elaborate abstractions with no timeouts or backups. Complexity in the wrong place is both."
+    }
+  ],
+  "example": "A new disbursement service had elegant code but one instance, no timeouts on the bank API, and no idempotency on transfers. A review listed three concrete failure scenarios, including double disbursement on retry. Adding a second instance, a 5-second timeout with a pending state, and idempotency keys took a week and was done before launch.",
+  "related": [
+    "tell-design-over-engineered",
+    "list-ways-three-tier-service",
+    "make-rebuild-scratch-possible-if",
+    "design-systems-owned-teams-not"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Addressing cascading failures",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    },
+    {
+      "title": "AWS Well-Architected Framework: Reliability pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
+    }
+  ]
+}

@@ -80,7 +80,7 @@ Hard limits that address the "against" side:
 
 The 48 merged cards show two overlapping outlines. Fold each pair into a single outline with no repetition. This is fast, improves the page immediately, and gives Phase 2 a clean starting point.
 
-### Phase 2 — Write the cards by category (about 9 sessions, ~10 cards each)
+### Phase 2 — Write the cards by category ✅ done (all 93, 2026-11-21)
 
 Order by how often each topic comes up in staff loops and how much depth it needs:
 

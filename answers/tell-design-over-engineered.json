@@ -1,0 +1,75 @@
+{
+  "thesis": "A design is over-engineered when it carries complexity with no current requirement or measured risk behind it: abstractions with one user, flexibility nobody has asked for, more moving parts than people to run them, and components whose need you can't explain in a sentence.",
+  "pitch": "I'd test every component against a simple question: what requirement or risk does this address today, and what happens if we remove it? If the answer is 'we might need it later' with no evidence, that's a warning sign. Concrete signals: abstractions or plugin systems with exactly one implementation; configuration for options nobody has requested; multiple services for a team of four, so every feature crosses network boundaries; distributed infrastructure, like Kafka, Kubernetes or a service mesh, for load a single database and a couple of servers would handle; and custom frameworks where a library exists. Another signal is operational: more systems than the team can realistically monitor, patch and be on call for. Over-engineering isn't free insurance; it slows every change, adds failure modes and costs money. The fix is to delete what isn't needed and keep the seams that make future change cheap.",
+  "points": [
+    {
+      "h": "No requirement behind it",
+      "d": "Components justified by hypothetical future needs rather than current requirements or measured risks."
+    },
+    {
+      "h": "Abstractions with one user",
+      "d": "Interfaces, plugin systems and generic frameworks with a single implementation add indirection without benefit."
+    },
+    {
+      "h": "Unrequested flexibility",
+      "d": "Configuration options, multi-tenancy or multi-cloud support nobody has asked for."
+    },
+    {
+      "h": "More services than teams",
+      "d": "Distribution without independent teams means coordination through network calls instead of function calls."
+    },
+    {
+      "h": "Infrastructure beyond the load",
+      "d": "Distributed streaming, sharding or global replication for traffic a simple setup handles comfortably."
+    },
+    {
+      "h": "Operational capacity exceeded",
+      "d": "If the team can't monitor, upgrade and be on call for every component, the design is too big for the team."
+    },
+    {
+      "h": "Can't explain the need in a sentence",
+      "d": "If a component's purpose takes a paragraph of 'in case' scenarios, it's probably not needed yet."
+    }
+  ],
+  "decision": "Remove components without a current justification; keep the cheap seams (clear module boundaries, stable ids and contracts) that make adding them later easy. Revisit when a real requirement or measured limit appears.",
+  "numbers": [
+    "Load sanity check: if peak load is a few hundred requests per second, a single database and a few app servers are typically more than enough; distributed infrastructure needs a stronger reason."
+  ],
+  "pitfalls": [
+    "Mistaking complexity for seniority or robustness.",
+    "Copying the architecture of companies with thousands of times your scale.",
+    "Calling everything over-engineered and skipping essential safety (that's under-engineering).",
+    "Keeping unused components because removing them feels risky."
+  ],
+  "followups": [
+    {
+      "q": "How do you push back on an over-engineered proposal without discouraging the author?",
+      "a": "Ask what requirement each component serves and what the simpler alternative would cost; propose deferring parts with explicit triggers for adding them."
+    },
+    {
+      "q": "What's the difference between over-engineering and planning ahead?",
+      "a": "Planning ahead keeps future options cheap (good boundaries, stable contracts). Over-engineering builds the future option now, paying its cost before you know you need it."
+    },
+    {
+      "q": "Give an example of complexity that's justified early.",
+      "a": "Idempotency keys on payment APIs, audit logs in regulated domains, and backups. They protect against known, high-cost risks."
+    }
+  ],
+  "example": "A four-person team proposed six microservices, Kafka and a service mesh for an internal tool with 200 users. In review we kept one service with clear modules, a Postgres database and a simple job queue, and wrote down triggers for extracting services later. It shipped in six weeks instead of the planned five months.",
+  "related": [
+    "tell-design-dangerously-under-engineered",
+    "decide-not-build-system",
+    "design-boring-reliability-instead-cleverness",
+    "splitting-monolith-pay-itself"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Yagni",
+      "url": "https://martinfowler.com/bliki/Yagni.html"
+    },
+    {
+      "title": "Dan McKinley: Choose boring technology",
+      "url": "https://mcfunley.com/choose-boring-technology"
+    }
+  ]
+}

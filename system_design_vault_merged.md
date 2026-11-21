@@ -2004,29 +2004,213 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### MVP, platforms & cost
 75. **How do I design something MVP-first that can still grow?** [ref · Fundamental · Scaling, Architecture]
-   - Make the cheapest design that satisfies today's load, but keep the seams that are expensive to add later: identifiers, data ownership, API contracts and observability.
+   - **Thesis:** Build the cheapest thing that meets today's load, but invest early in the few seams that are expensive to retrofit: identifiers, data ownership and boundaries, API contracts, and observability. Everything else can be replaced later because those stay stable.
+   - **60-second answer:** For an MVP I'd pick boring, managed components: one deployable, one relational database, a managed queue if needed, and no custom infrastructure. The time saved goes into four things that are painful to change later. Identifiers: globally unique, non-sequential ids from day one, because renumbering is miserable. Data ownership: clear modules that own their tables, even inside a monolith, so later splits follow existing lines. API contracts: versionable, additive-friendly public APIs with consistent error formats, because external clients are the hardest thing to migrate. Observability: structured logs, basic metrics and tracing hooks, because you can't scale what you can't see. I'd also keep the infrastructure as code from the start. Then I'd write down the known scaling limits and the trigger for each, like 'move search out of Postgres when queries exceed X', so growth is planned rather than an emergency.
+   - **Key points:**
+     1. **Boring, managed, single deployable.** A monolith on managed services lets a small team ship fast. Complexity is added only when a measured need appears.
+     2. **Seam 1: identifiers.** Use UUIDv7 or similar globally unique ids everywhere. Sequential integers leak volume and make merging, sharding and multi-region painful.
+     3. **Seam 2: data ownership.** Modules own their tables; no cross-module joins or writes. This keeps a later split or extraction mechanical.
+     4. **Seam 3: API contracts.** Consistent resource design, pagination via cursors, error formats, idempotency keys on writes, and versioning rules. External clients lock these in quickly.
+     5. **Seam 4: observability.** Structured logs with request ids, RED metrics and trace propagation from the first version.
+     6. **Infrastructure as code.** Even small setups in code, so environments can be recreated and changes reviewed.
+     7. **Write down the limits.** Known bottlenecks with the metric and threshold that trigger the next step. Makes scaling a planned project.
+   - **When to choose what:** Spend complexity budget only on seams that are expensive to change later; keep everything else as simple as possible. Revisit the limits list monthly as usage grows.
+   - **Numbers:**
+     - A single modern relational database and a handful of app instances can typically serve thousands of requests per second, far beyond most MVPs' first year.
+   - **Pitfalls:**
+     - Microservices, Kubernetes and event sourcing for a product with no users yet.
+     - Sequential ids exposed in URLs and APIs.
+     - Shared tables across modules, making later splits a rewrite.
+     - No logging or metrics, so the first scaling problem is diagnosed blind.
+   - **Follow-ups:**
+     - _What would you deliberately not build?_ Multi-region, custom caching layers, a plugin system, and generic configurability, until there's a measured need.
+     - _How do you avoid the MVP becoming permanent technical debt?_ Keep a visible list of shortcuts with their triggers, and budget time each cycle to address the ones approaching their limits.
+     - _Which decision is hardest to reverse?_ Public API shapes and data models with external dependents. Spend design time there.
+   - **Example:** A lending startup launched on one Rails app and Postgres, with UUIDs, module-owned tables, cursor pagination and idempotency keys on payment endpoints. Two years later, extracting underwriting into a service took weeks, not months, because its tables and APIs were already separate.
+   - **Sources:** [Martin Fowler: Monolith first](https://martinfowler.com/bliki/MonolithFirst.html); [Dan McKinley: Choose boring technology](https://mcfunley.com/choose-boring-technology)
 76. **How do I choose between building a platform and a one-off service?** [ref · Intermediate · Architecture]
-   - Build a platform when three or more teams need the same capability and the interface is stable. Otherwise ship the one-off and extract later from real usage.
+   - **Thesis:** Build a platform when several teams need the same capability, the interface has stabilised, and the cost of everyone building it separately is clear. Otherwise ship the one-off and extract a platform later from real, repeated usage.
+   - **60-second answer:** Platforms are tempting because they promise reuse, but a platform built before you understand the use cases encodes the wrong abstractions and then every team works around it. My rule of thumb: the first time, build it for the one use case; the second time, copy and adapt and notice what changed; the third time, you understand the variation well enough to extract a platform. I'd also check that the interface has stabilised, that there's a team willing to own it as a product with support, documentation and roadmap, and that the cost of duplication, such as divergent security, operational load and inconsistent behaviour, is real. When building a platform, start from the existing implementations, keep the first version narrow, make the easy path the default, and measure adoption and satisfaction rather than mandating it.
+   - **Key points:**
+     1. **Rule of three.** Extract a shared capability after it's been built and adapted several times, when you can see what really varies.
+     2. **Stable interface.** If requirements still change monthly, a platform will churn its users. Wait until the shape settles.
+     3. **Real duplication cost.** Security fixes applied in five places, inconsistent behaviour customers notice, five on-call burdens. Without real cost, duplication may be fine.
+     4. **A team that owns it as a product.** Platforms need roadmaps, docs, support, versioning and migration help. Without an owner they decay.
+     5. **Extract from working code.** Base the platform on existing implementations rather than designing from scratch, and migrate those users first.
+     6. **Narrow first version.** Cover the common 80% well; leave escape hatches for the rest rather than trying to handle every case.
+     7. **Adoption by pull.** Make it the easiest option. Measure adoption and user satisfaction; mandates hide a bad product.
+   - **When to choose what:** One-off first; extract when three or more teams need it, the interface is stable, duplication costs are measurable, and an owning team exists.
+   - **Numbers:**
+     - Break-even sketch: if a capability costs each team 4 engineer-weeks to build and 1 week/quarter to maintain, a platform costing 12 weeks plus 2 weeks/quarter pays off once 3–4 teams use it.
+   - **Pitfalls:**
+     - Building a platform for one team's use case and calling it general.
+     - No owner, so the platform's bugs block every team.
+     - Over-general abstractions that make the common case hard.
+     - Forcing adoption before the platform is better than the alternatives.
+   - **Follow-ups:**
+     - _How do you handle teams with needs the platform doesn't cover?_ Provide extension points or let them build outside the platform, then fold common patterns back in.
+     - _Internal platform or managed service?_ If a managed service covers the need, use it and build only thin glue; build internally only for what's specific to you.
+     - _How do you measure platform success?_ Adoption, time for a new team to onboard, incidents caused, and developer satisfaction surveys.
+   - **Example:** Three teams had built their own notification sending, each with different retry logic and provider integrations. A small team extracted a notification service from the best implementation, migrated the three teams over a quarter, and new teams adopted it voluntarily because it was faster than building their own.
+   - **Sources:** [Team Topologies: Key concepts (platform teams)](https://teamtopologies.com/key-concepts); [Martin Fowler: What I talk about when I talk about platforms](https://martinfowler.com/articles/talk-about-platforms.html)
 77. **How do I design for cost visibility and optimization from day one?** [ref · Intermediate · Cost & compliance, Observability]
-   - Tag every resource by team and service, expose cost per request or per tenant, set budgets and alerts, and review the top spenders on a schedule.
+   - **Thesis:** You can only optimise what you can attribute. Tag every resource by team, service and environment from day one, expose unit costs (per request, per tenant, per transaction), set budgets and anomaly alerts, and review top spenders on a schedule. Make cost a metric engineers see next to latency.
+   - **60-second answer:** I'd start with attribution: every cloud resource tagged with owner team, service, environment and cost centre, enforced by policy so untagged resources can't be created, plus allocation rules for shared costs like Kubernetes clusters, data transfer and observability. Then unit economics: cost per request, per active customer, per loan originated, per tenant, because absolute spend rising is fine if units grow faster. Put these on dashboards next to performance metrics and include cost estimates in design docs. Then guardrails: budgets per team with alerts, anomaly detection for sudden jumps, which are often a misconfiguration like a debug log level or runaway autoscaling, and lifecycle policies for storage and logs. Then a rhythm: monthly reviews of the top cost drivers with owners, and simple, safe wins first: rightsizing, committed-use discounts for steady load, deleting idle resources, and tiering storage.
+   - **Key points:**
+     1. **Tag and enforce.** Owner, service, environment and cost centre tags on every resource, enforced by policy-as-code. Untagged spend is unmanageable spend.
+     2. **Allocate shared costs.** Split shared clusters, networking and observability by usage (CPU requests, bytes, log volume) so teams see their real footprint.
+     3. **Unit costs.** Cost per request, per customer, per transaction or per tenant. Unit cost trends tell you whether efficiency is improving.
+     4. **Cost in design reviews.** Estimate the monthly cost of new designs, including data transfer and observability, which are often underestimated.
+     5. **Budgets and anomaly alerts.** Team budgets with alerts at thresholds; anomaly detection on daily spend per service.
+     6. **Lifecycle policies.** Automatic expiry or tiering for logs, backups, snapshots and object storage.
+     7. **Regular review.** Monthly top-spender review with owners; track savings actions like any other backlog.
+   - **When to choose what:** Tagging, unit-cost dashboards and anomaly alerts from day one, because they're cheap early and very hard to retrofit. Deeper optimisation (commitments, architecture changes) once spend and usage patterns are stable.
+   - **Numbers:**
+     - Unit cost example: $40,000/month for a service handling 200 million requests = $0.20 per 1,000 requests; if traffic doubles and cost rises to $60,000, unit cost fell to $0.15.
+     - Observability spend is often a significant share of cloud bills; sampling and retention policies are usually the quickest savings.
+   - **Pitfalls:**
+     - Untagged resources that nobody owns.
+     - Looking at total spend only, punishing growth instead of inefficiency.
+     - Ignoring data transfer costs (cross-zone, cross-region, egress) in designs.
+     - Debug logging or high-cardinality metrics quietly multiplying costs.
+   - **Follow-ups:**
+     - _How do you allocate a shared Kubernetes cluster's cost?_ By resource requests (CPU and memory reserved) per namespace or team, plus a share of idle capacity, using tools that read cluster metrics.
+     - _What's the fastest way to cut a cloud bill?_ Delete idle resources, rightsize over-provisioned instances, apply storage lifecycle rules, reduce log and metric volume, and buy commitments for steady baseline load.
+     - _How do you make engineers care?_ Show their service's cost and unit cost next to its latency and errors, include cost in design reviews, and celebrate savings.
+   - **Example:** A team's tracing bill doubled in a month. Anomaly alerts flagged it; the cause was a new high-cardinality span attribute. Removing it and adding tail sampling cut tracing cost 60%. Unit cost per 1,000 requests is now on every service dashboard.
+   - **Sources:** [FinOps Foundation: What is FinOps?](https://www.finops.org/introduction/what-is-finops/); [AWS Well-Architected: Cost optimization pillar](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html)
 
 ### Build vs buy
 78. **Decide what to buy and what to build.** [mine + ref · Intermediate · Architecture, Cost & compliance]
-   - Build what differentiates you and what you must control. Buy commodity. Count integration, lock-in, data egress and the people cost of running either.
-   - Build what differentiates you or needs deep control. Buy commodity capability. Weigh lock-in, integration cost, data portability, and the ongoing cost of operating either choice.
+   - **Thesis:** Build what differentiates you or what you must control deeply; buy what's commodity. Decide on total cost over several years: integration, lock-in, data portability, compliance, and the people cost of running either option.
+   - **60-second answer:** I'd ask first: does this capability make customers choose us, or does it just need to work? Underwriting models for a lender differentiate; email delivery, observability, authentication and payroll don't. For commodity capabilities, buying usually wins: vendors spread the cost across many customers and keep up with security and features. Then I'd compare total cost over three to five years: licence or usage fees against engineering time to build and, more importantly, to run, maintain, secure and support it. I'd weigh lock-in, meaning how hard it is to leave, including data export formats and proprietary APIs; compliance and data residency; vendor risk; and integration effort. For things we must control, like core data models, regulatory logic and latency-critical paths, building can be justified even if a vendor exists. And keep a thin abstraction around bought services where switching is plausible, not everywhere.
+   - **Key points:**
+     1. **Differentiation test.** If doing it better than competitors wins customers, consider building. If it just has to work, buy.
+     2. **Total cost of ownership.** Build: initial engineering plus ongoing maintenance, on-call, security patches and feature work. Buy: fees, integration, vendor management and constraints.
+     3. **Lock-in and portability.** Can you export your data in usable form? Are APIs standard? What would migration cost? Negotiate exit terms.
+     4. **Control requirements.** Regulatory logic, auditability, latency, and data residency may require control a vendor can't provide.
+     5. **Vendor risk.** Financial stability, security posture, SLAs, support quality and roadmap alignment.
+     6. **Integration effort.** Bought products still need integration, configuration, and sometimes workarounds for missing features.
+     7. **Thin abstraction where switching is plausible.** Wrap a bought service behind your own interface when you might realistically change vendors; don't abstract everything.
+   - **When to choose what:** Buy commodity, build differentiators, and treat 'buy then extend' (a vendor core with your logic on top) as a common middle path. Revisit when a bought product becomes a constraint or its costs scale faster than your business.
+   - **Numbers:**
+     - TCO sketch: building in-house = 3 engineers × 6 months to build + 1.5 engineers ongoing; at a fully loaded cost per engineer, that often exceeds a vendor fee for commodity capabilities several times over.
+   - **Pitfalls:**
+     - Building commodity infrastructure because it's interesting.
+     - Buying a product that can't meet a core regulatory or latency requirement and working around it forever.
+     - Ignoring exit costs and data portability.
+     - Comparing build cost to vendor price but forgetting the cost of running what you build.
+   - **Follow-ups:**
+     - _When would you switch from bought to built?_ When the vendor becomes a meaningful constraint on differentiation, when costs scale badly with your volume, or when control requirements change.
+     - _How do you evaluate vendors?_ Requirements checklist, proof of concept on your hardest use case, security and compliance review, reference customers, and contract terms including exit.
+     - _Open source as a third option?_ It removes licence fees but not running costs. Self-hosting open source is closer to building in operational terms; managed offerings of open source are a middle path.
+   - **Example:** A lender buys identity verification, email delivery and observability, but builds its decisioning engine and repayment schedule logic, because those encode credit policy and regulatory rules that set it apart and must be fully auditable.
+   - **Sources:** [Martin Fowler: Utility vs strategic dichotomy](https://martinfowler.com/bliki/UtilityVsStrategicDichotomy.html)
    - _Also asked as:_ How do I decide what to buy versus what to build?
 
 ### Extensibility, experiments & compliance
 79. **How do I design systems that multiple teams can safely extend?** [ref · Advanced · Architecture, Leadership]
-   - Clear extension points, stable contracts, isolation so one team's plugin cannot take down others, and ownership documented per component.
+   - **Thesis:** Make extension safe by design: clear, versioned extension points with stable contracts, isolation so one team's extension can't take down the core or other extensions, documented ownership per component, and guardrails (tests, limits, review) that scale without a central bottleneck.
+   - **60-second answer:** When many teams extend one system, the risks are breaking each other, coupling to internals, and one team's bug taking down everything. I'd define explicit extension points: plugin interfaces, events to subscribe to, configuration schemas, APIs, each versioned and documented like a public API, so teams don't reach into internals. Isolation: extensions run with resource limits, timeouts and failure containment, in separate processes or sandboxes where the risk justifies it, so a slow plugin degrades only its own feature. Ownership: every component and extension has an owning team in a registry, used for routing alerts and reviews. Guardrails: contract tests that every extension must pass, automated checks in CI, and staged rollouts with feature flags. The core team sets standards and builds the paved path, but doesn't approve every change; the aim is autonomy within safe boundaries.
+   - **Key points:**
+     1. **Explicit extension points.** Plugin interfaces, hooks, events, configuration and APIs. Anything not exposed is internal and may change.
+     2. **Stable, versioned contracts.** Extension APIs follow the same compatibility rules as public APIs: additive changes, deprecation windows.
+     3. **Isolation and limits.** Timeouts, resource quotas, separate thread pools or processes, and circuit breakers per extension so failures stay local.
+     4. **Ownership registry.** Every service, extension and config owned by a named team, used for alert routing, reviews and incident escalation.
+     5. **Contract and compatibility tests.** A test suite extensions must pass, run in CI against current and next core versions.
+     6. **Safe rollout.** Feature flags and staged rollouts for extensions, with per-extension kill switches.
+     7. **Paved path over gatekeeping.** Templates, libraries and docs that make the right way the easy way, instead of a central approval queue.
+   - **When to choose what:** Invest in extension points and isolation proportional to the number of contributing teams and the blast radius of failures. In-process plugins with limits for trusted teams; out-of-process or sandboxed for untrusted or high-risk code.
+   - **Numbers:**
+     - Isolation budget example: each extension gets a 50 ms timeout and a bounded pool of 10 concurrent executions; exceeding either disables it via circuit breaker without affecting the core request.
+   - **Pitfalls:**
+     - Teams depending on internal classes or tables because no extension point existed.
+     - Plugins running unbounded in the core request path.
+     - No ownership, so broken extensions linger and alerts go nowhere.
+     - A central team reviewing every change, becoming the bottleneck.
+   - **Follow-ups:**
+     - _How do you change an extension API without breaking teams?_ Version it, support old and new in parallel, provide migration guides and tooling, and track which extensions still use the old version.
+     - _How do you stop teams coupling to internals?_ Module boundaries enforced by build tooling, internal packages that can't be imported, and making the extension points good enough that nobody needs to bypass them.
+     - _What isolation level for third-party code?_ Out-of-process with strict resource and permission limits (containers, WebAssembly sandboxes) and no direct database access.
+   - **Example:** A checkout platform lets product teams add pricing rules through a versioned plugin interface. Each plugin runs with a 30 ms budget and its own circuit breaker; a buggy promotion plugin once timed out on every call, and checkout simply ran without it while its owning team was paged.
+   - **Sources:** [Team Topologies: Key concepts](https://teamtopologies.com/key-concepts); [AWS Builders' Library: Workload isolation using shuffle-sharding](https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/)
 80. **How do I plan for data residency and regional regulations?** [ref · Intermediate · Cost & compliance, Reliability]
-   - Tag data by jurisdiction, pin storage and processing to regions, control cross-region replication and logs, and design deletion and access requests per region.
+   - **Thesis:** Classify data by jurisdiction and sensitivity, pin storage and processing to the right regions, control every path data can leak out (replication, backups, logs, analytics, support tools, vendors), and implement access and deletion rights per region. Residency is a property of the whole data flow, not just the primary database.
+   - **60-second answer:** I'd start with a data inventory: which data is personal or regulated, which jurisdictions' rules apply, and what each requires, whether storage in-country, processing restrictions, transfer mechanisms or retention. Then architecture: deploy regional cells, so EU customers' data lives and is processed in the EU, with a global directory that routes each customer to their home region and contains only minimal non-sensitive data. The hard part is all the side paths: cross-region replication and backups, logs and traces that contain personal data, analytics pipelines, support and admin tools, and third-party processors. Each must respect the region or carry only pseudonymised data. I'd implement data-subject rights per region, such as access, deletion and export, and keep audit evidence. And I'd involve legal early, since requirements differ by country and change over time.
+   - **Key points:**
+     1. **Inventory and classify.** Map data types to jurisdictions and rules (storage location, transfer restrictions, retention). Without this, compliance is guesswork.
+     2. **Regional cells.** Separate deployments per region with their own databases and processing. Customers have a home region.
+     3. **Minimal global directory.** A global routing layer holds only what's needed to route (customer id to region), not regulated personal data.
+     4. **Control replication and backups.** Replicas and backups stay within allowed regions; disaster recovery uses another region in the same jurisdiction where required.
+     5. **Logs, traces and analytics.** Scrub or pseudonymise personal data before it leaves the region, or keep observability regional too.
+     6. **Vendors and support access.** Third-party processors must meet the same residency constraints; support tooling must respect regional access rules.
+     7. **Rights and evidence.** Access, export and deletion workflows per region, with audit logs proving compliance.
+   - **When to choose what:** Regional cells with a minimal global directory for strict residency; regional storage with global processing of pseudonymised data where rules allow. Bring in legal review before architecture is fixed.
+   - **Numbers:**
+     - Cost intuition: each additional regional cell adds a baseline of infrastructure and operational cost regardless of customer count, so enter regions deliberately.
+   - **Pitfalls:**
+     - Regional primary databases but global logs, analytics or backups containing the same personal data.
+     - A global user table holding names and emails 'for routing'.
+     - Support staff in another region with unrestricted access.
+     - Vendors (email, analytics, support desk) processing data outside allowed regions.
+   - **Follow-ups:**
+     - _A customer moves from the EU to the US. What happens?_ Follow policy and law: often their data stays in the EU unless they consent to migration; the directory continues to route them to the EU cell.
+     - _How do you run global analytics?_ Aggregate or pseudonymise within each region and export only aggregates or non-identifying data, or run analytics regionally and combine results.
+     - _How do you test compliance?_ Automated checks on resource locations, data-flow reviews for new features, and periodic audits of logs and vendor configurations.
+   - **Example:** A lender entering the EU built a separate EU cell. The global directory stores only customer id and home region. Logs leaving the EU are scrubbed of personal fields, backups replicate between two EU regions, and the support tool restricts EU records to EU-based staff.
+   - **Sources:** [GDPR Chapter 5: Transfers of personal data to third countries](https://gdpr-info.eu/chapter-5/)
 81. **How do I design to support experiments such as A/B tests and flags cleanly?** [ref · Intermediate · Architecture]
-   - Central flag service with stable user bucketing, exposure logging, kill switches, and a cleanup process for dead flags. Keep experiment logic out of business code paths where possible.
+   - **Thesis:** Put experiments and flags on a central service with stable user bucketing, log every exposure, give every flag an owner, expiry and kill switch, and keep experiment logic at the edges of business code so cleaning up a finished experiment is deleting a branch, not untangling logic.
+   - **60-second answer:** I'd use a central flag and experiment service, built or bought, with SDKs that evaluate flags locally from cached rules, so a flag check is fast and doesn't fail if the service is down. Bucketing is deterministic: hash the user or account id with the experiment key, so a user consistently sees the same variant across sessions and devices. Every time a user is exposed to a variant, the SDK logs an exposure event, which analysis needs to compare like with like. I'd separate kinds of flags: release toggles, which are short-lived; experiments; operational kill switches; and permissions. Each flag has an owner and expected removal date, and stale flags are flagged in reviews or CI. In code, evaluate the flag once near the entry point and pass the decision down, rather than scattering checks through business logic. And I'd guard experiments with metrics that automatically stop them if errors or key business metrics degrade.
+   - **Key points:**
+     1. **Central service, local evaluation.** Rules managed centrally; SDKs cache them and evaluate in-process, with safe defaults if the service is unreachable.
+     2. **Deterministic bucketing.** hash(experiment_key + unit_id) mod 100 assigns a stable bucket. Choose the unit (user, account, session) to match how the experience is shared.
+     3. **Exposure logging.** Log when a user actually encounters a variant, not just assignment. Analysis on exposed users avoids dilution and bias.
+     4. **Flag types and lifecycles.** Release toggles (days to weeks), experiments (weeks), ops kill switches (permanent), permissions (long-lived). Each type has different review rules.
+     5. **Ownership and expiry.** Every flag has an owner and removal date; dashboards and CI warnings surface stale ones.
+     6. **Keep logic at the edges.** Branch once near the entry point (choose implementation A or B) rather than sprinkling checks in core logic. Cleanup becomes deleting a branch.
+     7. **Guardrail metrics.** Automatic alerts or stops if error rates, latency or core business metrics drop in a variant.
+   - **When to choose what:** Buy or adopt a flag platform unless you have unusual needs; invest in exposure logging, guardrails and cleanup discipline either way. Statistical rigour (sample size, pre-registered metrics) matters as much as the tooling.
+   - **Numbers:**
+     - Sample size intuition: detecting a 1 percentage-point change on a 10% conversion rate with typical power needs on the order of tens of thousands of users per variant; small effects need large samples.
+   - **Pitfalls:**
+     - Random assignment per request, so users flip between variants.
+     - Analysing assigned users instead of exposed users.
+     - Hundreds of stale flags making code paths untestable.
+     - Flags evaluated by remote call on every request, adding latency and a failure point.
+   - **Follow-ups:**
+     - _How do you run experiments on the backend, like a new pricing algorithm?_ Same bucketing in the service, exposure logged when the algorithm's output is used, and guardrails on revenue and error metrics; consider shadow mode first.
+     - _How do you avoid experiments interfering with each other?_ Mutually exclusive layers for experiments that touch the same area, or factorial designs when interactions are wanted.
+     - _How do you clean up flags?_ Expiry dates with automatic tickets, CI warnings for flags past expiry, and periodic cleanup sprints.
+   - **Example:** A loan application redesign ran as an experiment bucketed by applicant id, with exposure logged on first view of the new form. A guardrail stopped one variant within an hour when submission errors spiked; the winning variant was rolled out and the flag removed two weeks later.
+   - **Sources:** [Martin Fowler (Pete Hodgson): Feature toggles](https://martinfowler.com/articles/feature-toggles.html); [Kohavi, Tang, Xu: Trustworthy online controlled experiments](https://experimentguide.com/)
 
 ### Legacy migration
 82. **How do I design migration paths when the legacy system cannot just die?** [ref · Advanced · Migration, Architecture]
-   - Strangler pattern: route slices of traffic to the new system, keep both in sync during the overlap, migrate data by domain, and define an exit criterion for the old system.
+   - **Thesis:** Use the strangler pattern: put a routing layer in front of the legacy system, move functionality slice by slice to the new system, keep data in sync during the overlap, and define a measurable exit criterion for turning the old system off. Big-bang rewrites fail because they defer all risk to one day.
+   - **60-second answer:** When a legacy system can't just be switched off, I'd first put a facade or routing layer in front of it, at the API gateway, a proxy, or an anti-corruption layer in code, so traffic can be directed per capability. Then pick a first slice that's valuable, well understood and loosely coupled, build it in the new system, and route that traffic over, often starting with shadow traffic to compare results. Data is the hard part: during the overlap, either the new system owns the migrated data and syncs back to legacy for the remaining functions, or legacy remains the source and the new system reads from it via CDC. Ownership must be clear for each piece of data at every stage. Each slice moves with a rollback path. And I'd define the exit: which functions remain on legacy, the date or traffic threshold for decommissioning, and who signs off, because otherwise the 'temporary' coexistence lasts a decade.
+   - **Key points:**
+     1. **Route in front.** A facade (gateway, proxy, or interception layer) lets you move traffic per endpoint, per customer segment or per product without clients noticing.
+     2. **Slice by capability.** Migrate business capabilities one at a time, starting with something valuable but not the most entangled core.
+     3. **Shadow and compare.** Send copies of real requests to the new system and compare outputs before switching traffic, catching behavioural differences.
+     4. **Clear data ownership during overlap.** For each data set at each stage, one system is the source of truth; the other is synced via CDC, events or batch, with reconciliation.
+     5. **Anti-corruption layer.** Translate legacy models and quirks at the boundary so they don't leak into the new system's design.
+     6. **Rollback per slice.** Routing can send traffic back to legacy if the new path misbehaves, as long as data sync allows it.
+     7. **Exit criteria.** A defined end: remaining functions migrated, traffic at zero, data archived, contracts ended. Track progress visibly.
+   - **When to choose what:** Incremental strangler migration with routing and data sync for any legacy system with active users. Big-bang cutovers only for small, well-understood systems where parallel running is impossible.
+   - **Numbers:**
+     - Progress metric: percent of traffic, endpoints or business volume served by the new system, reported monthly; stalled progress is a signal to revisit scope or staffing.
+   - **Pitfalls:**
+     - A full rewrite that runs for years without delivering value and then fails at cutover.
+     - Both systems writing the same data with no clear source of truth.
+     - Copying legacy quirks into the new system through a direct model translation.
+     - No exit criterion, so both systems run forever and double the operational cost.
+   - **Follow-ups:**
+     - _The legacy system has no APIs, only a shared database. How do you start?_ Use CDC on its database to feed the new system, and intercept at the UI or batch-job level, while wrapping writes behind a new API as functions move.
+     - _How do you choose the first slice?_ High value, clear boundaries, limited data dependencies, and a team that understands it. A quick win builds credibility for the rest.
+     - _How do you handle reports that span old and new data?_ Feed both into a warehouse with a unified model during the overlap, so reporting doesn't depend on where a record lives.
+   - **Example:** A bank migrated loan servicing off a mainframe over 30 months. A gateway routed by product: personal loans moved first, with CDC syncing balances back to the mainframe for statements. Each product moved after a month of shadow comparisons, and the mainframe contract ended when the last product migrated.
+   - **Sources:** [Martin Fowler: Strangler fig application](https://martinfowler.com/bliki/StranglerFigApplication.html); [Microsoft Azure Architecture Center: Anti-corruption layer pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer)
 
 ## Judgment & Leadership (11)
 
@@ -2059,34 +2243,260 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Sources:** [Michael Nygard: Documenting architecture decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
    - _Also asked as:_ How do I defend trade-offs to a sceptical architect?
 84. **Review a peer's design deeply and still be easy to work with.** [mine + ref · Advanced · Leadership]
-   - Ask questions that expose assumptions, separate blocking concerns from preferences, propose an alternative when you object, and credit what is good.
-   - Understand the goal first, ask questions about failure and scale, separate must-fix from preference, suggest alternatives, and acknowledge what is solid.
+   - **Thesis:** Review the design against its goals, not your preferences. Understand the problem first, ask questions that expose assumptions about failure and scale, separate blocking concerns from suggestions, offer an alternative whenever you object, and say what's good. Depth and kindness aren't in tension; vagueness and point-scoring are the problems.
+   - **60-second answer:** I'd start by reading the goals, non-goals and constraints, and if they're missing, that's my first comment, because I can't judge a design without knowing what it's for. Then I'd probe the places designs usually break: what happens when each dependency is slow or down, what the capacity numbers are, how data stays consistent, how it's deployed and rolled back, and who operates it. I'd phrase concerns as questions where I'm unsure, like 'what happens if the queue consumer falls an hour behind?', and as clear statements where I'm confident. I'd label each comment: blocking, meaning it must be resolved because of a correctness, security or operational risk; or suggestion, a preference the author can take or leave. When I object, I offer an alternative or at least the criteria a solution must meet. And I'd call out strong decisions explicitly. For big disagreements I'd talk in person rather than in a comment thread.
+   - **Key points:**
+     1. **Start from goals and constraints.** Read what the design is meant to achieve and what's out of scope. Many review fights are really disagreements about requirements.
+     2. **Probe failure, scale and operations.** Dependencies failing, capacity and growth, data consistency, deploy and rollback, observability, on-call ownership. These are where designs most often fall short.
+     3. **Ask, don't assert, when unsure.** Questions surface assumptions without putting the author on the defensive, and sometimes reveal that the reviewer missed something.
+     4. **Label blocking vs non-blocking.** Make it clear which comments must be addressed and why, and which are preferences. Unlabelled comments all feel blocking.
+     5. **Object with an alternative.** When you disagree, propose another approach or the criteria that would satisfy you. 'I don't like this' gives the author nothing to act on.
+     6. **Acknowledge what's good.** Specific praise for good decisions reinforces them and shows you read carefully.
+     7. **Take big disagreements offline.** A short conversation resolves in minutes what a comment thread drags out for days. Record the outcome in the doc.
+   - **When to choose what:** Block only on correctness, security, data integrity, operability or a mismatch with stated goals. Everything else is a suggestion the author decides on. Escalate unresolved blocking disagreements to a named decider rather than letting them stall.
+   - **Numbers:**
+     - Practical shape: a handful of well-explained, prioritised comments beats dozens of nits. If you have more than a few blocking concerns, ask for a meeting.
+   - **Pitfalls:**
+     - Reviewing against how you would have designed it rather than against the goals.
+     - Burying the one serious issue among twenty style nits.
+     - Vague concerns ('this won't scale') with no specifics.
+     - Approving to be nice and raising issues after launch.
+   - **Follow-ups:**
+     - _The author is senior to you. How does that change the review?_ It doesn't change the standard. Ask questions grounded in specifics; senior engineers generally appreciate being challenged on failure modes.
+     - _You and the author still disagree on a blocking issue. What then?_ Write down both positions and the trade-offs, and take it to the agreed decision-maker. Commit to the outcome either way.
+     - _How do you review a design in an area you know little about?_ Focus on what you can judge (goals, failure handling, operability, clarity) and say explicitly which parts you can't evaluate, so someone else can.
+   - **Example:** Reviewing a new notification system, I marked one blocking issue (no plan for provider outages: messages would be lost), asked two questions about capacity, offered a queue-with-DLQ alternative, labelled three formatting comments as non-blocking, and called out the clean idempotency design. The author fixed the blocker in a day.
+   - **Sources:** [Google engineering practices: The standard of code review](https://google.github.io/eng-practices/review/reviewer/standard.html)
    - _Also asked as:_ How do I review someone else's design deeply but respectfully?
 85. **How do I explain my design to a junior developer so they truly get it?** [ref · Intermediate · Leadership]
-   - Start from the problem and one request path, add pieces only as the problem demands them, use a single diagram, and check understanding by asking them to predict a failure.
+   - **Thesis:** Start from the problem and walk one real request through the system, adding each component only when the story needs it. Use one diagram, connect new ideas to things they already know, and check understanding by asking them to predict what happens when something fails.
+   - **60-second answer:** I'd begin with why the system exists: the user problem and the one or two constraints that shape everything, such as 'payments must never double-charge'. Then I'd trace a single concrete request end to end, say a user submitting a loan application, and introduce each component at the moment it's needed: the load balancer because we have several servers, the queue because document checks are slow, the outbox because we can't lose events. Each component arrives with the reason it exists, which makes it memorable. I'd draw one diagram as we go rather than presenting a finished wall of boxes, and connect ideas to familiar ones, for example a queue as a to-do list workers pick from. Then I'd check understanding by asking them to predict: 'what happens if the payment provider times out here?' Their answer shows what landed. Finally, I'd give them a small change to make in that flow, because explaining isn't the same as understanding.
+   - **Key points:**
+     1. **Problem and constraints first.** Explain what the system is for and the key constraints. Components make sense only in light of what they protect.
+     2. **Follow one concrete request.** A specific scenario (this user, this action) gives a narrative thread and avoids abstract tours of components.
+     3. **Introduce components just in time.** Each box appears when the story needs it, along with why it exists. Reasons stick better than names.
+     4. **One evolving diagram.** Draw as you talk. A diagram built in front of someone is far easier to follow than a finished one.
+     5. **Anchor to what they know.** Analogies and comparisons to systems or code they've used. Be clear where the analogy breaks.
+     6. **Check with predictions.** Ask what happens when something fails or load doubles. Predictions reveal gaps that 'does that make sense?' never will.
+     7. **Hands-on follow-up.** A small, real change in the flow you described, with support. Doing consolidates understanding.
+   - **When to choose what:** Narrative and reasons over completeness. Leave out details that don't serve the first mental model; they can come later once the skeleton is in place.
+   - **Numbers:**
+     - Session shape: about 5 minutes of problem and constraints, 20 minutes on one request flow, 10 minutes of prediction questions, then a follow-up task.
+   - **Pitfalls:**
+     - Starting with the full architecture diagram and every component.
+     - Jargon without definition.
+     - Asking 'any questions?' instead of checking with concrete prediction questions.
+     - Explaining once and assuming it stuck, with no hands-on follow-up.
+   - **Follow-ups:**
+     - _How do you know they really understood?_ They can predict failure behaviour correctly, explain the flow back in their own words, and make a small change without hand-holding.
+     - _What if they're too shy to ask questions?_ Ask them targeted questions instead, normalise not knowing by admitting what confused you when you learned it, and follow up one-on-one.
+     - _How does this apply to writing docs?_ Same structure: purpose, constraints, one walkthrough, then reference details. Most design docs fail by starting with the reference.
+   - **Example:** Explaining the repayment system to a new engineer, I started with 'every payment must be applied exactly once and in the right order', walked through one customer's payment from bank webhook to ledger posting, introduced the inbox table at the point a duplicate webhook arrived, and then asked what happens if the ledger is down. They worked out the retry and DLQ path themselves.
+   - **Sources:** [Simon Brown: The C4 model for visualising software architecture](https://c4model.com/)
 
 ### Simplicity & over/under-engineering
 86. **How do you tell when a design is over-engineered?** [mine + ref · Intermediate · Leadership, Architecture]
-   - Components with no current requirement behind them, flexibility nobody has asked for, more moving parts than people to run them.
-   - Complexity without a current requirement, abstractions with one user, more services than teams, and anything you cannot explain the need for in a sentence.
+   - **Thesis:** A design is over-engineered when it carries complexity with no current requirement or measured risk behind it: abstractions with one user, flexibility nobody has asked for, more moving parts than people to run them, and components whose need you can't explain in a sentence.
+   - **60-second answer:** I'd test every component against a simple question: what requirement or risk does this address today, and what happens if we remove it? If the answer is 'we might need it later' with no evidence, that's a warning sign. Concrete signals: abstractions or plugin systems with exactly one implementation; configuration for options nobody has requested; multiple services for a team of four, so every feature crosses network boundaries; distributed infrastructure, like Kafka, Kubernetes or a service mesh, for load a single database and a couple of servers would handle; and custom frameworks where a library exists. Another signal is operational: more systems than the team can realistically monitor, patch and be on call for. Over-engineering isn't free insurance; it slows every change, adds failure modes and costs money. The fix is to delete what isn't needed and keep the seams that make future change cheap.
+   - **Key points:**
+     1. **No requirement behind it.** Components justified by hypothetical future needs rather than current requirements or measured risks.
+     2. **Abstractions with one user.** Interfaces, plugin systems and generic frameworks with a single implementation add indirection without benefit.
+     3. **Unrequested flexibility.** Configuration options, multi-tenancy or multi-cloud support nobody has asked for.
+     4. **More services than teams.** Distribution without independent teams means coordination through network calls instead of function calls.
+     5. **Infrastructure beyond the load.** Distributed streaming, sharding or global replication for traffic a simple setup handles comfortably.
+     6. **Operational capacity exceeded.** If the team can't monitor, upgrade and be on call for every component, the design is too big for the team.
+     7. **Can't explain the need in a sentence.** If a component's purpose takes a paragraph of 'in case' scenarios, it's probably not needed yet.
+   - **When to choose what:** Remove components without a current justification; keep the cheap seams (clear module boundaries, stable ids and contracts) that make adding them later easy. Revisit when a real requirement or measured limit appears.
+   - **Numbers:**
+     - Load sanity check: if peak load is a few hundred requests per second, a single database and a few app servers are typically more than enough; distributed infrastructure needs a stronger reason.
+   - **Pitfalls:**
+     - Mistaking complexity for seniority or robustness.
+     - Copying the architecture of companies with thousands of times your scale.
+     - Calling everything over-engineered and skipping essential safety (that's under-engineering).
+     - Keeping unused components because removing them feels risky.
+   - **Follow-ups:**
+     - _How do you push back on an over-engineered proposal without discouraging the author?_ Ask what requirement each component serves and what the simpler alternative would cost; propose deferring parts with explicit triggers for adding them.
+     - _What's the difference between over-engineering and planning ahead?_ Planning ahead keeps future options cheap (good boundaries, stable contracts). Over-engineering builds the future option now, paying its cost before you know you need it.
+     - _Give an example of complexity that's justified early._ Idempotency keys on payment APIs, audit logs in regulated domains, and backups. They protect against known, high-cost risks.
+   - **Example:** A four-person team proposed six microservices, Kafka and a service mesh for an internal tool with 200 users. In review we kept one service with clear modules, a Postgres database and a simple job queue, and wrote down triggers for extracting services later. It shipped in six weeks instead of the planned five months.
+   - **Sources:** [Martin Fowler: Yagni](https://martinfowler.com/bliki/Yagni.html); [Dan McKinley: Choose boring technology](https://mcfunley.com/choose-boring-technology)
    - _Also asked as:_ How do I know when a design is over-engineered?
 87. **How do you tell when a design is dangerously under-engineered?** [mine + ref · Intermediate · Leadership, Reliability]
-   - No answer for the failure you can name, no way to roll back, no capacity numbers, one person who understands it.
-   - No failure handling for known risks, no capacity estimate, no rollback or recovery path, unclear ownership, and a single point of failure on a critical path.
+   - **Thesis:** A design is dangerously under-engineered when it has no answer for failures you can already name: no plan for a dependency outage, no capacity numbers, no way to roll back or recover data, a single point of failure on a critical path, or only one person who understands it.
+   - **60-second answer:** The test is whether the design has an answer for foreseeable problems, not exotic ones. I'd ask: what happens when each dependency is down or slow; is there a timeout, a fallback, or at least a clear failure mode? What are the expected and peak loads, and has anyone checked the design handles them with headroom? How do we roll back a bad deploy, and how do we recover if data is corrupted; are there tested backups? Is there a single component whose failure takes down a critical path with no redundancy? Can we tell it's broken before customers tell us, meaning monitoring and alerts? Who owns it and who else understands it? And for money or personal data: are there idempotency, audit and access controls? A missing answer to any of these on a critical system is a real risk, not a nice-to-have. The fix is targeted: add the specific safeguard, not a platform.
+   - **Key points:**
+     1. **No failure handling for known risks.** No timeouts, retries, fallbacks or failure modes defined for dependencies that will certainly fail sometimes.
+     2. **No capacity estimate.** Nobody has estimated peak load or checked limits (connections, throughput, storage growth).
+     3. **No rollback or recovery path.** Deploys can't be reverted safely, migrations are one-way, backups are untested or missing.
+     4. **Single points of failure on critical paths.** One instance, one zone, one manual step, one credential that everything depends on.
+     5. **No observability.** No metrics, logs or alerts that would reveal problems before customers report them.
+     6. **Bus factor of one.** Only one person understands or can operate it; no docs or runbooks.
+     7. **Missing domain safeguards.** No idempotency for payments, no audit trail for regulated actions, no access controls for personal data.
+   - **When to choose what:** Critical systems must have answers for dependency failure, capacity, rollback, recovery, observability and ownership before launch. Add the specific missing safeguard; don't use under-engineering as a reason for a rewrite.
+   - **Numbers:**
+     - Minimum bar example for a critical service: at least two instances across zones, timeouts on every call, tested backup restore, an SLO with alerting, and a runbook.
+   - **Pitfalls:**
+     - Calling necessary safeguards 'over-engineering' to ship faster.
+     - Assuming the cloud provider handles availability for you.
+     - Untested backups counted as a recovery plan.
+     - Launching with the only expert about to go on leave.
+   - **Follow-ups:**
+     - _How do you prioritise which gaps to fix first?_ By likelihood times impact: dependency failures and bad deploys are frequent; data loss is rare but catastrophic. Fix cheap, high-impact gaps (timeouts, backups, rollback) first.
+     - _How do you raise this without blocking a launch unreasonably?_ List specific risks with concrete failure scenarios and the minimal fix for each, and agree which must be done before launch and which can follow with dates.
+     - _Over- vs under-engineering in the same design?_ Common: elaborate abstractions with no timeouts or backups. Complexity in the wrong place is both.
+   - **Example:** A new disbursement service had elegant code but one instance, no timeouts on the bank API, and no idempotency on transfers. A review listed three concrete failure scenarios, including double disbursement on retry. Adding a second instance, a 5-second timeout with a pending state, and idempotency keys took a week and was done before launch.
+   - **Sources:** [Google SRE book: Addressing cascading failures](https://sre.google/sre-book/addressing-cascading-failures/); [AWS Well-Architected Framework: Reliability pillar](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html)
    - _Also asked as:_ How do I know when a design is dangerously under-engineered?
 88. **How do I simplify a complex design without losing guarantees?** [ref · Advanced · Leadership, Reliability]
-   - List the guarantees that must hold, remove components that do not protect one, merge things that always change together, and prove the invariants still hold.
+   - **Thesis:** List the guarantees that must hold, map each component to the guarantee it protects, remove components that protect none, merge components that always change together, and prove the invariants still hold, ideally with tests or fault injection rather than argument.
+   - **60-second answer:** I'd start by writing down the guarantees explicitly: for example, no payment is applied twice, every application gets a decision within 30 seconds, customer data stays in-region, and the service survives a zone loss. Then for each component and mechanism, I'd ask which guarantee it serves. Components that serve none are candidates for removal; often they're leftovers from old requirements or speculative flexibility. Components that serve the same guarantee in overlapping ways, like two layers of retries or two caches, can often be collapsed. Services that always change and deploy together can be merged. Then I'd check that simpler mechanisms still provide each guarantee: maybe a database transaction replaces a saga if the data can live in one place, or a managed service replaces a self-run cluster. Finally, prove it: tests for the invariants, fault injection for the availability guarantees, and a staged rollout. Simplicity is valuable precisely because it makes guarantees easier to verify.
+   - **Key points:**
+     1. **Write the guarantees down.** Correctness invariants, latency and availability targets, compliance constraints. If a guarantee isn't written, you can't tell what a simplification risks.
+     2. **Map components to guarantees.** For each component, name the guarantee it protects. Unmapped components are removal candidates.
+     3. **Remove what protects nothing.** Old features, speculative extension points, abandoned integrations and redundant layers.
+     4. **Collapse overlapping mechanisms.** Multiple retry layers, duplicate caches, parallel queues for similar work. Keep one well-understood mechanism.
+     5. **Merge what changes together.** Services or modules that always deploy together gain nothing from being separate.
+     6. **Use stronger primitives.** Moving data into one database can replace sagas and reconciliation with transactions; a managed service can replace a custom cluster.
+     7. **Prove the invariants still hold.** Property tests, integration tests and fault injection for each guarantee before and after the change; staged rollout with monitoring.
+   - **When to choose what:** Simplify incrementally, one removal or merge at a time, with the guarantee tests as a safety net. Prefer changes that replace distributed coordination with local transactions when ownership allows.
+   - **Numbers:**
+     - Simplification payoff is often visible in operational metrics: fewer components to patch, fewer alert rules, lower incident counts and faster lead time for changes.
+   - **Pitfalls:**
+     - Removing a component whose guarantee was implicit and undocumented.
+     - Simplifying by merging everything into one service, losing isolation that protected availability.
+     - Big-bang simplification instead of incremental steps.
+     - Assuming a simpler design is correct without testing the invariants.
+   - **Follow-ups:**
+     - _How do you find implicit guarantees?_ Read incident history, interview the people who operate it, and look at what breaks in tests when a component is stubbed out.
+     - _Give an example of replacing distributed machinery with a simpler primitive._ Two services coordinating via a saga merged into one service with one database, replacing the saga, outbox and reconciliation with a single transaction.
+     - _How do you convince people simplification is worth it?_ Show the cost of current complexity in incidents, on-call load and lead time, and propose small steps with clear rollback.
+   - **Example:** A loan pipeline had five services, two queues and a reconciliation job to keep application status consistent. Mapping components to guarantees showed three services always deployed together and existed for a team structure that no longer existed. Merging them let a single transaction replace two queues and the reconciliation job, while integration tests confirmed every application still received exactly one decision.
+   - **Sources:** [Rich Hickey: Simple made easy (talk)](https://www.infoq.com/presentations/Simple-Made-Easy/); [Martin Fowler: Microservice trade-offs](https://martinfowler.com/articles/microservice-trade-offs.html)
 89. **How do I design for boring reliability instead of cleverness?** [ref · Intermediate · Leadership, Reliability]
-   - Choose proven components, minimize moving parts, prefer simple failure modes, and spend novelty budget only where it creates real advantage.
+   - **Thesis:** Choose proven components, minimise moving parts, prefer designs whose failure modes are simple and well understood, and spend your limited 'innovation budget' only where it creates real advantage. Reliability comes from boring systems that many people can operate, not clever ones only their author can.
+   - **60-second answer:** Clever designs often work beautifully until something unusual happens, and then only one person can debug them. Boring designs use well-known technology with mature tooling, documented failure modes and a large community. I'd apply a few rules. Default to technologies the team already runs well, like a relational database, a mainstream queue and a standard deploy pipeline, and treat each new technology as a cost to justify. Minimise components on the critical path, because every component is a failure mode. Prefer simple failure behaviour: fail fast with clear errors rather than complex self-healing that can misbehave. Make operations predictable: the same deployment, monitoring and runbook patterns everywhere. And reserve novelty for the parts that actually differentiate the product. Dan McKinley's idea of innovation tokens captures this: you only get a few, so spend them where they matter.
+   - **Key points:**
+     1. **Proven technology by default.** Mature tools have known failure modes, tooling, documentation and people who know them. New tools have unknown unknowns.
+     2. **Innovation budget.** Each new technology or novel design pattern costs learning, operational effort and risk. Spend that budget only on differentiators.
+     3. **Fewer moving parts.** Every component on the critical path is a way to fail. Remove components whose value doesn't clearly exceed that risk.
+     4. **Simple failure modes.** Fail fast, clear errors, predictable degradation. Complex automatic recovery can create new, harder failures.
+     5. **Uniform operations.** Same deploy, observability and runbook patterns across services, so anyone on call can work on any of them.
+     6. **Readable over clever code.** Code that a new team member can follow at 3 a.m. beats a concise trick. Optimise for the reader.
+     7. **Defend the choice with operational data.** Incident counts, time to recover and on-call load show the value of boring choices.
+   - **When to choose what:** Boring by default; novel only where it provides a measurable advantage and the team can operate it. Revisit 'boring' periodically, since today's novel tool can become tomorrow's standard.
+   - **Numbers:**
+     - Rule of thumb: limit new production technologies to a small number per year per team, each with a named owner and an exit plan.
+   - **Pitfalls:**
+     - Adopting a new database or framework because it's exciting.
+     - Elaborate self-healing logic that causes outages when it misfires.
+     - Clever one-off solutions that nobody else understands.
+     - Confusing boring with neglected: boring systems still need upgrades and care.
+   - **Follow-ups:**
+     - _When is a novel technology worth it?_ When it solves a real problem existing tools can't, the advantage is significant, and the team commits to learning and operating it.
+     - _Doesn't boring tech hold back innovation?_ It frees capacity for innovation where it matters: in the product. Infrastructure novelty rarely wins customers.
+     - _How do you retire a clever system?_ Document what it does, replace it incrementally with a standard approach, and verify behaviour with tests before removing it.
+   - **Example:** A team replaced a custom-built distributed lock manager, written by an engineer who'd left, with Postgres advisory locks and leases. Throughput was more than enough, three lock-related incidents a quarter dropped to zero, and any engineer could now debug it.
+   - **Sources:** [Dan McKinley: Choose boring technology](https://mcfunley.com/choose-boring-technology)
 90. **How do I decide what not to build into a system?** [ref · Intermediate · Leadership, Architecture]
-   - Tie each feature to a present requirement or measured risk, defer what is cheap to add later, and write the non-goals down.
+   - **Thesis:** Tie every feature and component to a present requirement or a measured risk, defer what's cheap to add later, and write the non-goals down so the decision survives the next planning meeting. Saying no is a design activity, not an absence of one.
+   - **60-second answer:** I'd sort candidate features into three groups. Must have now: needed for the core use case, legal or safety requirements, or protection against a known, costly risk. Cheap to add later: features whose absence doesn't lock in anything, like extra reports, more configuration, or another integration; these are deferred without guilt. Expensive to add later: things that shape data models, public APIs or security boundaries; these deserve discussion now, even if the decision is to keep a seam rather than build the feature. Then I'd write explicit non-goals in the design doc, such as 'we won't support multi-currency in v1' and 'we won't build our own notification system', so scope creep has to argue against a written decision. I'd also look at the cost side: every feature adds code to maintain, test surface, documentation, support load and failure modes, so 'nice to have' needs to be worth that ongoing cost.
+   - **Key points:**
+     1. **Requirement or risk test.** Each feature must trace to a current user need, legal requirement, or measured risk. 'Someone might want it' isn't enough.
+     2. **Reversibility test.** Defer features that are cheap to add later; discuss now the ones that would force data model, API or security changes later.
+     3. **Keep seams, not features.** For likely future needs, make the design not preclude them (an id format, a currency field) without building the feature.
+     4. **Write non-goals.** Explicit non-goals in the design doc stop scope creep and make trade-offs visible to stakeholders.
+     5. **Count the ongoing cost.** Maintenance, testing, documentation, support and operational load for every feature, forever.
+     6. **Use evidence to add later.** Usage data, customer requests and incidents decide when a deferred feature becomes a requirement.
+   - **When to choose what:** Build what the core use case and known risks require; keep cheap seams for likely needs; defer everything else with written non-goals and triggers for reconsideration.
+   - **Numbers:**
+     - Rough heuristic: the lifetime cost of a feature is often several times its build cost once maintenance, support and the drag on future changes are counted.
+   - **Pitfalls:**
+     - Building configurability for imagined future customers.
+     - Deferring something that's expensive to retrofit (like multi-tenancy or audit logging in a regulated domain).
+     - Non-goals not written down, so they're relitigated every month.
+     - Saying no without explaining the trade-off, which damages trust with stakeholders.
+   - **Follow-ups:**
+     - _A stakeholder insists on a feature you think is unnecessary. What do you do?_ Ask for the underlying need and evidence, estimate the full cost, propose a cheaper way to meet the need or a trigger to revisit, and escalate to the product owner if needed.
+     - _How do you decide what's expensive to add later?_ Anything that changes the shape of stored data, public APIs, security or tenancy boundaries, or requires migrating many clients.
+     - _How do non-goals help later?_ They record why something was excluded, so future teams can tell whether circumstances have changed rather than guessing.
+   - **Example:** For a new lending product, the team deferred co-borrower support, custom report builders and a partner API, but stored amounts with currency codes and kept applicant data in a structure that could hold multiple applicants. When co-borrowers were added a year later, no migration was needed.
+   - **Sources:** [Martin Fowler: Yagni](https://martinfowler.com/bliki/Yagni.html)
 91. **How do I design so that mistakes are cheap, not catastrophic?** [ref · Advanced · Reliability, Leadership]
-   - Small blast radius, progressive rollout, reversible changes, backups and restore tests, feature flags, and guardrails on destructive operations.
+   - **Thesis:** Assume mistakes will happen and design so each one has a small blast radius and a fast undo: progressive rollouts, reversible changes, feature flags, cells or shards that contain failures, backups with tested restores, and guardrails on destructive operations.
+   - **60-second answer:** People will deploy bugs, push bad config, run the wrong command and delete the wrong thing. The goal is to make each of those cheap. I'd limit blast radius: progressive rollouts that start with a canary, one cell or one region and expand only if metrics stay healthy, with automatic rollback; cell-based architecture so a bad change or overload affects a fraction of customers. I'd make changes reversible: backward-compatible schema changes, feature flags that turn new behaviour off without a deploy, config changes versioned and quickly revertible. I'd add guardrails on destructive operations: soft delete, deletion protection on databases and buckets, confirmation and peer approval for dangerous commands, and least-privilege access so one mistake can't touch everything. And I'd make recovery real: tested backups and point-in-time restore. Culturally, blameless postmortems make people report and fix near-misses instead of hiding them.
+   - **Key points:**
+     1. **Progressive delivery.** Canary, then a small percentage, then wider, with automated health checks and rollback. Most bad changes are caught at a few percent of traffic.
+     2. **Cells and blast-radius limits.** Partition customers into independent cells; deploy and configure one cell at a time so failures stay contained.
+     3. **Reversible changes.** Backward-compatible migrations, feature flags, and versioned config with one-step revert.
+     4. **Guardrails on destructive actions.** Deletion protection, soft delete, required approvals, dry-run modes, and rate limits on bulk operations.
+     5. **Least privilege.** Narrow permissions and separate production credentials so one mistake or compromised account can't affect everything.
+     6. **Tested recovery.** Point-in-time recovery, backups in an isolated account, and regular restore drills.
+     7. **Blameless learning.** Postmortems focus on how the system allowed the mistake, leading to better guardrails rather than blame.
+   - **When to choose what:** Invest first in fast rollback and progressive delivery (they catch the most common mistakes), then guardrails on destructive operations, then cell isolation as scale and risk grow.
+   - **Numbers:**
+     - Rollout example: 1% for 15 minutes, 10% for 30 minutes, 50% for 30 minutes, then 100%, with automatic rollback if error rate rises by more than a set threshold at any stage.
+     - Cell math: with 20 cells, a bad change caught in the first cell affects about 5% of customers.
+   - **Pitfalls:**
+     - Global config pushes that apply everywhere at once.
+     - Rollbacks that are possible in theory but never practised.
+     - Production databases without deletion protection or point-in-time recovery.
+     - Blame culture, so near-misses go unreported.
+   - **Follow-ups:**
+     - _How do you make config changes as safe as code deploys?_ Store config in version control, validate it in CI, roll it out progressively, and monitor and revert it like code.
+     - _What's the most valuable guardrail to add first?_ Fast, practised rollback for deploys and config, because bad changes cause a large share of incidents.
+     - _How do cells differ from shards?_ Cells are complete, independent copies of the service stack serving a subset of customers, so a failure or bad deploy in one doesn't spread; shards usually partition only the data.
+   - **Example:** A bad fee-calculation rule was deployed behind a flag to 2% of loans. Automated checks comparing fees with the previous version flagged anomalies within 10 minutes; the flag was turned off, 140 loans were corrected by a script, and no customer was charged incorrectly.
+   - **Sources:** [AWS Builders' Library: Automating safe, hands-off deployments](https://aws.amazon.com/builders-library/automating-safe-hands-off-deployments/); [Google SRE book: Postmortem culture](https://sre.google/sre-book/postmortem-culture/)
 
 ### Design docs & ownership
 92. **Write a design doc that is still useful in three years.** [mine + ref · Advanced · Leadership]
-   - Context and constraints, alternatives considered, decisions with reasons, non-goals, and open questions. The reasons age better than the diagrams.
-   - Record context, goals and non-goals, alternatives considered, decisions and their reasons, and known risks. Date it, link follow-ups, and keep diagrams simple.
+   - **Thesis:** Write down what will still matter when the code has changed: the context and constraints, the goals and non-goals, the alternatives considered, and the decisions with their reasons. Reasons age well; diagrams and implementation details don't. Date it, keep it short, and link decisions to follow-up records as things change.
+   - **60-second answer:** In three years, nobody will need the class diagram, because the code shows that. They'll need to know why: what problem we were solving, which constraints we had, such as team size, deadline, regulation or traffic, which options we considered and why we rejected them, and what we explicitly chose not to do. So I'd structure the doc as context, goals and non-goals, the proposed design at the level of components and data flows, alternatives considered with honest trade-offs, risks and open questions, and a decision record. I'd keep diagrams simple and high-level so they stay true longer. The doc gets a date, an author and a status. When decisions change later, I'd add short architecture decision records that link back, rather than silently editing history, so the trail of reasoning survives. And I'd store it next to the code or in a searchable place people actually look.
+   - **Key points:**
+     1. **Context and constraints.** The problem, the users, and the forces at the time: scale, deadline, team, regulation. Future readers judge the decision against these.
+     2. **Goals and non-goals.** What success means and what was deliberately excluded. Non-goals prevent future readers from assuming omissions were oversights.
+     3. **Design at the right altitude.** Components, data ownership, flows and key interfaces. Skip details that the code expresses better and that will change quickly.
+     4. **Alternatives considered.** Two or three real options with trade-offs, including why the chosen one won. This is the most valuable section later.
+     5. **Risks and open questions.** Known weaknesses and assumptions, so future teams know what to watch and what might have changed.
+     6. **Dated, owned, with status.** Draft, approved, superseded. A reader should know immediately whether it's current.
+     7. **Decision records for changes.** Short ADRs for later decisions, linked from the original doc, preserve the reasoning trail without rewriting history.
+   - **When to choose what:** Design docs for significant or hard-to-reverse decisions; ADRs for smaller decisions and changes. Store them where the code lives or in a well-indexed repository.
+   - **Numbers:**
+     - Length guide: most design docs are clearer at a handful of pages; if it's much longer, split decisions into separate ADRs or appendices.
+   - **Pitfalls:**
+     - Docs that describe implementation details already in the code.
+     - No alternatives section, so readers can't tell whether options were considered.
+     - Editing the original doc to match current reality, losing the history of why.
+     - Docs stored where nobody can find them.
+   - **Follow-ups:**
+     - _How do you keep docs from going stale?_ Don't try to keep them current in detail; mark status, link superseding ADRs, and keep living reference docs (runbooks, API docs) separate.
+     - _What's an ADR?_ A short record of one decision: context, decision, status and consequences. Michael Nygard popularised the format.
+     - _Who should review a design doc?_ People who will build it, operate it, depend on it, and someone outside the team for a fresh view on assumptions.
+   - **Example:** A 2023 doc explaining why the team chose a single Postgres instance over a distributed database (team of five, 2,000 writes/s peak, regulator-mandated simplicity) saved a later team weeks of debate: they saw the constraints had changed, wrote an ADR superseding it, and moved to partitioning with the original reasoning as a baseline.
+   - **Sources:** [Michael Nygard: Documenting architecture decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions); [ADR GitHub organisation: Architecture decision records](https://adr.github.io/)
    - _Also asked as:_ How do I write a design doc that survives 3 years of evolution?
 93. **How do I design systems that can be owned by teams, not heroes?** [ref · Advanced · Leadership, Operations]
-   - Documented runbooks, shared on-call, boring technology, clear ownership boundaries, and no component only one person understands.
+   - **Thesis:** A system is team-owned when anyone on the rotation can understand, operate and change it: clear ownership boundaries, documented runbooks and design records, shared on-call, boring technology, and no component that only one person can fix. Hero dependence is a design flaw, not a staffing detail.
+   - **60-second answer:** I'd start with ownership: every service, job and data store has one owning team, recorded in a catalogue used for alerts and reviews, with boundaries matching team boundaries so a team can change its system without coordinating with five others. Then make knowledge transferable: runbooks for every alert, design docs and decision records for the why, and onboarding that includes doing real operational tasks. On-call is shared by the whole team on a sustainable rotation, which spreads knowledge and makes pain visible to everyone, motivating fixes. Technology choices favour things many people already know. And I'd actively look for heroes: if one person is always pulled into incidents for a component, that's a risk to fix with pairing, documentation and simplification, not a person to praise and rely on. Measure it: can someone new to the team handle a typical incident with the runbook alone?
+   - **Key points:**
+     1. **Single, clear owner.** Every component owned by one team in a service catalogue, linked to alerts, dashboards and docs.
+     2. **Boundaries match teams.** Systems divided so each team can change and deploy its part independently, reducing coordination and diffusion of responsibility.
+     3. **Runbooks and decision records.** Operational knowledge and design reasoning written down where the team can find them.
+     4. **Shared on-call.** The whole team rotates, sustainably. Knowledge spreads, and the people who build the system feel its operational pain.
+     5. **Boring, familiar technology.** Fewer specialised components means fewer specialists required.
+     6. **Find and remove hero dependencies.** Track who gets pulled into incidents; pair, document and simplify until others can handle those components.
+     7. **Test it.** Game days and onboarding tasks where newer team members handle realistic incidents using only docs and tools.
+   - **When to choose what:** Make ownership, documentation and shared on-call explicit requirements for production readiness. Treat a bus factor of one on a critical component as a risk with an owner and a deadline.
+   - **Numbers:**
+     - On-call sustainability guide: rotations of at least several people (Google's SRE book suggests a minimum of around eight for a single-site 24/7 rotation) so on-call doesn't burn people out.
+   - **Pitfalls:**
+     - Components 'owned' by everyone, meaning no one.
+     - Rewarding heroics in incidents instead of fixing what made heroics necessary.
+     - On-call only for a few senior engineers.
+     - Documentation written once at launch and never updated.
+   - **Follow-ups:**
+     - _A key engineer is the only one who understands the billing engine. What do you do?_ Schedule pairing and shadowing, have others lead the next changes and incidents with their support, write runbooks from their knowledge, and simplify the scariest parts.
+     - _How do you assign ownership for shared libraries or platforms?_ A platform team owns them as products, with clear support channels and versioning; consuming teams own their use of them.
+     - _How do you know ownership is working?_ Incidents are resolved by whoever is on call, without escalation to specific individuals, and changes ship without cross-team coordination.
+   - **Example:** Incident data showed one engineer joined 70% of payment incidents. Over a quarter, the team wrote runbooks from their knowledge, paired on every payment change, and had others lead game days. The next two payment incidents were resolved by on-call engineers alone.
+   - **Sources:** [Google SRE book: Being on-call](https://sre.google/sre-book/being-on-call/); [Team Topologies: Key concepts](https://teamtopologies.com/key-concepts)

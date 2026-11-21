@@ -1,0 +1,70 @@
+{
+  "thesis": "Start from the problem and walk one real request through the system, adding each component only when the story needs it. Use one diagram, connect new ideas to things they already know, and check understanding by asking them to predict what happens when something fails.",
+  "pitch": "I'd begin with why the system exists: the user problem and the one or two constraints that shape everything, such as 'payments must never double-charge'. Then I'd trace a single concrete request end to end, say a user submitting a loan application, and introduce each component at the moment it's needed: the load balancer because we have several servers, the queue because document checks are slow, the outbox because we can't lose events. Each component arrives with the reason it exists, which makes it memorable. I'd draw one diagram as we go rather than presenting a finished wall of boxes, and connect ideas to familiar ones, for example a queue as a to-do list workers pick from. Then I'd check understanding by asking them to predict: 'what happens if the payment provider times out here?' Their answer shows what landed. Finally, I'd give them a small change to make in that flow, because explaining isn't the same as understanding.",
+  "points": [
+    {
+      "h": "Problem and constraints first",
+      "d": "Explain what the system is for and the key constraints. Components make sense only in light of what they protect."
+    },
+    {
+      "h": "Follow one concrete request",
+      "d": "A specific scenario (this user, this action) gives a narrative thread and avoids abstract tours of components."
+    },
+    {
+      "h": "Introduce components just in time",
+      "d": "Each box appears when the story needs it, along with why it exists. Reasons stick better than names."
+    },
+    {
+      "h": "One evolving diagram",
+      "d": "Draw as you talk. A diagram built in front of someone is far easier to follow than a finished one."
+    },
+    {
+      "h": "Anchor to what they know",
+      "d": "Analogies and comparisons to systems or code they've used. Be clear where the analogy breaks."
+    },
+    {
+      "h": "Check with predictions",
+      "d": "Ask what happens when something fails or load doubles. Predictions reveal gaps that 'does that make sense?' never will."
+    },
+    {
+      "h": "Hands-on follow-up",
+      "d": "A small, real change in the flow you described, with support. Doing consolidates understanding."
+    }
+  ],
+  "decision": "Narrative and reasons over completeness. Leave out details that don't serve the first mental model; they can come later once the skeleton is in place.",
+  "numbers": [
+    "Session shape: about 5 minutes of problem and constraints, 20 minutes on one request flow, 10 minutes of prediction questions, then a follow-up task."
+  ],
+  "pitfalls": [
+    "Starting with the full architecture diagram and every component.",
+    "Jargon without definition.",
+    "Asking 'any questions?' instead of checking with concrete prediction questions.",
+    "Explaining once and assuming it stuck, with no hands-on follow-up."
+  ],
+  "followups": [
+    {
+      "q": "How do you know they really understood?",
+      "a": "They can predict failure behaviour correctly, explain the flow back in their own words, and make a small change without hand-holding."
+    },
+    {
+      "q": "What if they're too shy to ask questions?",
+      "a": "Ask them targeted questions instead, normalise not knowing by admitting what confused you when you learned it, and follow up one-on-one."
+    },
+    {
+      "q": "How does this apply to writing docs?",
+      "a": "Same structure: purpose, constraints, one walkthrough, then reference details. Most design docs fail by starting with the reference."
+    }
+  ],
+  "example": "Explaining the repayment system to a new engineer, I started with 'every payment must be applied exactly once and in the right order', walked through one customer's payment from bank webhook to ledger posting, introduced the inbox table at the point a duplicate webhook arrived, and then asked what happens if the ledger is down. They worked out the retry and DLQ path themselves.",
+  "related": [
+    "defend-design-trade-off-skeptical",
+    "write-design-doc-still-useful",
+    "design-systems-owned-teams-not"
+  ],
+  "sources": [
+    {
+      "title": "Simon Brown: The C4 model for visualising software architecture",
+      "url": "https://c4model.com/"
+    }
+  ]
+}

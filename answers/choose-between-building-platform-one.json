@@ -1,0 +1,75 @@
+{
+  "thesis": "Build a platform when several teams need the same capability, the interface has stabilised, and the cost of everyone building it separately is clear. Otherwise ship the one-off and extract a platform later from real, repeated usage.",
+  "pitch": "Platforms are tempting because they promise reuse, but a platform built before you understand the use cases encodes the wrong abstractions and then every team works around it. My rule of thumb: the first time, build it for the one use case; the second time, copy and adapt and notice what changed; the third time, you understand the variation well enough to extract a platform. I'd also check that the interface has stabilised, that there's a team willing to own it as a product with support, documentation and roadmap, and that the cost of duplication, such as divergent security, operational load and inconsistent behaviour, is real. When building a platform, start from the existing implementations, keep the first version narrow, make the easy path the default, and measure adoption and satisfaction rather than mandating it.",
+  "points": [
+    {
+      "h": "Rule of three",
+      "d": "Extract a shared capability after it's been built and adapted several times, when you can see what really varies."
+    },
+    {
+      "h": "Stable interface",
+      "d": "If requirements still change monthly, a platform will churn its users. Wait until the shape settles."
+    },
+    {
+      "h": "Real duplication cost",
+      "d": "Security fixes applied in five places, inconsistent behaviour customers notice, five on-call burdens. Without real cost, duplication may be fine."
+    },
+    {
+      "h": "A team that owns it as a product",
+      "d": "Platforms need roadmaps, docs, support, versioning and migration help. Without an owner they decay."
+    },
+    {
+      "h": "Extract from working code",
+      "d": "Base the platform on existing implementations rather than designing from scratch, and migrate those users first."
+    },
+    {
+      "h": "Narrow first version",
+      "d": "Cover the common 80% well; leave escape hatches for the rest rather than trying to handle every case."
+    },
+    {
+      "h": "Adoption by pull",
+      "d": "Make it the easiest option. Measure adoption and user satisfaction; mandates hide a bad product."
+    }
+  ],
+  "decision": "One-off first; extract when three or more teams need it, the interface is stable, duplication costs are measurable, and an owning team exists.",
+  "numbers": [
+    "Break-even sketch: if a capability costs each team 4 engineer-weeks to build and 1 week/quarter to maintain, a platform costing 12 weeks plus 2 weeks/quarter pays off once 3–4 teams use it."
+  ],
+  "pitfalls": [
+    "Building a platform for one team's use case and calling it general.",
+    "No owner, so the platform's bugs block every team.",
+    "Over-general abstractions that make the common case hard.",
+    "Forcing adoption before the platform is better than the alternatives."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle teams with needs the platform doesn't cover?",
+      "a": "Provide extension points or let them build outside the platform, then fold common patterns back in."
+    },
+    {
+      "q": "Internal platform or managed service?",
+      "a": "If a managed service covers the need, use it and build only thin glue; build internally only for what's specific to you."
+    },
+    {
+      "q": "How do you measure platform success?",
+      "a": "Adoption, time for a new team to onboard, incidents caused, and developer satisfaction surveys."
+    }
+  ],
+  "example": "Three teams had built their own notification sending, each with different retry logic and provider integrations. A small team extracted a notification service from the best implementation, migrated the three teams over a quarter, and new teams adopted it voluntarily because it was faster than building their own.",
+  "related": [
+    "decide-buy-build",
+    "design-systems-multiple-teams-safely",
+    "splitting-monolith-pay-itself",
+    "tell-design-over-engineered"
+  ],
+  "sources": [
+    {
+      "title": "Team Topologies: Key concepts (platform teams)",
+      "url": "https://teamtopologies.com/key-concepts"
+    },
+    {
+      "title": "Martin Fowler: What I talk about when I talk about platforms",
+      "url": "https://martinfowler.com/articles/talk-about-platforms.html"
+    }
+  ]
+}

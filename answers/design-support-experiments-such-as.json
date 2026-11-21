@@ -1,0 +1,74 @@
+{
+  "thesis": "Put experiments and flags on a central service with stable user bucketing, log every exposure, give every flag an owner, expiry and kill switch, and keep experiment logic at the edges of business code so cleaning up a finished experiment is deleting a branch, not untangling logic.",
+  "pitch": "I'd use a central flag and experiment service, built or bought, with SDKs that evaluate flags locally from cached rules, so a flag check is fast and doesn't fail if the service is down. Bucketing is deterministic: hash the user or account id with the experiment key, so a user consistently sees the same variant across sessions and devices. Every time a user is exposed to a variant, the SDK logs an exposure event, which analysis needs to compare like with like. I'd separate kinds of flags: release toggles, which are short-lived; experiments; operational kill switches; and permissions. Each flag has an owner and expected removal date, and stale flags are flagged in reviews or CI. In code, evaluate the flag once near the entry point and pass the decision down, rather than scattering checks through business logic. And I'd guard experiments with metrics that automatically stop them if errors or key business metrics degrade.",
+  "points": [
+    {
+      "h": "Central service, local evaluation",
+      "d": "Rules managed centrally; SDKs cache them and evaluate in-process, with safe defaults if the service is unreachable."
+    },
+    {
+      "h": "Deterministic bucketing",
+      "d": "hash(experiment_key + unit_id) mod 100 assigns a stable bucket. Choose the unit (user, account, session) to match how the experience is shared."
+    },
+    {
+      "h": "Exposure logging",
+      "d": "Log when a user actually encounters a variant, not just assignment. Analysis on exposed users avoids dilution and bias."
+    },
+    {
+      "h": "Flag types and lifecycles",
+      "d": "Release toggles (days to weeks), experiments (weeks), ops kill switches (permanent), permissions (long-lived). Each type has different review rules."
+    },
+    {
+      "h": "Ownership and expiry",
+      "d": "Every flag has an owner and removal date; dashboards and CI warnings surface stale ones."
+    },
+    {
+      "h": "Keep logic at the edges",
+      "d": "Branch once near the entry point (choose implementation A or B) rather than sprinkling checks in core logic. Cleanup becomes deleting a branch."
+    },
+    {
+      "h": "Guardrail metrics",
+      "d": "Automatic alerts or stops if error rates, latency or core business metrics drop in a variant."
+    }
+  ],
+  "decision": "Buy or adopt a flag platform unless you have unusual needs; invest in exposure logging, guardrails and cleanup discipline either way. Statistical rigour (sample size, pre-registered metrics) matters as much as the tooling.",
+  "numbers": [
+    "Sample size intuition: detecting a 1 percentage-point change on a 10% conversion rate with typical power needs on the order of tens of thousands of users per variant; small effects need large samples."
+  ],
+  "pitfalls": [
+    "Random assignment per request, so users flip between variants.",
+    "Analysing assigned users instead of exposed users.",
+    "Hundreds of stale flags making code paths untestable.",
+    "Flags evaluated by remote call on every request, adding latency and a failure point."
+  ],
+  "followups": [
+    {
+      "q": "How do you run experiments on the backend, like a new pricing algorithm?",
+      "a": "Same bucketing in the service, exposure logged when the algorithm's output is used, and guardrails on revenue and error metrics; consider shadow mode first."
+    },
+    {
+      "q": "How do you avoid experiments interfering with each other?",
+      "a": "Mutually exclusive layers for experiments that touch the same area, or factorial designs when interactions are wanted."
+    },
+    {
+      "q": "How do you clean up flags?",
+      "a": "Expiry dates with automatic tickets, CI warnings for flags past expiry, and periodic cleanup sprints."
+    }
+  ],
+  "example": "A loan application redesign ran as an experiment bucketed by applicant id, with exposure logged on first view of the new form. A guardrail stopped one variant within an hour when submission errors spiked; the winning variant was rolled out and the flag removed two weeks later.",
+  "related": [
+    "design-mistakes-cheap-not-catastrophic",
+    "plan-rollback-release-has-already",
+    "design-systems-multiple-teams-safely"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler (Pete Hodgson): Feature toggles",
+      "url": "https://martinfowler.com/articles/feature-toggles.html"
+    },
+    {
+      "title": "Kohavi, Tang, Xu: Trustworthy online controlled experiments",
+      "url": "https://experimentguide.com/"
+    }
+  ]
+}

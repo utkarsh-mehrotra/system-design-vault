@@ -1,0 +1,70 @@
+{
+  "thesis": "Build what differentiates you or what you must control deeply; buy what's commodity. Decide on total cost over several years: integration, lock-in, data portability, compliance, and the people cost of running either option.",
+  "pitch": "I'd ask first: does this capability make customers choose us, or does it just need to work? Underwriting models for a lender differentiate; email delivery, observability, authentication and payroll don't. For commodity capabilities, buying usually wins: vendors spread the cost across many customers and keep up with security and features. Then I'd compare total cost over three to five years: licence or usage fees against engineering time to build and, more importantly, to run, maintain, secure and support it. I'd weigh lock-in, meaning how hard it is to leave, including data export formats and proprietary APIs; compliance and data residency; vendor risk; and integration effort. For things we must control, like core data models, regulatory logic and latency-critical paths, building can be justified even if a vendor exists. And keep a thin abstraction around bought services where switching is plausible, not everywhere.",
+  "points": [
+    {
+      "h": "Differentiation test",
+      "d": "If doing it better than competitors wins customers, consider building. If it just has to work, buy."
+    },
+    {
+      "h": "Total cost of ownership",
+      "d": "Build: initial engineering plus ongoing maintenance, on-call, security patches and feature work. Buy: fees, integration, vendor management and constraints."
+    },
+    {
+      "h": "Lock-in and portability",
+      "d": "Can you export your data in usable form? Are APIs standard? What would migration cost? Negotiate exit terms."
+    },
+    {
+      "h": "Control requirements",
+      "d": "Regulatory logic, auditability, latency, and data residency may require control a vendor can't provide."
+    },
+    {
+      "h": "Vendor risk",
+      "d": "Financial stability, security posture, SLAs, support quality and roadmap alignment."
+    },
+    {
+      "h": "Integration effort",
+      "d": "Bought products still need integration, configuration, and sometimes workarounds for missing features."
+    },
+    {
+      "h": "Thin abstraction where switching is plausible",
+      "d": "Wrap a bought service behind your own interface when you might realistically change vendors; don't abstract everything."
+    }
+  ],
+  "decision": "Buy commodity, build differentiators, and treat 'buy then extend' (a vendor core with your logic on top) as a common middle path. Revisit when a bought product becomes a constraint or its costs scale faster than your business.",
+  "numbers": [
+    "TCO sketch: building in-house = 3 engineers × 6 months to build + 1.5 engineers ongoing; at a fully loaded cost per engineer, that often exceeds a vendor fee for commodity capabilities several times over."
+  ],
+  "pitfalls": [
+    "Building commodity infrastructure because it's interesting.",
+    "Buying a product that can't meet a core regulatory or latency requirement and working around it forever.",
+    "Ignoring exit costs and data portability.",
+    "Comparing build cost to vendor price but forgetting the cost of running what you build."
+  ],
+  "followups": [
+    {
+      "q": "When would you switch from bought to built?",
+      "a": "When the vendor becomes a meaningful constraint on differentiation, when costs scale badly with your volume, or when control requirements change."
+    },
+    {
+      "q": "How do you evaluate vendors?",
+      "a": "Requirements checklist, proof of concept on your hardest use case, security and compliance review, reference customers, and contract terms including exit."
+    },
+    {
+      "q": "Open source as a third option?",
+      "a": "It removes licence fees but not running costs. Self-hosting open source is closer to building in operational terms; managed offerings of open source are a middle path."
+    }
+  ],
+  "example": "A lender buys identity verification, email delivery and observability, but builds its decisioning engine and repayment schedule logic, because those encode credit policy and regulatory rules that set it apart and must be fully auditable.",
+  "related": [
+    "choose-between-building-platform-one",
+    "design-cost-visibility-optimization-day",
+    "defend-design-trade-off-skeptical"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Utility vs strategic dichotomy",
+      "url": "https://martinfowler.com/bliki/UtilityVsStrategicDichotomy.html"
+    }
+  ]
+}

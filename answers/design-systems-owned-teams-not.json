@@ -1,0 +1,75 @@
+{
+  "thesis": "A system is team-owned when anyone on the rotation can understand, operate and change it: clear ownership boundaries, documented runbooks and design records, shared on-call, boring technology, and no component that only one person can fix. Hero dependence is a design flaw, not a staffing detail.",
+  "pitch": "I'd start with ownership: every service, job and data store has one owning team, recorded in a catalogue used for alerts and reviews, with boundaries matching team boundaries so a team can change its system without coordinating with five others. Then make knowledge transferable: runbooks for every alert, design docs and decision records for the why, and onboarding that includes doing real operational tasks. On-call is shared by the whole team on a sustainable rotation, which spreads knowledge and makes pain visible to everyone, motivating fixes. Technology choices favour things many people already know. And I'd actively look for heroes: if one person is always pulled into incidents for a component, that's a risk to fix with pairing, documentation and simplification, not a person to praise and rely on. Measure it: can someone new to the team handle a typical incident with the runbook alone?",
+  "points": [
+    {
+      "h": "Single, clear owner",
+      "d": "Every component owned by one team in a service catalogue, linked to alerts, dashboards and docs."
+    },
+    {
+      "h": "Boundaries match teams",
+      "d": "Systems divided so each team can change and deploy its part independently, reducing coordination and diffusion of responsibility."
+    },
+    {
+      "h": "Runbooks and decision records",
+      "d": "Operational knowledge and design reasoning written down where the team can find them."
+    },
+    {
+      "h": "Shared on-call",
+      "d": "The whole team rotates, sustainably. Knowledge spreads, and the people who build the system feel its operational pain."
+    },
+    {
+      "h": "Boring, familiar technology",
+      "d": "Fewer specialised components means fewer specialists required."
+    },
+    {
+      "h": "Find and remove hero dependencies",
+      "d": "Track who gets pulled into incidents; pair, document and simplify until others can handle those components."
+    },
+    {
+      "h": "Test it",
+      "d": "Game days and onboarding tasks where newer team members handle realistic incidents using only docs and tools."
+    }
+  ],
+  "decision": "Make ownership, documentation and shared on-call explicit requirements for production readiness. Treat a bus factor of one on a critical component as a risk with an owner and a deadline.",
+  "numbers": [
+    "On-call sustainability guide: rotations of at least several people (Google's SRE book suggests a minimum of around eight for a single-site 24/7 rotation) so on-call doesn't burn people out."
+  ],
+  "pitfalls": [
+    "Components 'owned' by everyone, meaning no one.",
+    "Rewarding heroics in incidents instead of fixing what made heroics necessary.",
+    "On-call only for a few senior engineers.",
+    "Documentation written once at launch and never updated."
+  ],
+  "followups": [
+    {
+      "q": "A key engineer is the only one who understands the billing engine. What do you do?",
+      "a": "Schedule pairing and shadowing, have others lead the next changes and incidents with their support, write runbooks from their knowledge, and simplify the scariest parts."
+    },
+    {
+      "q": "How do you assign ownership for shared libraries or platforms?",
+      "a": "A platform team owns them as products, with clear support channels and versioning; consuming teams own their use of them."
+    },
+    {
+      "q": "How do you know ownership is working?",
+      "a": "Incidents are resolved by whoever is on call, without escalation to specific individuals, and changes ship without cross-team coordination."
+    }
+  ],
+  "example": "Incident data showed one engineer joined 70% of payment incidents. Over a quarter, the team wrote runbooks from their knowledge, paired on every payment change, and had others lead game days. The next two payment incidents were resolved by on-call engineers alone.",
+  "related": [
+    "write-runbook-call-engineer-follow",
+    "design-boring-reliability-instead-cleverness",
+    "write-design-doc-still-useful",
+    "design-systems-multiple-teams-safely"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Being on-call",
+      "url": "https://sre.google/sre-book/being-on-call/"
+    },
+    {
+      "title": "Team Topologies: Key concepts",
+      "url": "https://teamtopologies.com/key-concepts"
+    }
+  ]
+}

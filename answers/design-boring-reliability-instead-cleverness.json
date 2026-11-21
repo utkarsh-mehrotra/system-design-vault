@@ -1,0 +1,71 @@
+{
+  "thesis": "Choose proven components, minimise moving parts, prefer designs whose failure modes are simple and well understood, and spend your limited 'innovation budget' only where it creates real advantage. Reliability comes from boring systems that many people can operate, not clever ones only their author can.",
+  "pitch": "Clever designs often work beautifully until something unusual happens, and then only one person can debug them. Boring designs use well-known technology with mature tooling, documented failure modes and a large community. I'd apply a few rules. Default to technologies the team already runs well, like a relational database, a mainstream queue and a standard deploy pipeline, and treat each new technology as a cost to justify. Minimise components on the critical path, because every component is a failure mode. Prefer simple failure behaviour: fail fast with clear errors rather than complex self-healing that can misbehave. Make operations predictable: the same deployment, monitoring and runbook patterns everywhere. And reserve novelty for the parts that actually differentiate the product. Dan McKinley's idea of innovation tokens captures this: you only get a few, so spend them where they matter.",
+  "points": [
+    {
+      "h": "Proven technology by default",
+      "d": "Mature tools have known failure modes, tooling, documentation and people who know them. New tools have unknown unknowns."
+    },
+    {
+      "h": "Innovation budget",
+      "d": "Each new technology or novel design pattern costs learning, operational effort and risk. Spend that budget only on differentiators."
+    },
+    {
+      "h": "Fewer moving parts",
+      "d": "Every component on the critical path is a way to fail. Remove components whose value doesn't clearly exceed that risk."
+    },
+    {
+      "h": "Simple failure modes",
+      "d": "Fail fast, clear errors, predictable degradation. Complex automatic recovery can create new, harder failures."
+    },
+    {
+      "h": "Uniform operations",
+      "d": "Same deploy, observability and runbook patterns across services, so anyone on call can work on any of them."
+    },
+    {
+      "h": "Readable over clever code",
+      "d": "Code that a new team member can follow at 3 a.m. beats a concise trick. Optimise for the reader."
+    },
+    {
+      "h": "Defend the choice with operational data",
+      "d": "Incident counts, time to recover and on-call load show the value of boring choices."
+    }
+  ],
+  "decision": "Boring by default; novel only where it provides a measurable advantage and the team can operate it. Revisit 'boring' periodically, since today's novel tool can become tomorrow's standard.",
+  "numbers": [
+    "Rule of thumb: limit new production technologies to a small number per year per team, each with a named owner and an exit plan."
+  ],
+  "pitfalls": [
+    "Adopting a new database or framework because it's exciting.",
+    "Elaborate self-healing logic that causes outages when it misfires.",
+    "Clever one-off solutions that nobody else understands.",
+    "Confusing boring with neglected: boring systems still need upgrades and care."
+  ],
+  "followups": [
+    {
+      "q": "When is a novel technology worth it?",
+      "a": "When it solves a real problem existing tools can't, the advantage is significant, and the team commits to learning and operating it."
+    },
+    {
+      "q": "Doesn't boring tech hold back innovation?",
+      "a": "It frees capacity for innovation where it matters: in the product. Infrastructure novelty rarely wins customers."
+    },
+    {
+      "q": "How do you retire a clever system?",
+      "a": "Document what it does, replace it incrementally with a standard approach, and verify behaviour with tests before removing it."
+    }
+  ],
+  "example": "A team replaced a custom-built distributed lock manager, written by an engineer who'd left, with Postgres advisory locks and leases. Throughput was more than enough, three lock-related incidents a quarter dropped to zero, and any engineer could now debug it.",
+  "related": [
+    "tell-design-over-engineered",
+    "simplify-complex-design-losing-guarantees",
+    "design-systems-owned-teams-not",
+    "decide-buy-build"
+  ],
+  "sources": [
+    {
+      "title": "Dan McKinley: Choose boring technology",
+      "url": "https://mcfunley.com/choose-boring-technology"
+    }
+  ]
+}

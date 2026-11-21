@@ -1,0 +1,75 @@
+{
+  "thesis": "Use the strangler pattern: put a routing layer in front of the legacy system, move functionality slice by slice to the new system, keep data in sync during the overlap, and define a measurable exit criterion for turning the old system off. Big-bang rewrites fail because they defer all risk to one day.",
+  "pitch": "When a legacy system can't just be switched off, I'd first put a facade or routing layer in front of it, at the API gateway, a proxy, or an anti-corruption layer in code, so traffic can be directed per capability. Then pick a first slice that's valuable, well understood and loosely coupled, build it in the new system, and route that traffic over, often starting with shadow traffic to compare results. Data is the hard part: during the overlap, either the new system owns the migrated data and syncs back to legacy for the remaining functions, or legacy remains the source and the new system reads from it via CDC. Ownership must be clear for each piece of data at every stage. Each slice moves with a rollback path. And I'd define the exit: which functions remain on legacy, the date or traffic threshold for decommissioning, and who signs off, because otherwise the 'temporary' coexistence lasts a decade.",
+  "points": [
+    {
+      "h": "Route in front",
+      "d": "A facade (gateway, proxy, or interception layer) lets you move traffic per endpoint, per customer segment or per product without clients noticing."
+    },
+    {
+      "h": "Slice by capability",
+      "d": "Migrate business capabilities one at a time, starting with something valuable but not the most entangled core."
+    },
+    {
+      "h": "Shadow and compare",
+      "d": "Send copies of real requests to the new system and compare outputs before switching traffic, catching behavioural differences."
+    },
+    {
+      "h": "Clear data ownership during overlap",
+      "d": "For each data set at each stage, one system is the source of truth; the other is synced via CDC, events or batch, with reconciliation."
+    },
+    {
+      "h": "Anti-corruption layer",
+      "d": "Translate legacy models and quirks at the boundary so they don't leak into the new system's design."
+    },
+    {
+      "h": "Rollback per slice",
+      "d": "Routing can send traffic back to legacy if the new path misbehaves, as long as data sync allows it."
+    },
+    {
+      "h": "Exit criteria",
+      "d": "A defined end: remaining functions migrated, traffic at zero, data archived, contracts ended. Track progress visibly."
+    }
+  ],
+  "decision": "Incremental strangler migration with routing and data sync for any legacy system with active users. Big-bang cutovers only for small, well-understood systems where parallel running is impossible.",
+  "numbers": [
+    "Progress metric: percent of traffic, endpoints or business volume served by the new system, reported monthly; stalled progress is a signal to revisit scope or staffing."
+  ],
+  "pitfalls": [
+    "A full rewrite that runs for years without delivering value and then fails at cutover.",
+    "Both systems writing the same data with no clear source of truth.",
+    "Copying legacy quirks into the new system through a direct model translation.",
+    "No exit criterion, so both systems run forever and double the operational cost."
+  ],
+  "followups": [
+    {
+      "q": "The legacy system has no APIs, only a shared database. How do you start?",
+      "a": "Use CDC on its database to feed the new system, and intercept at the UI or batch-job level, while wrapping writes behind a new API as functions move."
+    },
+    {
+      "q": "How do you choose the first slice?",
+      "a": "High value, clear boundaries, limited data dependencies, and a team that understands it. A quick win builds credibility for the rest."
+    },
+    {
+      "q": "How do you handle reports that span old and new data?",
+      "a": "Feed both into a warehouse with a unified model during the overlap, so reporting doesn't depend on where a record lives."
+    }
+  ],
+  "example": "A bank migrated loan servicing off a mainframe over 30 months. A gateway routed by product: personal loans moved first, with CDC syncing balances back to the mainframe for statements. Each product moved after a month of shadow comparisons, and the mainframe contract ended when the last product migrated.",
+  "related": [
+    "migrate-billion-row-table-new",
+    "handle-breaking-change-scenarios-minimal",
+    "splitting-monolith-pay-itself",
+    "reconcile-divergent-data-across-systems"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Strangler fig application",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    },
+    {
+      "title": "Microsoft Azure Architecture Center: Anti-corruption layer pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer"
+    }
+  ]
+}

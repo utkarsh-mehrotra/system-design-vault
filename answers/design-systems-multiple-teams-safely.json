@@ -1,0 +1,75 @@
+{
+  "thesis": "Make extension safe by design: clear, versioned extension points with stable contracts, isolation so one team's extension can't take down the core or other extensions, documented ownership per component, and guardrails (tests, limits, review) that scale without a central bottleneck.",
+  "pitch": "When many teams extend one system, the risks are breaking each other, coupling to internals, and one team's bug taking down everything. I'd define explicit extension points: plugin interfaces, events to subscribe to, configuration schemas, APIs, each versioned and documented like a public API, so teams don't reach into internals. Isolation: extensions run with resource limits, timeouts and failure containment, in separate processes or sandboxes where the risk justifies it, so a slow plugin degrades only its own feature. Ownership: every component and extension has an owning team in a registry, used for routing alerts and reviews. Guardrails: contract tests that every extension must pass, automated checks in CI, and staged rollouts with feature flags. The core team sets standards and builds the paved path, but doesn't approve every change; the aim is autonomy within safe boundaries.",
+  "points": [
+    {
+      "h": "Explicit extension points",
+      "d": "Plugin interfaces, hooks, events, configuration and APIs. Anything not exposed is internal and may change."
+    },
+    {
+      "h": "Stable, versioned contracts",
+      "d": "Extension APIs follow the same compatibility rules as public APIs: additive changes, deprecation windows."
+    },
+    {
+      "h": "Isolation and limits",
+      "d": "Timeouts, resource quotas, separate thread pools or processes, and circuit breakers per extension so failures stay local."
+    },
+    {
+      "h": "Ownership registry",
+      "d": "Every service, extension and config owned by a named team, used for alert routing, reviews and incident escalation."
+    },
+    {
+      "h": "Contract and compatibility tests",
+      "d": "A test suite extensions must pass, run in CI against current and next core versions."
+    },
+    {
+      "h": "Safe rollout",
+      "d": "Feature flags and staged rollouts for extensions, with per-extension kill switches."
+    },
+    {
+      "h": "Paved path over gatekeeping",
+      "d": "Templates, libraries and docs that make the right way the easy way, instead of a central approval queue."
+    }
+  ],
+  "decision": "Invest in extension points and isolation proportional to the number of contributing teams and the blast radius of failures. In-process plugins with limits for trusted teams; out-of-process or sandboxed for untrusted or high-risk code.",
+  "numbers": [
+    "Isolation budget example: each extension gets a 50 ms timeout and a bounded pool of 10 concurrent executions; exceeding either disables it via circuit breaker without affecting the core request."
+  ],
+  "pitfalls": [
+    "Teams depending on internal classes or tables because no extension point existed.",
+    "Plugins running unbounded in the core request path.",
+    "No ownership, so broken extensions linger and alerts go nowhere.",
+    "A central team reviewing every change, becoming the bottleneck."
+  ],
+  "followups": [
+    {
+      "q": "How do you change an extension API without breaking teams?",
+      "a": "Version it, support old and new in parallel, provide migration guides and tooling, and track which extensions still use the old version."
+    },
+    {
+      "q": "How do you stop teams coupling to internals?",
+      "a": "Module boundaries enforced by build tooling, internal packages that can't be imported, and making the extension points good enough that nobody needs to bypass them."
+    },
+    {
+      "q": "What isolation level for third-party code?",
+      "a": "Out-of-process with strict resource and permission limits (containers, WebAssembly sandboxes) and no direct database access."
+    }
+  ],
+  "example": "A checkout platform lets product teams add pricing rules through a versioned plugin interface. Each plugin runs with a 30 ms budget and its own circuit breaker; a buggy promotion plugin once timed out on every call, and checkout simply ran without it while its owning team was paged.",
+  "related": [
+    "design-gateway-evolve-independently-services",
+    "choose-between-building-platform-one",
+    "design-systems-owned-teams-not",
+    "version-public-api-cannot-force"
+  ],
+  "sources": [
+    {
+      "title": "Team Topologies: Key concepts",
+      "url": "https://teamtopologies.com/key-concepts"
+    },
+    {
+      "title": "AWS Builders' Library: Workload isolation using shuffle-sharding",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  ]
+}

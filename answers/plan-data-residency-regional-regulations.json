@@ -1,0 +1,71 @@
+{
+  "thesis": "Classify data by jurisdiction and sensitivity, pin storage and processing to the right regions, control every path data can leak out (replication, backups, logs, analytics, support tools, vendors), and implement access and deletion rights per region. Residency is a property of the whole data flow, not just the primary database.",
+  "pitch": "I'd start with a data inventory: which data is personal or regulated, which jurisdictions' rules apply, and what each requires, whether storage in-country, processing restrictions, transfer mechanisms or retention. Then architecture: deploy regional cells, so EU customers' data lives and is processed in the EU, with a global directory that routes each customer to their home region and contains only minimal non-sensitive data. The hard part is all the side paths: cross-region replication and backups, logs and traces that contain personal data, analytics pipelines, support and admin tools, and third-party processors. Each must respect the region or carry only pseudonymised data. I'd implement data-subject rights per region, such as access, deletion and export, and keep audit evidence. And I'd involve legal early, since requirements differ by country and change over time.",
+  "points": [
+    {
+      "h": "Inventory and classify",
+      "d": "Map data types to jurisdictions and rules (storage location, transfer restrictions, retention). Without this, compliance is guesswork."
+    },
+    {
+      "h": "Regional cells",
+      "d": "Separate deployments per region with their own databases and processing. Customers have a home region."
+    },
+    {
+      "h": "Minimal global directory",
+      "d": "A global routing layer holds only what's needed to route (customer id to region), not regulated personal data."
+    },
+    {
+      "h": "Control replication and backups",
+      "d": "Replicas and backups stay within allowed regions; disaster recovery uses another region in the same jurisdiction where required."
+    },
+    {
+      "h": "Logs, traces and analytics",
+      "d": "Scrub or pseudonymise personal data before it leaves the region, or keep observability regional too."
+    },
+    {
+      "h": "Vendors and support access",
+      "d": "Third-party processors must meet the same residency constraints; support tooling must respect regional access rules."
+    },
+    {
+      "h": "Rights and evidence",
+      "d": "Access, export and deletion workflows per region, with audit logs proving compliance."
+    }
+  ],
+  "decision": "Regional cells with a minimal global directory for strict residency; regional storage with global processing of pseudonymised data where rules allow. Bring in legal review before architecture is fixed.",
+  "numbers": [
+    "Cost intuition: each additional regional cell adds a baseline of infrastructure and operational cost regardless of customer count, so enter regions deliberately."
+  ],
+  "pitfalls": [
+    "Regional primary databases but global logs, analytics or backups containing the same personal data.",
+    "A global user table holding names and emails 'for routing'.",
+    "Support staff in another region with unrestricted access.",
+    "Vendors (email, analytics, support desk) processing data outside allowed regions."
+  ],
+  "followups": [
+    {
+      "q": "A customer moves from the EU to the US. What happens?",
+      "a": "Follow policy and law: often their data stays in the EU unless they consent to migration; the directory continues to route them to the EU cell."
+    },
+    {
+      "q": "How do you run global analytics?",
+      "a": "Aggregate or pseudonymise within each region and export only aggregates or non-identifying data, or run analytics regionally and combine results."
+    },
+    {
+      "q": "How do you test compliance?",
+      "a": "Automated checks on resource locations, data-flow reviews for new features, and periodic audits of logs and vendor configurations."
+    }
+  ],
+  "example": "A lender entering the EU built a separate EU cell. The global directory stores only customer id and home region. Logs leaving the EU are scrubbed of personal fields, backups replicate between two EU regions, and the support tool restricts EU records to EU-based staff.",
+  "related": [
+    "shard-data-user-tenant-region",
+    "design-retention-soft-delete-legal",
+    "handle-multi-tenant-data-isolation",
+    "should-each-layer-log-must"
+  ],
+  "sources": [
+    {
+      "title": "GDPR Chapter 5: Transfers of personal data to third countries",
+      "url": "https://gdpr-info.eu/chapter-5/"
+    }
+  ]
+}

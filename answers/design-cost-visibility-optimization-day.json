@@ -1,0 +1,75 @@
+{
+  "thesis": "You can only optimise what you can attribute. Tag every resource by team, service and environment from day one, expose unit costs (per request, per tenant, per transaction), set budgets and anomaly alerts, and review top spenders on a schedule. Make cost a metric engineers see next to latency.",
+  "pitch": "I'd start with attribution: every cloud resource tagged with owner team, service, environment and cost centre, enforced by policy so untagged resources can't be created, plus allocation rules for shared costs like Kubernetes clusters, data transfer and observability. Then unit economics: cost per request, per active customer, per loan originated, per tenant, because absolute spend rising is fine if units grow faster. Put these on dashboards next to performance metrics and include cost estimates in design docs. Then guardrails: budgets per team with alerts, anomaly detection for sudden jumps, which are often a misconfiguration like a debug log level or runaway autoscaling, and lifecycle policies for storage and logs. Then a rhythm: monthly reviews of the top cost drivers with owners, and simple, safe wins first: rightsizing, committed-use discounts for steady load, deleting idle resources, and tiering storage.",
+  "points": [
+    {
+      "h": "Tag and enforce",
+      "d": "Owner, service, environment and cost centre tags on every resource, enforced by policy-as-code. Untagged spend is unmanageable spend."
+    },
+    {
+      "h": "Allocate shared costs",
+      "d": "Split shared clusters, networking and observability by usage (CPU requests, bytes, log volume) so teams see their real footprint."
+    },
+    {
+      "h": "Unit costs",
+      "d": "Cost per request, per customer, per transaction or per tenant. Unit cost trends tell you whether efficiency is improving."
+    },
+    {
+      "h": "Cost in design reviews",
+      "d": "Estimate the monthly cost of new designs, including data transfer and observability, which are often underestimated."
+    },
+    {
+      "h": "Budgets and anomaly alerts",
+      "d": "Team budgets with alerts at thresholds; anomaly detection on daily spend per service."
+    },
+    {
+      "h": "Lifecycle policies",
+      "d": "Automatic expiry or tiering for logs, backups, snapshots and object storage."
+    },
+    {
+      "h": "Regular review",
+      "d": "Monthly top-spender review with owners; track savings actions like any other backlog."
+    }
+  ],
+  "decision": "Tagging, unit-cost dashboards and anomaly alerts from day one, because they're cheap early and very hard to retrofit. Deeper optimisation (commitments, architecture changes) once spend and usage patterns are stable.",
+  "numbers": [
+    "Unit cost example: $40,000/month for a service handling 200 million requests = $0.20 per 1,000 requests; if traffic doubles and cost rises to $60,000, unit cost fell to $0.15.",
+    "Observability spend is often a significant share of cloud bills; sampling and retention policies are usually the quickest savings."
+  ],
+  "pitfalls": [
+    "Untagged resources that nobody owns.",
+    "Looking at total spend only, punishing growth instead of inefficiency.",
+    "Ignoring data transfer costs (cross-zone, cross-region, egress) in designs.",
+    "Debug logging or high-cardinality metrics quietly multiplying costs."
+  ],
+  "followups": [
+    {
+      "q": "How do you allocate a shared Kubernetes cluster's cost?",
+      "a": "By resource requests (CPU and memory reserved) per namespace or team, plus a share of idle capacity, using tools that read cluster metrics."
+    },
+    {
+      "q": "What's the fastest way to cut a cloud bill?",
+      "a": "Delete idle resources, rightsize over-provisioned instances, apply storage lifecycle rules, reduce log and metric volume, and buy commitments for steady baseline load."
+    },
+    {
+      "q": "How do you make engineers care?",
+      "a": "Show their service's cost and unit cost next to its latency and errors, include cost in design reviews, and celebrate savings."
+    }
+  ],
+  "example": "A team's tracing bill doubled in a month. Anomaly alerts flagged it; the cause was a new high-cardinality span attribute. Removing it and adding tail sampling cut tracing cost 60%. Unit cost per 1,000 requests is now on every service dashboard.",
+  "related": [
+    "trace-request-across-50-services",
+    "decide-buy-build",
+    "design-metrics-actually-tell-me"
+  ],
+  "sources": [
+    {
+      "title": "FinOps Foundation: What is FinOps?",
+      "url": "https://www.finops.org/introduction/what-is-finops/"
+    },
+    {
+      "title": "AWS Well-Architected: Cost optimization pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html"
+    }
+  ]
+}

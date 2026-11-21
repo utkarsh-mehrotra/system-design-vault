@@ -1,0 +1,71 @@
+{
+  "thesis": "Review the design against its goals, not your preferences. Understand the problem first, ask questions that expose assumptions about failure and scale, separate blocking concerns from suggestions, offer an alternative whenever you object, and say what's good. Depth and kindness aren't in tension; vagueness and point-scoring are the problems.",
+  "pitch": "I'd start by reading the goals, non-goals and constraints, and if they're missing, that's my first comment, because I can't judge a design without knowing what it's for. Then I'd probe the places designs usually break: what happens when each dependency is slow or down, what the capacity numbers are, how data stays consistent, how it's deployed and rolled back, and who operates it. I'd phrase concerns as questions where I'm unsure, like 'what happens if the queue consumer falls an hour behind?', and as clear statements where I'm confident. I'd label each comment: blocking, meaning it must be resolved because of a correctness, security or operational risk; or suggestion, a preference the author can take or leave. When I object, I offer an alternative or at least the criteria a solution must meet. And I'd call out strong decisions explicitly. For big disagreements I'd talk in person rather than in a comment thread.",
+  "points": [
+    {
+      "h": "Start from goals and constraints",
+      "d": "Read what the design is meant to achieve and what's out of scope. Many review fights are really disagreements about requirements."
+    },
+    {
+      "h": "Probe failure, scale and operations",
+      "d": "Dependencies failing, capacity and growth, data consistency, deploy and rollback, observability, on-call ownership. These are where designs most often fall short."
+    },
+    {
+      "h": "Ask, don't assert, when unsure",
+      "d": "Questions surface assumptions without putting the author on the defensive, and sometimes reveal that the reviewer missed something."
+    },
+    {
+      "h": "Label blocking vs non-blocking",
+      "d": "Make it clear which comments must be addressed and why, and which are preferences. Unlabelled comments all feel blocking."
+    },
+    {
+      "h": "Object with an alternative",
+      "d": "When you disagree, propose another approach or the criteria that would satisfy you. 'I don't like this' gives the author nothing to act on."
+    },
+    {
+      "h": "Acknowledge what's good",
+      "d": "Specific praise for good decisions reinforces them and shows you read carefully."
+    },
+    {
+      "h": "Take big disagreements offline",
+      "d": "A short conversation resolves in minutes what a comment thread drags out for days. Record the outcome in the doc."
+    }
+  ],
+  "decision": "Block only on correctness, security, data integrity, operability or a mismatch with stated goals. Everything else is a suggestion the author decides on. Escalate unresolved blocking disagreements to a named decider rather than letting them stall.",
+  "numbers": [
+    "Practical shape: a handful of well-explained, prioritised comments beats dozens of nits. If you have more than a few blocking concerns, ask for a meeting."
+  ],
+  "pitfalls": [
+    "Reviewing against how you would have designed it rather than against the goals.",
+    "Burying the one serious issue among twenty style nits.",
+    "Vague concerns ('this won't scale') with no specifics.",
+    "Approving to be nice and raising issues after launch."
+  ],
+  "followups": [
+    {
+      "q": "The author is senior to you. How does that change the review?",
+      "a": "It doesn't change the standard. Ask questions grounded in specifics; senior engineers generally appreciate being challenged on failure modes."
+    },
+    {
+      "q": "You and the author still disagree on a blocking issue. What then?",
+      "a": "Write down both positions and the trade-offs, and take it to the agreed decision-maker. Commit to the outcome either way."
+    },
+    {
+      "q": "How do you review a design in an area you know little about?",
+      "a": "Focus on what you can judge (goals, failure handling, operability, clarity) and say explicitly which parts you can't evaluate, so someone else can."
+    }
+  ],
+  "example": "Reviewing a new notification system, I marked one blocking issue (no plan for provider outages: messages would be lost), asked two questions about capacity, offered a queue-with-DLQ alternative, labelled three formatting comments as non-blocking, and called out the clean idempotency design. The author fixed the blocker in a day.",
+  "related": [
+    "defend-design-trade-off-skeptical",
+    "write-design-doc-still-useful",
+    "tell-design-dangerously-under-engineered",
+    "tell-design-over-engineered"
+  ],
+  "sources": [
+    {
+      "title": "Google engineering practices: The standard of code review",
+      "url": "https://google.github.io/eng-practices/review/reviewer/standard.html"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "thesis": "Assume mistakes will happen and design so each one has a small blast radius and a fast undo: progressive rollouts, reversible changes, feature flags, cells or shards that contain failures, backups with tested restores, and guardrails on destructive operations.",
+  "pitch": "People will deploy bugs, push bad config, run the wrong command and delete the wrong thing. The goal is to make each of those cheap. I'd limit blast radius: progressive rollouts that start with a canary, one cell or one region and expand only if metrics stay healthy, with automatic rollback; cell-based architecture so a bad change or overload affects a fraction of customers. I'd make changes reversible: backward-compatible schema changes, feature flags that turn new behaviour off without a deploy, config changes versioned and quickly revertible. I'd add guardrails on destructive operations: soft delete, deletion protection on databases and buckets, confirmation and peer approval for dangerous commands, and least-privilege access so one mistake can't touch everything. And I'd make recovery real: tested backups and point-in-time restore. Culturally, blameless postmortems make people report and fix near-misses instead of hiding them.",
+  "points": [
+    {
+      "h": "Progressive delivery",
+      "d": "Canary, then a small percentage, then wider, with automated health checks and rollback. Most bad changes are caught at a few percent of traffic."
+    },
+    {
+      "h": "Cells and blast-radius limits",
+      "d": "Partition customers into independent cells; deploy and configure one cell at a time so failures stay contained."
+    },
+    {
+      "h": "Reversible changes",
+      "d": "Backward-compatible migrations, feature flags, and versioned config with one-step revert."
+    },
+    {
+      "h": "Guardrails on destructive actions",
+      "d": "Deletion protection, soft delete, required approvals, dry-run modes, and rate limits on bulk operations."
+    },
+    {
+      "h": "Least privilege",
+      "d": "Narrow permissions and separate production credentials so one mistake or compromised account can't affect everything."
+    },
+    {
+      "h": "Tested recovery",
+      "d": "Point-in-time recovery, backups in an isolated account, and regular restore drills."
+    },
+    {
+      "h": "Blameless learning",
+      "d": "Postmortems focus on how the system allowed the mistake, leading to better guardrails rather than blame."
+    }
+  ],
+  "decision": "Invest first in fast rollback and progressive delivery (they catch the most common mistakes), then guardrails on destructive operations, then cell isolation as scale and risk grow.",
+  "numbers": [
+    "Rollout example: 1% for 15 minutes, 10% for 30 minutes, 50% for 30 minutes, then 100%, with automatic rollback if error rate rises by more than a set threshold at any stage.",
+    "Cell math: with 20 cells, a bad change caught in the first cell affects about 5% of customers."
+  ],
+  "pitfalls": [
+    "Global config pushes that apply everywhere at once.",
+    "Rollbacks that are possible in theory but never practised.",
+    "Production databases without deletion protection or point-in-time recovery.",
+    "Blame culture, so near-misses go unreported."
+  ],
+  "followups": [
+    {
+      "q": "How do you make config changes as safe as code deploys?",
+      "a": "Store config in version control, validate it in CI, roll it out progressively, and monitor and revert it like code."
+    },
+    {
+      "q": "What's the most valuable guardrail to add first?",
+      "a": "Fast, practised rollback for deploys and config, because bad changes cause a large share of incidents."
+    },
+    {
+      "q": "How do cells differ from shards?",
+      "a": "Cells are complete, independent copies of the service stack serving a subset of customers, so a failure or bad deploy in one doesn't spread; shards usually partition only the data."
+    }
+  ],
+  "example": "A bad fee-calculation rule was deployed behind a flag to 2% of loans. Automated checks comparing fees with the previous version flagged anomalies within 10 minutes; the flag was turned off, 140 loans were corrected by a script, and no customer was charged incorrectly.",
+  "related": [
+    "plan-rollback-release-has-already",
+    "design-support-experiments-such-as",
+    "make-rebuild-scratch-possible-if",
+    "tell-design-dangerously-under-engineered"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Automating safe, hands-off deployments",
+      "url": "https://aws.amazon.com/builders-library/automating-safe-hands-off-deployments/"
+    },
+    {
+      "title": "Google SRE book: Postmortem culture",
+      "url": "https://sre.google/sre-book/postmortem-culture/"
+    }
+  ]
+}

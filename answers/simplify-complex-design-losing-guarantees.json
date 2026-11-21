@@ -1,0 +1,75 @@
+{
+  "thesis": "List the guarantees that must hold, map each component to the guarantee it protects, remove components that protect none, merge components that always change together, and prove the invariants still hold, ideally with tests or fault injection rather than argument.",
+  "pitch": "I'd start by writing down the guarantees explicitly: for example, no payment is applied twice, every application gets a decision within 30 seconds, customer data stays in-region, and the service survives a zone loss. Then for each component and mechanism, I'd ask which guarantee it serves. Components that serve none are candidates for removal; often they're leftovers from old requirements or speculative flexibility. Components that serve the same guarantee in overlapping ways, like two layers of retries or two caches, can often be collapsed. Services that always change and deploy together can be merged. Then I'd check that simpler mechanisms still provide each guarantee: maybe a database transaction replaces a saga if the data can live in one place, or a managed service replaces a self-run cluster. Finally, prove it: tests for the invariants, fault injection for the availability guarantees, and a staged rollout. Simplicity is valuable precisely because it makes guarantees easier to verify.",
+  "points": [
+    {
+      "h": "Write the guarantees down",
+      "d": "Correctness invariants, latency and availability targets, compliance constraints. If a guarantee isn't written, you can't tell what a simplification risks."
+    },
+    {
+      "h": "Map components to guarantees",
+      "d": "For each component, name the guarantee it protects. Unmapped components are removal candidates."
+    },
+    {
+      "h": "Remove what protects nothing",
+      "d": "Old features, speculative extension points, abandoned integrations and redundant layers."
+    },
+    {
+      "h": "Collapse overlapping mechanisms",
+      "d": "Multiple retry layers, duplicate caches, parallel queues for similar work. Keep one well-understood mechanism."
+    },
+    {
+      "h": "Merge what changes together",
+      "d": "Services or modules that always deploy together gain nothing from being separate."
+    },
+    {
+      "h": "Use stronger primitives",
+      "d": "Moving data into one database can replace sagas and reconciliation with transactions; a managed service can replace a custom cluster."
+    },
+    {
+      "h": "Prove the invariants still hold",
+      "d": "Property tests, integration tests and fault injection for each guarantee before and after the change; staged rollout with monitoring."
+    }
+  ],
+  "decision": "Simplify incrementally, one removal or merge at a time, with the guarantee tests as a safety net. Prefer changes that replace distributed coordination with local transactions when ownership allows.",
+  "numbers": [
+    "Simplification payoff is often visible in operational metrics: fewer components to patch, fewer alert rules, lower incident counts and faster lead time for changes."
+  ],
+  "pitfalls": [
+    "Removing a component whose guarantee was implicit and undocumented.",
+    "Simplifying by merging everything into one service, losing isolation that protected availability.",
+    "Big-bang simplification instead of incremental steps.",
+    "Assuming a simpler design is correct without testing the invariants."
+  ],
+  "followups": [
+    {
+      "q": "How do you find implicit guarantees?",
+      "a": "Read incident history, interview the people who operate it, and look at what breaks in tests when a component is stubbed out."
+    },
+    {
+      "q": "Give an example of replacing distributed machinery with a simpler primitive.",
+      "a": "Two services coordinating via a saga merged into one service with one database, replacing the saga, outbox and reconciliation with a single transaction."
+    },
+    {
+      "q": "How do you convince people simplification is worth it?",
+      "a": "Show the cost of current complexity in incidents, on-call load and lead time, and propose small steps with clear rollback."
+    }
+  ],
+  "example": "A loan pipeline had five services, two queues and a reconciliation job to keep application status consistent. Mapping components to guarantees showed three services always deployed together and existed for a team structure that no longer existed. Merging them let a single transaction replace two queues and the reconciliation job, while integration tests confirmed every application still received exactly one decision.",
+  "related": [
+    "tell-design-over-engineered",
+    "design-boring-reliability-instead-cleverness",
+    "replace-two-phase-commit-across",
+    "splitting-monolith-pay-itself"
+  ],
+  "sources": [
+    {
+      "title": "Rich Hickey: Simple made easy (talk)",
+      "url": "https://www.infoq.com/presentations/Simple-Made-Easy/"
+    },
+    {
+      "title": "Martin Fowler: Microservice trade-offs",
+      "url": "https://martinfowler.com/articles/microservice-trade-offs.html"
+    }
+  ]
+}
