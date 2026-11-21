@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Clinicians log in, and anyone with the doctor role can view any patient record.\"",
+    "why": "Role-only access gives every clinician access to every patient, violating least privilege and privacy rules; and without access audits, snooping on records (for example of celebrities or colleagues) goes undetected.",
+    "probe": "Relationship-based access, consent, minimum necessary data, comprehensive audit logs and monitoring for inappropriate access.",
+    "say": "\"Access depends on role plus an active care relationship and the patient's consent, limited to the minimum necessary data; every view is audit-logged with who, what and why, and we monitor for unusual access patterns.\""
+  },
+  "thesis": "Healthcare access control combines role, care relationship, patient consent and purpose, exposing only the minimum necessary data. Every access is logged in detail, logs are monitored for inappropriate access, and patients can see who accessed their records where regulations allow.",
+  "pitch": "I'd base access on more than role: a clinician can access a patient's record when they're part of that patient's care team, through an appointment, admission or referral, and when the patient's consent covers that use. That's relationship-based and attribute-based authorisation evaluated on every request. Data access follows the minimum necessary principle: a billing clerk sees billing data, not clinical notes; sensitive categories like mental health or substance use treatment have stricter consent rules. Consent is stored as structured records with scope, purpose, expiry and revocation, checked at access time. Every read and write is audit-logged with user, patient, data accessed, time, purpose and context, in tamper-evident storage, retained per regulation. Monitoring flags unusual patterns: access to records with no care relationship, VIP records, colleagues' records, high-volume access. Encryption at rest and in transit, strong authentication with MFA, and session timeouts on shared workstations complete the picture, plus a break-glass mechanism for emergencies.",
+  "points": [
+    {
+      "h": "Role plus relationship",
+      "d": "Access requires an appropriate role and an active care relationship with the patient."
+    },
+    {
+      "h": "Consent as structured data",
+      "d": "Scope, purpose, expiry and revocation recorded and evaluated at access time."
+    },
+    {
+      "h": "Minimum necessary",
+      "d": "Different roles see different subsets; sensitive categories have extra restrictions."
+    },
+    {
+      "h": "Comprehensive audit logging",
+      "d": "Every access with who, which patient, what data, when, why, stored tamper-evidently."
+    },
+    {
+      "h": "Access monitoring",
+      "d": "Detect snooping: no care relationship, VIP or employee records, unusual volume or times."
+    },
+    {
+      "h": "Strong authentication and session controls",
+      "d": "MFA, short sessions and automatic logout on shared clinical workstations."
+    },
+    {
+      "h": "Patient transparency",
+      "d": "Where regulations allow, patients can see access history to their records."
+    }
+  ],
+  "decision": "Relationship- and consent-aware authorisation, minimum-necessary data views, comprehensive tamper-evident auditing with active monitoring, plus a controlled break-glass path.",
+  "numbers": [
+    "Audit volume sketch: 5,000 clinicians averaging 200 record views a day is 1 million audit events a day, easily stored and searchable for years."
+  ],
+  "pitfalls": [
+    "Role-only access to all patients.",
+    "Consent captured on paper or in free text that systems can't enforce.",
+    "Audit logs that exist but are never reviewed.",
+    "Sensitive record categories treated like any other data."
+  ],
+  "followups": [
+    {
+      "q": "How do you model a care relationship?",
+      "a": "From scheduling, admission, referral and care-team assignments, with expiry when the episode of care ends."
+    },
+    {
+      "q": "How do you handle a patient revoking consent for data sharing?",
+      "a": "Record the revocation, enforce it immediately for future access, and handle data already shared per legal requirements."
+    },
+    {
+      "q": "How do research uses fit in?",
+      "a": "Separate consent and de-identified or pseudonymised datasets with governance approval, not production access."
+    }
+  ],
+  "example": "A hospital found staff viewing a celebrity patient's record after a news story. It added care-relationship checks with a 'reason for access' prompt for out-of-relationship views, automated alerts for VIP and employee records, and monthly audit reviews; inappropriate access incidents dropped sharply.",
+  "related": [
+    "authorization-models-idor",
+    "audit-logs-tamper-evident",
+    "break-glass-access",
+    "encryption-key-management"
+  ],
+  "sources": [
+    {
+      "title": "HHS: HIPAA minimum necessary requirement",
+      "url": "https://www.hhs.gov/hipaa/for-professionals/privacy/guidance/minimum-necessary-requirement/index.html"
+    },
+    {
+      "title": "HHS: HIPAA Security Rule",
+      "url": "https://www.hhs.gov/hipaa/for-professionals/security/index.html"
+    }
+  ]
+}

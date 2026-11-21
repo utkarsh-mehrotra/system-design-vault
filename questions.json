@@ -3586,6 +3586,142 @@
         "Architecture"
       ],
       "legacy": []
+    },
+    {
+      "id": "usage-metering-billing",
+      "cat": "domains",
+      "topic": "SaaS & B2B",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design usage-based billing: meter API calls, compute or storage per customer, and invoice accurately.",
+      "also": [],
+      "a": [
+        "Separate metering (recording what happened as immutable usage events), aggregation (summing per customer, meter and period), and rating (applying prices and plans). Use idempotent events, keep raw data to explain and correct invoices, and give customers near-real-time visibility of usage."
+      ],
+      "tags": [
+        "Messaging",
+        "Transactions"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "per-tenant-customisation",
+      "cat": "domains",
+      "topic": "SaaS & B2B",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Enterprise customers each want custom fields, workflows and rules. How do you support customisation without forking the product?",
+      "also": [],
+      "a": [
+        "Multi-tenant SaaS supports customisation through metadata and configuration (custom fields, workflow definitions, rules, layouts) interpreted by generic engines, plus well-defined extension points like webhooks, APIs and sandboxed scripts. One codebase and one release for everyone; customer-specific code is the thing to avoid."
+      ],
+      "tags": [
+        "Architecture",
+        "APIs"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "realtime-game-state-sync",
+      "cat": "domains",
+      "topic": "Gaming",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Synchronise game state for a fast-paced multiplayer game. How do you keep it responsive and fair?",
+      "also": [],
+      "a": [
+        "Fast multiplayer games use an authoritative server that simulates the game from player inputs at a fixed tick rate. Clients predict their own actions for responsiveness and reconcile with server state, interpolate other players, and the server applies lag compensation and sends each client only relevant state."
+      ],
+      "tags": [
+        "Latency",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "leaderboards-scale",
+      "cat": "domains",
+      "topic": "Gaming",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Build global, regional and friends leaderboards for millions of players with real-time rank lookups.",
+      "also": [],
+      "a": [
+        "Leaderboards need fast score updates and rank queries. Sorted-set structures provide logarithmic updates and rank lookups; at very large scale, combine exact ranks for the top with approximate ranks for the tail, partition by season and region, and compute friends leaderboards from friend lists on demand."
+      ],
+      "tags": [
+        "Databases",
+        "Caching"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "matchmaking-fair-fast",
+      "cat": "domains",
+      "topic": "Gaming",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design matchmaking that creates fair games quickly for millions of players.",
+      "also": [],
+      "a": [
+        "Matchmaking balances match quality (skill, latency, party composition) against wait time. Use pools partitioned by region and mode, widen acceptable windows as players wait, treat parties as units, run matchers in parallel per pool, and tune with data on wait times and match outcomes."
+      ],
+      "tags": [
+        "Scaling",
+        "Latency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "consent-audit-access",
+      "cat": "domains",
+      "topic": "Healthcare",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design access to patient health records with consent, least privilege and a full audit trail.",
+      "also": [],
+      "a": [
+        "Healthcare access control combines role, care relationship, patient consent and purpose, exposing only the minimum necessary data. Every access is logged in detail, logs are monitored for inappropriate access, and patients can see who accessed their records where regulations allow."
+      ],
+      "tags": [
+        "Security",
+        "Cost & compliance"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "interoperability-fhir",
+      "cat": "domains",
+      "topic": "Healthcare",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Exchange patient data with hospitals, labs and other systems. How do you design for interoperability?",
+      "also": [],
+      "a": [
+        "Healthcare interoperability relies on standards (FHIR for APIs, HL7 v2 for many legacy feeds), consistent terminologies (SNOMED CT, LOINC, ICD), reliable patient identity matching, and an integration layer that handles transformation, routing, retries and audit, all subject to consent and privacy rules."
+      ],
+      "tags": [
+        "APIs",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "break-glass-access",
+      "cat": "domains",
+      "topic": "Healthcare",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "In an emergency, a clinician needs records they don't normally have access to. How do you design break-glass access?",
+      "also": [],
+      "a": [
+        "Emergency access should be available instantly but exceptional: a clinician can override normal restrictions by declaring a reason, gets time-limited access to the relevant records, and every use is logged, alerted on and reviewed. Safety requires availability; privacy requires accountability."
+      ],
+      "tags": [
+        "Security",
+        "Reliability"
+      ],
+      "legacy": []
     }
   ]
 }

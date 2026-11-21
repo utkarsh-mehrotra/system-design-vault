@@ -1,0 +1,80 @@
+{
+  "trap": {
+    "wrong": "\"Clients send their positions and the server broadcasts them to everyone.\"",
+    "why": "Trusting client state enables cheating, waiting for server round trips makes controls feel laggy, and broadcasting full state to everyone wastes bandwidth.",
+    "probe": "Authoritative server, client prediction and reconciliation, interpolation, lag compensation, and interest management.",
+    "say": "\"An authoritative server simulates at a fixed tick from client inputs; clients predict their own movement and reconcile with server snapshots; other players are interpolated; the server applies lag compensation for hits; and each client only receives state relevant to it.\""
+  },
+  "thesis": "Fast multiplayer games use an authoritative server that simulates the game from player inputs at a fixed tick rate. Clients predict their own actions for responsiveness and reconcile with server state, interpolate other players, and the server applies lag compensation and sends each client only relevant state.",
+  "pitch": "Clients send inputs, not positions: 'moved forward, fired at time T'. The server runs the simulation at a fixed tick, say 30 or 60 times a second, applying inputs and validating them, which prevents speed hacks and teleporting. It sends snapshots or deltas of state to clients. Waiting for the server would make controls feel laggy, so the client predicts its own movement immediately and, when a server snapshot arrives, reconciles: if the server disagrees, it corrects and replays unacknowledged inputs, ideally smoothly. Other players are shown slightly in the past using interpolation between snapshots, which looks smooth despite jitter. For shooting, the server does lag compensation: it rewinds other players' positions to what the shooter saw when they fired, within limits. Bandwidth is managed by interest management: send each client only entities near or visible to them, with delta compression and UDP-based protocols tolerant of loss. Game servers are deployed close to players, and matchmaking considers latency.",
+  "points": [
+    {
+      "h": "Authoritative server",
+      "d": "The server simulates the game; clients send inputs and can't directly set state, which limits cheating."
+    },
+    {
+      "h": "Fixed tick rate",
+      "d": "Deterministic simulation steps at a fixed rate; higher tick rates improve accuracy at higher cost."
+    },
+    {
+      "h": "Client-side prediction",
+      "d": "The local player's actions apply immediately on the client for responsiveness."
+    },
+    {
+      "h": "Server reconciliation",
+      "d": "Clients correct to server snapshots and replay unacknowledged inputs."
+    },
+    {
+      "h": "Entity interpolation",
+      "d": "Other players are rendered slightly behind, interpolated between snapshots, to hide jitter."
+    },
+    {
+      "h": "Lag compensation",
+      "d": "The server rewinds to the shooter's view when resolving hits, bounded to avoid abuse."
+    },
+    {
+      "h": "Interest management and deltas",
+      "d": "Send only relevant entities, delta-compressed, over UDP-style transports tolerant of packet loss."
+    }
+  ],
+  "decision": "Authoritative servers with prediction, interpolation and lag compensation for competitive real-time games; lockstep or turn-based models for strategy games where determinism and low bandwidth matter more than instant response.",
+  "numbers": [
+    "Bandwidth sketch: 64 players, 60 ticks/s, ~50 bytes per relevant entity update with interest management limiting each client to ~20 entities ≈ 60 KB/s per client downstream."
+  ],
+  "pitfalls": [
+    "Trusting client-reported positions or hits.",
+    "No prediction, so controls feel delayed by the round trip.",
+    "Broadcasting all state to all clients.",
+    "Unbounded lag compensation that lets high-ping players shoot around corners."
+  ],
+  "followups": [
+    {
+      "q": "How do you scale to a large open world?",
+      "a": "Spatial partitioning across servers (zones or cells), with handoff as players move, and interest management within each."
+    },
+    {
+      "q": "Why UDP rather than TCP?",
+      "a": "TCP's retransmission and ordering cause head-of-line blocking; games prefer to drop stale state and send newer updates."
+    },
+    {
+      "q": "How do you detect cheating beyond server authority?",
+      "a": "Server-side anomaly detection (impossible accuracy, reaction times), client integrity checks, and replay analysis."
+    }
+  ],
+  "example": "An indie shooter trusted client positions and hit reports and was overrun by teleport and aimbot cheats. Moving to an authoritative server at 30 ticks with client prediction, interpolation and bounded lag compensation removed most cheats while keeping controls responsive.",
+  "related": [
+    "matchmaking-fair-fast",
+    "realtime-delivery-polling-websockets",
+    "clocks-ordering-lww"
+  ],
+  "sources": [
+    {
+      "title": "Gabriel Gambetta: Fast-paced multiplayer (client-server game architecture)",
+      "url": "https://www.gabrielgambetta.com/client-server-game-architecture.html"
+    },
+    {
+      "title": "Valve Developer Community: Source multiplayer networking",
+      "url": "https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking"
+    }
+  ]
+}

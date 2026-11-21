@@ -1,0 +1,80 @@
+{
+  "trap": {
+    "wrong": "\"Match players with the closest skill rating.\"",
+    "why": "Strict skill matching leaves players waiting forever at the extremes and off-peak, ignores latency and party sizes, and a single global matcher doesn't scale.",
+    "probe": "Balancing skill, wait time and latency, widening windows over time, pools by region and mode, and evaluating match quality.",
+    "say": "\"Players enter pools by region and mode; the matcher searches for matches with tight skill and latency windows that widen as wait time grows; parties are handled as units; and we measure match quality, wait times and outcomes to tune it.\""
+  },
+  "thesis": "Matchmaking balances match quality (skill, latency, party composition) against wait time. Use pools partitioned by region and mode, widen acceptable windows as players wait, treat parties as units, run matchers in parallel per pool, and tune with data on wait times and match outcomes.",
+  "pitch": "Each player has a skill rating, often with uncertainty, as in Glicko or TrueSkill-style systems, plus their latency to each region and their party. When they queue, they join a pool for their mode and best regions. A matcher per pool periodically tries to form matches from waiting tickets, scoring candidate groups by skill spread, latency and team balance. Acceptable windows start tight and widen with wait time, so a top-ranked player at 4 a.m. eventually gets a game, slightly less balanced, instead of waiting forever. Parties are matched as units, with team balancing accounting for coordinated groups. Pools are independent, so matchers scale horizontally by region and mode, and very large pools are split by skill bands with overlap. After forming a match, the system allocates a game server in a region good for all players. I'd track wait time percentiles, match quality, how predictable outcomes were, and early quits, and run experiments when changing parameters, because players notice.",
+  "points": [
+    {
+      "h": "Skill with uncertainty",
+      "d": "Ratings with confidence (Glicko, TrueSkill-style) place new players faster and more accurately."
+    },
+    {
+      "h": "Pools by region and mode",
+      "d": "Partition the queue so matchers scale horizontally and consider latency."
+    },
+    {
+      "h": "Widening windows",
+      "d": "Start with strict skill and latency requirements and relax them as wait time grows."
+    },
+    {
+      "h": "Parties as units",
+      "d": "Match groups together and balance teams accounting for party advantages."
+    },
+    {
+      "h": "Batch matching per tick",
+      "d": "Matchers evaluate waiting tickets periodically to find good combinations, not first-come pairings."
+    },
+    {
+      "h": "Server allocation",
+      "d": "Choose a game server region minimising latency for the matched players."
+    },
+    {
+      "h": "Measure and experiment",
+      "d": "Wait times, outcome predictability, early quits and satisfaction guide parameter changes."
+    }
+  ],
+  "decision": "Region and mode pools, rating with uncertainty, time-based window widening and party-aware balancing; tune with data and A/B tests. Managed matchmaking services are an option for smaller studios.",
+  "numbers": [
+    "Window example: start at ±50 rating and 60 ms latency difference, widening by 25 rating every 10 seconds of waiting, capped at ±300."
+  ],
+  "pitfalls": [
+    "Strict skill matching with no time-based relaxation.",
+    "Ignoring latency, giving balanced but laggy games.",
+    "Treating parties as individuals.",
+    "One global matcher process as a bottleneck and single point of failure."
+  ],
+  "followups": [
+    {
+      "q": "How do you rate brand-new players?",
+      "a": "High-uncertainty initial ratings that move quickly, sometimes with placement matches, so they find their level fast."
+    },
+    {
+      "q": "How do you handle smurfs (experienced players on new accounts)?",
+      "a": "Rapid rating movement for high-uncertainty accounts, behavioural signals, and linking accounts by device or payment where allowed."
+    },
+    {
+      "q": "How do you test changes?",
+      "a": "Simulate on historical queue data, then A/B test in a region with guardrails on wait time and quit rates."
+    }
+  ],
+  "example": "A competitive game matched strictly on rating, and top players waited 15 minutes at night. Introducing time-based window widening, latency-aware pools and party-aware balancing cut top-tier waits to under 3 minutes with only a small drop in match balance metrics.",
+  "related": [
+    "realtime-game-state-sync",
+    "leaderboards-scale",
+    "dispatch-matching-shortage"
+  ],
+  "sources": [
+    {
+      "title": "Microsoft Research: TrueSkill ranking system",
+      "url": "https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/"
+    },
+    {
+      "title": "Mark Glickman: The Glicko system",
+      "url": "https://www.glicko.net/glicko/glicko.pdf"
+    }
+  ]
+}

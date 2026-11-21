@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Increment a usage counter per customer in the database on every API call, and bill from it monthly.\"",
+    "why": "Per-request database increments are a hot write path, counters lose or double-count under retries and failures, and there's no audit trail to explain an invoice when a customer disputes it.",
+    "probe": "Usage events with idempotency, aggregation pipelines, rating separate from metering, auditability and corrections.",
+    "say": "\"Every billable action emits a usage event with a unique id; a pipeline dedupes and aggregates per customer, meter and period; rating applies the customer's plan at invoice time; raw events are kept so every invoice line is explainable and corrections are re-ratings.\""
+  },
+  "thesis": "Separate metering (recording what happened as immutable usage events), aggregation (summing per customer, meter and period), and rating (applying prices and plans). Use idempotent events, keep raw data to explain and correct invoices, and give customers near-real-time visibility of usage.",
+  "pitch": "Each billable action, like an API call, compute minute or gigabyte stored, emits a usage event with a unique id, customer, meter name, quantity and timestamp, sent asynchronously so metering never slows the product. For storage-type meters, periodic snapshots emit events. A pipeline dedupes by event id, which handles retries, and aggregates per customer, meter and hour or day into a usage store. Rating is separate: at invoice time, the customer's contract determines prices, tiers, included allowances, commitments and discounts, applied to aggregated usage to produce invoice lines. Because raw events and aggregates are kept, any line can be traced back, and if a bug miscounted usage, we fix and re-aggregate and re-rate rather than editing invoices by hand. Customers see a usage dashboard updated within minutes and alerts as they approach limits or budgets. Late events after period close go into the next invoice or an adjustment, by policy. Reconciliation compares metered usage against product logs or infrastructure metrics to catch metering gaps, which silently lose revenue.",
+  "points": [
+    {
+      "h": "Usage events with unique ids",
+      "d": "Immutable records of billable actions, emitted asynchronously and deduplicated by id."
+    },
+    {
+      "h": "Snapshot meters for stock quantities",
+      "d": "Storage or seats measured by periodic snapshots and integrated over time."
+    },
+    {
+      "h": "Aggregation pipeline",
+      "d": "Per customer, meter and time bucket, by event time, with late data handling."
+    },
+    {
+      "h": "Rating separate from metering",
+      "d": "Prices, tiers, allowances and commitments applied at invoice time from the contract in force."
+    },
+    {
+      "h": "Explainable invoices",
+      "d": "Keep raw events and aggregates so each line can be traced and disputes resolved."
+    },
+    {
+      "h": "Corrections by recomputation",
+      "d": "Fix bugs by re-aggregating and re-rating, issuing credits or adjustments, not hand edits."
+    },
+    {
+      "h": "Customer visibility and controls",
+      "d": "Usage dashboards, alerts and spending limits reduce bill shock and disputes."
+    }
+  ],
+  "decision": "Event-based metering with idempotent ingestion, a separate rating engine, retained raw data, and reconciliation against independent signals. Buy a billing platform for rating and invoicing; keep metering close to the product.",
+  "numbers": [
+    "Volume sketch: 2 billion API calls a month emitting ~150-byte events is ~300 GB/month raw; aggregated hourly per customer and meter it's a tiny fraction of that for rating."
+  ],
+  "pitfalls": [
+    "Synchronous per-request counter updates.",
+    "No event ids, so retries double-bill.",
+    "Pricing baked into metering, making plan changes painful.",
+    "Discarding raw usage, so disputes can't be resolved."
+  ],
+  "followups": [
+    {
+      "q": "A customer changes plans mid-month. How do you bill?",
+      "a": "Rate usage up to the change under the old plan and after under the new, using timestamps on aggregated buckets, with proration for fixed fees."
+    },
+    {
+      "q": "How do you enforce usage limits in real time?",
+      "a": "A separate fast counter or quota service for enforcement, with the billing pipeline as the source of truth for invoices."
+    },
+    {
+      "q": "How do you detect metering gaps?",
+      "a": "Reconcile metered quantities against independent sources (request logs, infrastructure metrics) and alert on drift."
+    }
+  ],
+  "example": "A SaaS API billed from a counter column and couldn't explain invoices during disputes; retries also double-counted some calls. Moving to usage events with ids, an hourly aggregation pipeline and a billing platform for rating made every invoice line traceable, and a reconciliation job found 2% of calls weren't being metered at all.",
+  "related": [
+    "ad-event-counting-attribution",
+    "build-idempotency-write-api-clients",
+    "stream-windows-late-data",
+    "design-per-tenant-rate-limits"
+  ],
+  "sources": [
+    {
+      "title": "Stripe documentation: Usage-based billing",
+      "url": "https://docs.stripe.com/billing/subscriptions/usage-based"
+    }
+  ]
+}

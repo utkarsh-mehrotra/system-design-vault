@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Add if-statements for big customers\" or \"give each enterprise customer their own branch.\"",
+    "why": "Customer-specific code paths and branches multiply testing, slow every release and make upgrades impossible. Customisation has to be data and configuration, not code.",
+    "probe": "Metadata-driven customisation, extension points, limits, and keeping one codebase and one release.",
+    "say": "\"Customisation is configuration within guardrails: custom fields and objects stored as metadata, configurable workflows and rules evaluated by a generic engine, webhooks and APIs for anything beyond, all on one codebase and one release train, with limits per tenant.\""
+  },
+  "thesis": "Multi-tenant SaaS supports customisation through metadata and configuration (custom fields, workflow definitions, rules, layouts) interpreted by generic engines, plus well-defined extension points like webhooks, APIs and sandboxed scripts. One codebase and one release for everyone; customer-specific code is the thing to avoid.",
+  "pitch": "I'd identify the common customisation needs and turn each into a configurable capability. Custom fields: tenants define fields with types and validation stored as metadata; values live in a flexible structure, like a JSONB column with indexes on commonly queried fields, or an attribute table, rather than altering schemas per tenant. Workflows and rules: a generic state machine or rules engine whose definitions are per-tenant data, such as approval steps and conditions. Layouts and forms: configuration rendered by the UI. For needs beyond that, extension points: webhooks on events, a public API, and maybe sandboxed scripts or functions with strict time and resource limits. Everything is versioned and validated, with sandboxes for customers to test changes and per-tenant limits on fields, rules and script runtime to protect the shared platform. The product team watches which customisations are common and promotes them into first-class features. The non-negotiable is one codebase and one release train for all tenants.",
+  "points": [
+    {
+      "h": "Configuration, not code",
+      "d": "Tenant-specific behaviour defined as data interpreted by generic engines."
+    },
+    {
+      "h": "Custom fields as metadata",
+      "d": "Field definitions per tenant; values in JSON columns or attribute tables, with selective indexing."
+    },
+    {
+      "h": "Configurable workflows and rules",
+      "d": "State machines and rule definitions per tenant, evaluated by a shared engine."
+    },
+    {
+      "h": "Extension points",
+      "d": "Webhooks, APIs and sandboxed functions for needs configuration can't cover."
+    },
+    {
+      "h": "Guardrails and limits",
+      "d": "Caps on custom fields, rule complexity and script runtime to protect performance for everyone."
+    },
+    {
+      "h": "Versioning and sandboxes",
+      "d": "Tenants test configuration changes safely and roll back if needed."
+    },
+    {
+      "h": "Promote common patterns",
+      "d": "Frequently built customisations become standard features."
+    }
+  ],
+  "decision": "Metadata-driven customisation with generic engines and limited, sandboxed extensibility; refuse customer-specific code branches even for large deals, offering configuration or services instead.",
+  "numbers": [
+    "Limit example: up to 500 custom fields per object per tenant, rule evaluation under 50 ms, sandboxed scripts capped at 1 second of CPU per execution."
+  ],
+  "pitfalls": [
+    "Customer-specific code paths or branches.",
+    "Per-tenant schema changes in a shared database.",
+    "Unlimited custom rules or scripts that degrade shared performance.",
+    "No way for customers to test configuration changes safely."
+  ],
+  "followups": [
+    {
+      "q": "How do you query and report on custom fields efficiently?",
+      "a": "Index frequently used custom fields (expression or generated-column indexes) and replicate data to a search or analytics store with flattened schemas."
+    },
+    {
+      "q": "A huge customer insists on custom code. What do you do?",
+      "a": "Offer configuration, the API and extension points, or a professional services integration outside the core product; avoid forking the codebase."
+    },
+    {
+      "q": "How do you upgrade the workflow engine without breaking tenant workflows?",
+      "a": "Version workflow definitions, keep the engine backward compatible, and test against a corpus of real tenant configurations."
+    }
+  ],
+  "example": "A B2B platform had 40 customer-specific if-branches, and every release needed manual testing for each big customer. Replacing them with metadata-driven custom fields, a configurable approval engine and webhooks let them delete the branches and return to weekly releases.",
+  "related": [
+    "handle-multi-tenant-data-isolation",
+    "design-systems-multiple-teams-safely",
+    "design-support-experiments-such-as",
+    "outgoing-webhooks-design"
+  ],
+  "sources": [
+    {
+      "title": "Salesforce: Multitenant architecture (metadata-driven) whitepaper",
+      "url": "https://architect.salesforce.com/fundamentals/platform-multitenant-architecture"
+    }
+  ]
+}

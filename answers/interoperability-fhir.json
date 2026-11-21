@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Build custom point-to-point integrations with each partner's API.\"",
+    "why": "Healthcare has many systems with varied standards (HL7 v2, FHIR, CDA); custom integrations don't scale, patient identities don't match across systems, and coded data (diagnoses, labs) is useless without consistent terminologies.",
+    "probe": "Standards (FHIR, HL7 v2), an integration engine, patient matching, terminology mapping, and consent-aware sharing.",
+    "say": "\"Expose and consume standard FHIR APIs where possible, handle legacy HL7 v2 feeds through an integration engine, map codes to standard terminologies, use a master patient index for identity matching, and enforce consent and audit on every exchange.\""
+  },
+  "thesis": "Healthcare interoperability relies on standards (FHIR for APIs, HL7 v2 for many legacy feeds), consistent terminologies (SNOMED CT, LOINC, ICD), reliable patient identity matching, and an integration layer that handles transformation, routing, retries and audit, all subject to consent and privacy rules.",
+  "pitch": "I'd adopt HL7 FHIR as the primary model and API: resources like Patient, Observation, Encounter and MedicationRequest with RESTful access and SMART on FHIR for app authorisation. Many hospital systems still send HL7 v2 messages, like ADT admissions and ORU lab results, over MLLP, so an integration engine receives, validates, transforms to the internal FHIR-based model, and acknowledges them, with queues, retries and replay. Codes must be mapped to standard terminologies: lab results in LOINC, clinical findings in SNOMED CT, diagnoses in ICD-10, because local codes don't mean anything elsewhere. Patient identity is a hard problem: there's often no universal patient id, so a master patient index uses probabilistic matching on name, date of birth, address and identifiers, with human review of uncertain matches, because merging two different people's records is dangerous. Every exchange checks consent and data-sharing agreements and is logged. And I'd monitor feeds for silence and errors, since a stopped lab feed is a patient safety issue.",
+  "points": [
+    {
+      "h": "FHIR as the canonical model",
+      "d": "Standard resources and REST APIs, with SMART on FHIR for app authorisation."
+    },
+    {
+      "h": "Handle HL7 v2 legacy feeds",
+      "d": "Integration engine for ADT, lab and order messages, transforming to the internal model with acknowledgements."
+    },
+    {
+      "h": "Standard terminologies",
+      "d": "Map local codes to LOINC, SNOMED CT, ICD-10 and RxNorm so data is meaningful across systems."
+    },
+    {
+      "h": "Master patient index",
+      "d": "Probabilistic identity matching with review queues; avoid wrongful merges."
+    },
+    {
+      "h": "Reliable messaging",
+      "d": "Queues, retries, deduplication, replay and dead-letter handling for clinical messages."
+    },
+    {
+      "h": "Consent and audit on exchange",
+      "d": "Check sharing permissions and log every disclosure."
+    },
+    {
+      "h": "Monitor feeds as safety-critical",
+      "d": "Alert on errors and on unexpected silence from partners."
+    }
+  ],
+  "decision": "FHIR-first design with an integration engine for legacy standards, terminology services, a master patient index, and consent-aware, audited exchange.",
+  "numbers": [
+    "Matching trade-off: tightening match thresholds reduces wrongful merges (a safety risk) but increases duplicates needing manual review; tune with labelled samples."
+  ],
+  "pitfalls": [
+    "Custom formats per partner.",
+    "Storing local codes without terminology mapping.",
+    "Deterministic exact-match patient identity, creating duplicates or bad merges.",
+    "No monitoring for stopped feeds."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle two records that might be the same patient?",
+      "a": "Score the match; auto-link above a high threshold, queue for human review in between, and keep links reversible."
+    },
+    {
+      "q": "What's the difference between HL7 v2 and FHIR?",
+      "a": "HL7 v2 is a pipe-delimited messaging standard widely used in hospitals; FHIR is a modern resource-based standard with REST APIs and JSON or XML."
+    },
+    {
+      "q": "How do you test integrations safely?",
+      "a": "Synthetic patient data, partner test environments, message replay from sanitised samples, and certification against FHIR profiles."
+    }
+  ],
+  "example": "A health-tech company had 30 custom hospital integrations and frequent duplicate patient records. Standardising on FHIR internally, an integration engine for HL7 v2 feeds, LOINC mapping for labs and a master patient index with review queues cut onboarding time for new hospitals from months to weeks and reduced duplicates significantly.",
+  "related": [
+    "partner-integrations-reconcile",
+    "consent-audit-access",
+    "evolve-event-schema-breaking-consumers",
+    "design-dead-letter-queues-retry"
+  ],
+  "sources": [
+    {
+      "title": "HL7 FHIR specification",
+      "url": "https://hl7.org/fhir/"
+    },
+    {
+      "title": "SMART on FHIR",
+      "url": "https://docs.smarthealthit.org/"
+    }
+  ]
+}

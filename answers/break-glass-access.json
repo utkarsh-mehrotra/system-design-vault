@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Give senior clinicians permanent access to all records for emergencies.\"",
+    "why": "Permanent broad access defeats least privilege and enables snooping; emergencies are rare, so access should be exceptional, time-limited and heavily audited, not standing.",
+    "probe": "Just-in-time elevated access, justification, time limits, real-time alerts, and after-the-fact review.",
+    "say": "\"Break-glass grants temporary, scoped access when a clinician declares an emergency with a reason, triggers immediate alerts and enhanced logging, expires automatically, and every use is reviewed afterwards.\""
+  },
+  "thesis": "Emergency access should be available instantly but exceptional: a clinician can override normal restrictions by declaring a reason, gets time-limited access to the relevant records, and every use is logged, alerted on and reviewed. Safety requires availability; privacy requires accountability.",
+  "pitch": "When normal checks deny access, the user interface offers a break-glass option with a warning. The clinician selects a reason, like an emergency treatment situation, and optionally adds a note. The system grants access scoped to that patient for a short period, say a few hours, and marks every action taken under it. It immediately notifies the privacy or compliance team, and in some setups the patient's primary clinician. Break-glass events are logged with extra detail and reviewed afterwards: was there a genuine clinical need? Patterns like frequent use by one person or use on VIP records get extra scrutiny. The mechanism must work when other systems are degraded, because emergencies don't wait for a consent service to recover, so it relies on minimal dependencies and caches what it needs. The same pattern applies outside healthcare: production database access for on-call engineers during incidents, with just-in-time elevation, automatic expiry and audit.",
+  "points": [
+    {
+      "h": "Exceptional, not standing access",
+      "d": "Default least privilege; elevated access only when explicitly invoked."
+    },
+    {
+      "h": "Declared justification",
+      "d": "Required reason codes and notes captured at the time of access."
+    },
+    {
+      "h": "Scoped and time-limited",
+      "d": "Access to the specific patient (or system) for a short period, expiring automatically."
+    },
+    {
+      "h": "Real-time alerts",
+      "d": "Notify privacy, compliance or security teams when break-glass is used."
+    },
+    {
+      "h": "Enhanced audit and review",
+      "d": "Every action under break-glass is logged in detail and reviewed afterwards."
+    },
+    {
+      "h": "Works in degraded conditions",
+      "d": "Minimal dependencies so emergency access isn't blocked by other outages."
+    },
+    {
+      "h": "Same pattern for production access",
+      "d": "Just-in-time elevation for engineers during incidents, with approval or after-the-fact review."
+    }
+  ],
+  "decision": "Implement break-glass for any system where denial of access can cause harm, with justification, time limits, alerts and mandatory review; never replace it with standing broad access.",
+  "numbers": [
+    "Typical configuration: access valid for a few hours, alert within minutes, review within days; break-glass usage normally a tiny fraction of all accesses, so spikes are a signal."
+  ],
+  "pitfalls": [
+    "Standing broad access for convenience.",
+    "Break-glass with no review, becoming a routine bypass.",
+    "Emergency access depending on the same services that might be down.",
+    "No alerting, so misuse is discovered months later."
+  ],
+  "followups": [
+    {
+      "q": "How do you stop break-glass becoming a habit?",
+      "a": "Review every use, give feedback, track usage per user and department, and fix the normal access rules if legitimate needs keep requiring break-glass."
+    },
+    {
+      "q": "How does this apply to engineers and production data?",
+      "a": "Just-in-time access requests with approval or justification, short-lived credentials, session recording for sensitive systems, and post-incident review."
+    },
+    {
+      "q": "What if the patient objects afterwards?",
+      "a": "The audit trail shows who accessed what and why; the review process handles complaints and any disciplinary or legal steps."
+    }
+  ],
+  "example": "An emergency department clinician needed medication history for an unconscious patient from another hospital in the network. Break-glass granted 4 hours of access after selecting 'emergency treatment', alerted the privacy office, and the following week's review confirmed appropriate use. Two other break-glass uses that month on a celebrity's record were flagged and investigated.",
+  "related": [
+    "consent-audit-access",
+    "audit-logs-tamper-evident",
+    "authorization-models-idor",
+    "incident-commander-first-15"
+  ],
+  "sources": [
+    {
+      "title": "HHS: HIPAA Security Rule (emergency access procedure)",
+      "url": "https://www.hhs.gov/hipaa/for-professionals/security/index.html"
+    },
+    {
+      "title": "NIST SP 800-53: Access control (AC) family",
+      "url": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
+    }
+  ]
+}

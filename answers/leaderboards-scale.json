@@ -1,0 +1,76 @@
+{
+  "trap": {
+    "wrong": "\"ORDER BY score DESC in the database, and COUNT(*) WHERE score > mine for rank.\"",
+    "why": "Computing ranks with counts over millions of rows per request is slow, and a single global sorted structure becomes a hot spot when everyone updates scores at the end of a season or event.",
+    "probe": "Sorted sets or rank-indexed structures, sharding strategies, approximate ranks for the long tail, and friend leaderboards.",
+    "say": "\"Sorted sets (like Redis ZSETs) give O(log n) updates and rank queries; for very large boards, shard by score range or use exact ranks for the top and approximate percentiles for everyone else; friends boards are computed per request from the friend list.\""
+  },
+  "thesis": "Leaderboards need fast score updates and rank queries. Sorted-set structures provide logarithmic updates and rank lookups; at very large scale, combine exact ranks for the top with approximate ranks for the tail, partition by season and region, and compute friends leaderboards from friend lists on demand.",
+  "pitch": "For a leaderboard per game mode, region and season, I'd use a sorted set keyed by player with score as the sort value, such as Redis ZSETs, which give O(log n) inserts and updates, rank lookups and top-N ranges. Tens of millions of entries fit in memory per board. Ties are broken deterministically, for example by achievement time, encoded into the score. For extremely large boards or very high update rates, I'd shard: by score buckets so each shard covers a range and a player's rank is the sum of counts in higher buckets plus their rank within the bucket, or keep exact ranking for the top tens of thousands and show percentiles for the rest via histograms, since 'top 12%' is as useful as 'rank 4,812,331'. Friends leaderboards are small: fetch friends' scores, sort, done, with caching. Updates come from game results via a queue, validated server-side to prevent cheating, with the database as the durable source of truth so the in-memory boards can be rebuilt. Seasons create new boards rather than resetting in place.",
+  "points": [
+    {
+      "h": "Sorted sets",
+      "d": "O(log n) updates, rank and range queries; ideal for per-board real-time ranking."
+    },
+    {
+      "h": "Partition by board",
+      "d": "Separate boards per mode, region and season keep sizes manageable and resets simple."
+    },
+    {
+      "h": "Deterministic tie-breaking",
+      "d": "Encode a tiebreaker (time achieved) into the score so ranks are stable."
+    },
+    {
+      "h": "Exact top, approximate tail",
+      "d": "Exact ranks for leaders, percentiles from score histograms for the long tail."
+    },
+    {
+      "h": "Score-range sharding",
+      "d": "For huge boards, shard by score buckets and sum counts across buckets for rank."
+    },
+    {
+      "h": "Friends leaderboards on demand",
+      "d": "Compute from the friend list's scores per request, cached briefly."
+    },
+    {
+      "h": "Durable source of truth",
+      "d": "Validated scores persisted in a database; in-memory boards rebuilt from it."
+    }
+  ],
+  "decision": "Sorted sets per board for most games; approximate percentiles and score-range sharding for very large global boards; server-validated scores with a durable store.",
+  "numbers": [
+    "Memory sketch: 20 million entries × ~100 bytes per sorted-set entry ≈ 2 GB per board, fine for an in-memory store; rank queries in microseconds to low milliseconds."
+  ],
+  "pitfalls": [
+    "COUNT queries over millions of rows for each rank lookup.",
+    "One global board absorbing all updates at event end.",
+    "Client-reported scores accepted without validation.",
+    "Resetting a board in place at season change instead of starting a new one."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a burst of score updates when a tournament ends?",
+      "a": "Queue results, apply them in batches, and shard boards or use replicas for reads so rank queries aren't blocked by writes."
+    },
+    {
+      "q": "How do you show 'players near me' on the board?",
+      "a": "Fetch a range around the player's rank from the sorted set (rank ± 10)."
+    },
+    {
+      "q": "How do you prevent leaderboard cheating?",
+      "a": "Server-authoritative results, anomaly detection on score jumps, replay validation for top scores, and removal tooling."
+    }
+  ],
+  "example": "A mobile game computed ranks with SQL counts and timed out at season end. Moving to Redis sorted sets per region and season, exact top-10,000 with percentiles below, and score updates via a queue made rank lookups take milliseconds during the end-of-season spike.",
+  "related": [
+    "approximate-counting-sketches",
+    "hot-partition-shows-up-2",
+    "realtime-game-state-sync"
+  ],
+  "sources": [
+    {
+      "title": "Redis documentation: Sorted sets",
+      "url": "https://redis.io/docs/latest/develop/data-types/sorted-sets/"
+    }
+  ]
+}
