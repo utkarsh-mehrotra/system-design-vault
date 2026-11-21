@@ -60,6 +60,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .saved{display:inline-flex;align-items:center;gap:6px;font:500 11px "JetBrains Mono",monospace;color:var(--muted)}
 .saved::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);transition:box-shadow .3s}
 .saved.pulse::before{box-shadow:0 0 0 4px var(--ok-bg)}
+.saved[hidden]{display:none}
 .saved.syncing::before{background:var(--warn)}
 .saved.error::before{background:var(--bad)}
 .auth{position:relative;display:inline-flex}
@@ -275,7 +276,7 @@ body.resizing{cursor:col-resize;user-select:none}
   </div>
   <div class="sync">
     <div class="prog" aria-live="polite"><b id="mastered"></b><div class="pbar" aria-hidden="true"><i id="mbar"></i></div></div>
-    <span class="saved" id="saved">Saved locally</span>
+    <span class="saved" id="saved" hidden></span>
     <button type="button" class="ibtn" id="reset" aria-label="Reset all progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="lbl">Reset</span></button>
     <span class="auth" id="auth" hidden></span>
     <button type="button" class="ibtn sq" id="theme"></button>
@@ -354,7 +355,7 @@ function saveAll(fromSync){store(KEY,JSON.stringify(done));store(CKEY,JSON.strin
 window.SDV={
   snapshot:()=>({done:JSON.parse(JSON.stringify(done)),conf:JSON.parse(JSON.stringify(conf)),drill:JSON.parse(JSON.stringify(drill))}),
   apply:s=>{done=s.done||{};conf=s.conf||{};drill=s.drill||{};saveAll(true);if(typeof render==="function")render()},
-  setSync:(label,state)=>{const el=$("saved");el.textContent=label;el.classList.toggle("syncing",state==="syncing");el.classList.toggle("error",state==="error")},
+  setSync:(label,state)=>{const el=$("saved");el.hidden=!label;el.textContent=label||"";el.classList.toggle("syncing",state==="syncing");el.classList.toggle("error",state==="error")},
   onLocalSave:null
 };
 const status=id=>conf[id]||(done[id]?"solid":"unseen");
@@ -749,7 +750,7 @@ if(cfg&&window.SDV){
   onAuthStateChanged(auth,async u=>{
     user=u;
     if(u){ref=doc(db,"progress",u.uid);setStatus("Syncing…","syncing");draw();await pull(true)}
-    else{ref=null;clearTimeout(timer);SDV.setSync("Saved locally","ok");draw()}
+    else{ref=null;clearTimeout(timer);SDV.setSync("","ok");draw()}
   });
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")pull(false);else if(dirty)push()});
   window.addEventListener("pagehide",()=>{if(dirty)push()});
