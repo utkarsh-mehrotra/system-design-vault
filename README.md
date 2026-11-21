@@ -37,7 +37,7 @@ See `docs/answer-plan.md` for the plan to add in-depth answers (and the debate o
 | `sdv-theme` | `dark` (default) or `light` |
 | `sdv-recall` | Whether "Hide outline (test yourself)" is on |
 
-Export/Import JSON carries `done`, `conf` and `drill`; older exports (with only `done` and `drill`) still import.
+Progress lives only in this browser's localStorage (no export/import); clearing site data resets it.
 
 ## Keyboard
 

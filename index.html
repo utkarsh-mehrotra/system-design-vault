@@ -261,11 +261,8 @@ body.resizing{cursor:col-resize;user-select:none}
   <div class="sync">
     <div class="prog" aria-live="polite"><b id="mastered"></b><div class="pbar" aria-hidden="true"><i id="mbar"></i></div></div>
     <span class="saved" id="saved">Saved locally</span>
-    <button type="button" class="ibtn" id="export" aria-label="Export progress as JSON"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span class="lbl">Export JSON</span></button>
-    <button type="button" class="ibtn" id="import" aria-label="Import progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9M7 14l5-5 5 5M5 3h14"/></svg><span class="lbl">Import</span></button>
     <button type="button" class="ibtn" id="reset" aria-label="Reset all progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="lbl">Reset</span></button>
     <button type="button" class="ibtn sq" id="theme"></button>
-    <input type="file" id="file" accept="application/json,.json" hidden>
     <span class="sr" id="msg" aria-live="polite"></span>
   </div>
 </header>
@@ -645,24 +642,8 @@ document.addEventListener("keydown",e=>{
   else if(["1","2","3"].includes(e.key)&&sel){e.preventDefault();setConf(sel,["missed","shaky","solid"][+e.key-1]);refreshStatus()}
 });
 
-/* ---------- export / import / reset ---------- */
-$("export").onclick=()=>{
-  const blob=new Blob([JSON.stringify({app:"staff-design-vault",version:3,exported:new Date().toISOString(),done:Object.keys(done),conf,drill},null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="design-vault-progress.json";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},0);msg("Progress exported");
-};
-$("import").onclick=()=>$("file").click();
-$("file").onchange=e=>{
-  const f=e.target.files[0];if(!f)return;
-  f.text().then(t=>{
-    const j=JSON.parse(t),ids=Array.isArray(j.done)?j.done:Object.keys(j.done||{});let n=0;
-    ids.forEach(id=>{if(byId[id]&&!done[id]){done[id]=1;n++}});
-    if(j.conf&&typeof j.conf==="object")Object.keys(j.conf).forEach(id=>{if(byId[id]&&["missed","shaky","solid"].includes(j.conf[id]))conf[id]=j.conf[id]});
-    if(j.drill&&typeof j.drill==="object")Object.keys(j.drill).forEach(k=>{const a=drill[k],b=j.drill[k];if(b&&(!a||(b.last||0)>(a.last||0)))drill[k]=b});
-    saveAll();render();msg("Imported progress");alert("Imported progress: "+n+" newly mastered questions.");
-  }).catch(()=>alert("That file could not be read."));
-  e.target.value="";
-};
-$("reset").onclick=()=>{if(!confirm("Reset all progress? Confidence ratings, mastered questions and drill history will be cleared from this browser. Export first if you want a backup."))return;done={};conf={};drill={};saveAll();dHist=[];dHi=-1;dCur=null;render();msg("Progress reset")};
+/* ---------- reset ---------- */
+$("reset").onclick=()=>{if(!confirm("Reset all progress? Confidence ratings, mastered questions and drill history will be cleared from this browser."))return;done={};conf={};drill={};saveAll();dHist=[];dHi=-1;dCur=null;render();msg("Progress reset")};
 
 /* ---------- resizable split ---------- */
 (function(){
