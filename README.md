@@ -34,7 +34,7 @@ See `docs/answer-plan.md` for the plan to add in-depth answers (and the debate o
 | `sdv-done-v2` | Mastered questions `{id: 1}` (kept from earlier versions; set when a card is rated Solid) |
 | `sdv-conf-v1` | Confidence per question: `missed` / `shaky` / `solid` |
 | `sdv-drill-v1` | Trap drill spaced-repetition state per prompt |
-| `sdv-theme` | `dark` (default) or `light` |
+| `sdv-theme` | `light` (default), `dark` or `auto` |
 | `sdv-recall` | Whether "Hide outline (test yourself)" is on |
 | `sdv-sync-rev` | Revision of the last cloud sync (only when signed in) |
 
