@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Kubernetes sends SIGTERM, and the app exits.\"",
+    "why": "If the process exits immediately, in-flight requests fail, and the load balancer may still route new requests to it for a few seconds because deregistration propagates asynchronously.",
+    "probe": "The shutdown sequence: unready, wait for deregistration, drain in-flight work, close connections, then exit.",
+    "say": "\"On SIGTERM I mark the instance unready, keep serving while the load balancer deregisters it, stop accepting new work, finish in-flight requests and jobs within a deadline, close connections cleanly, then exit.\""
+  },
+  "thesis": "Graceful shutdown is a sequence: stop receiving new traffic, let routing changes propagate, finish in-flight work within a deadline, release resources cleanly, then exit. Skipping any step turns every deploy and scale-in into a burst of user-visible errors.",
+  "pitch": "When an instance is told to stop, it should first fail readiness so the load balancer and service mesh stop sending it new requests. Those changes take a few seconds to propagate, so the process should keep serving during that window, often implemented as a short pre-stop sleep. Then it stops accepting new connections, waits for in-flight requests to finish up to a deadline, tells long-lived connection clients to reconnect elsewhere (HTTP/2 GOAWAY, WebSocket close messages), and for queue consumers stops pulling new messages and finishes or releases current ones. Then it flushes logs and metrics, closes database connections, and exits. The orchestrator's grace period must be longer than all of that. The same logic applies on scale-in and spot instance reclamation. I'd test it by deploying under load and checking that the error rate doesn't move.",
+  "points": [
+    {
+      "h": "Fail readiness first",
+      "d": "Mark the instance unready so routing systems stop sending new traffic."
+    },
+    {
+      "h": "Wait for deregistration to propagate",
+      "d": "Load balancers and service discovery update asynchronously; a short delay (often seconds) avoids requests arriving at a closing process."
+    },
+    {
+      "h": "Drain in-flight requests",
+      "d": "Stop accepting new connections and let current requests complete within a deadline."
+    },
+    {
+      "h": "Handle long-lived connections",
+      "d": "Send GOAWAY or close messages so clients reconnect elsewhere, staggered to avoid a reconnect storm."
+    },
+    {
+      "h": "Queue consumers",
+      "d": "Stop fetching, finish current messages or return them (visibility timeout, nack), and commit offsets for completed work."
+    },
+    {
+      "h": "Grace period sized correctly",
+      "d": "The orchestrator's termination grace period must exceed the drain deadline plus propagation delay."
+    },
+    {
+      "h": "Test under load",
+      "d": "Deploy during a load test and verify error rates and latency stay flat."
+    }
+  ],
+  "decision": "Implement the full sequence in a shared library or framework so every service gets it. Size drain deadlines from p99 request time, and keep long-running work resumable rather than relying on long grace periods.",
+  "numbers": [
+    "Example: 5 s pre-stop delay for deregistration, 25 s drain deadline for requests (p99 is 2 s), 30–40 s termination grace period."
+  ],
+  "pitfalls": [
+    "Exiting immediately on SIGTERM.",
+    "No delay for load balancer deregistration.",
+    "Grace period shorter than drain time, so SIGKILL cuts work off.",
+    "Consumers that die mid-message without returning it."
+  ],
+  "followups": [
+    {
+      "q": "What about jobs that run for 20 minutes?",
+      "a": "Make them checkpointed and resumable, release them on shutdown, and let another worker continue, rather than blocking shutdown for 20 minutes."
+    },
+    {
+      "q": "Why do errors appear even with draining?",
+      "a": "Often clients reuse keep-alive connections to the old instance; send Connection: close or GOAWAY during drain so they reconnect."
+    },
+    {
+      "q": "How does this apply to spot or preemptible instances?",
+      "a": "Same sequence, triggered by the interruption notice, with a much shorter deadline, which is another reason to keep work resumable."
+    }
+  ],
+  "example": "A team saw 0.3% errors on every deploy. Adding a readiness flip, a 5-second pre-stop sleep, connection-close headers during drain and a 30-second grace period made deploys invisible in error-rate graphs.",
+  "related": [
+    "health-checks-liveness-readiness",
+    "choose-load-balancing-strategy-long",
+    "deploy-strategies-compared",
+    "autoscaling-pitfalls"
+  ],
+  "sources": [
+    {
+      "title": "Kubernetes documentation: Pod termination",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination"
+    },
+    {
+      "title": "AWS Elastic Load Balancing: Deregistration delay",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html#deregistration-delay"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"JWTs, because they're stateless and scale better, so no session store is needed.\"",
+    "why": "A self-contained JWT stays valid until it expires; you can't revoke it without checking some server-side state, which brings back the session store. Long-lived JWTs make stolen tokens dangerous.",
+    "probe": "Revocation, token lifetimes, refresh tokens, and where tokens are stored.",
+    "say": "\"Short-lived access tokens (minutes) plus revocable, rotating refresh tokens stored server-side; for web apps, server-side sessions in HttpOnly cookies are often simpler and revocable immediately.\""
+  },
+  "thesis": "Server-side sessions are easy to revoke but need a lookup per request; JWTs avoid the lookup but can't be revoked before expiry without extra state. The standard compromise is short-lived access tokens with server-side, rotating refresh tokens, and storing tokens where scripts can't steal them.",
+  "pitch": "With sessions, the browser holds an opaque random id in an HttpOnly, Secure, SameSite cookie, and the server looks it up in a store. Revocation is deleting the session, which is instant. The cost is a lookup per request, usually a fast cache hit. With JWTs, the token carries claims signed by the issuer, so services can verify it without a lookup, which is convenient across many services. But a stolen JWT is valid until it expires, and 'logout everywhere' needs a denylist or a per-user token version check, which is state again. So I'd use short access tokens, around 5 to 15 minutes, and refresh tokens that are stored server-side, rotated on every use, and revoked on logout or suspicious activity, with reuse detection: if an old refresh token is presented, revoke the whole family. For browsers I'd keep tokens out of localStorage, using HttpOnly cookies or a backend-for-frontend, to limit damage from XSS.",
+  "points": [
+    {
+      "h": "Sessions: simple and revocable",
+      "d": "Opaque id in a secure cookie, server-side state, instant revocation, one fast lookup per request."
+    },
+    {
+      "h": "JWTs: verifiable without lookup",
+      "d": "Signed claims let many services authenticate requests independently, but revocation before expiry isn't built in."
+    },
+    {
+      "h": "Short-lived access tokens",
+      "d": "Minutes, not days, so a stolen access token has limited value."
+    },
+    {
+      "h": "Rotating refresh tokens",
+      "d": "Stored and revocable server-side, rotated on each use, with reuse detection that revokes the token family."
+    },
+    {
+      "h": "Logout everywhere",
+      "d": "Revoke refresh tokens and optionally bump a per-user token version checked on sensitive requests."
+    },
+    {
+      "h": "Token storage in browsers",
+      "d": "HttpOnly, Secure, SameSite cookies or a BFF; avoid localStorage, which any injected script can read."
+    },
+    {
+      "h": "Validate properly",
+      "d": "Check signature algorithm (no 'none'), issuer, audience, expiry, and rotate signing keys with key ids."
+    }
+  ],
+  "decision": "Web apps: server-side sessions in secure cookies, or a BFF holding tokens. APIs and service meshes: short-lived JWT access tokens plus revocable refresh tokens. Sensitive actions: re-check server-side state or require step-up authentication.",
+  "numbers": [
+    "With a 10-minute access token, the worst-case window for a stolen access token after revocation is 10 minutes; with a 24-hour token, it's a day."
+  ],
+  "pitfalls": [
+    "Long-lived JWTs with no revocation.",
+    "Storing tokens in localStorage.",
+    "Accepting unsigned or wrongly signed tokens due to algorithm confusion.",
+    "Refresh tokens that never rotate or expire."
+  ],
+  "followups": [
+    {
+      "q": "A user's laptop is stolen. What do you do?",
+      "a": "Revoke all their refresh tokens and sessions, bump their token version, force re-authentication, and alert them."
+    },
+    {
+      "q": "How do microservices validate user identity?",
+      "a": "The gateway validates the access token and forwards verified claims or a signed internal token; services check audience and scopes."
+    },
+    {
+      "q": "What does SameSite protect against?",
+      "a": "Cross-site request forgery: cookies aren't sent on cross-site requests (Lax or Strict), reducing CSRF risk."
+    }
+  ],
+  "example": "A lending app moved from 7-day JWTs in localStorage to a BFF with HttpOnly session cookies; the BFF holds 10-minute access tokens and rotating refresh tokens. 'Log out of all devices' now takes effect within minutes, and an XSS bug would no longer expose tokens directly.",
+  "related": [
+    "authorization-models-idor",
+    "credential-stuffing-ato",
+    "service-to-service-auth",
+    "design-gateway-evolve-independently-services"
+  ],
+  "sources": [
+    {
+      "title": "OWASP: Session management cheat sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+    },
+    {
+      "title": "OAuth 2.0 Security Best Current Practice (RFC 9700)",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700"
+    }
+  ]
+}

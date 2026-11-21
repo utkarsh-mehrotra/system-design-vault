@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"The gateway checks the JWT, so the request is authorised.\"",
+    "why": "Authentication proves who the caller is, not whether they may access resource 123. Missing object-level checks (IDOR, broken object-level authorisation) are among the most common API vulnerabilities.",
+    "probe": "Object-level authorisation in the service, a central policy model, and testing for it.",
+    "say": "\"The gateway authenticates and checks coarse scopes; every service checks object-level access (does this user's tenant and role allow this action on this resource) through a shared policy library, with tests that try other tenants' ids.\""
+  },
+  "thesis": "Authorisation has to be enforced where the resource lives, for every object access, not just at the edge. Choose a model that fits (RBAC for roles, ABAC for attribute rules, relationship-based for sharing), centralise the policy logic, and test explicitly for cross-tenant and cross-user access.",
+  "pitch": "I'd split it into layers. The gateway authenticates the caller and checks coarse scopes, like 'this token may call the invoices API'. The service owning the invoice then checks, for each request, whether this user may perform this action on this specific invoice: same tenant, appropriate role, owner or shared with them. That object-level check is where most real breaches happen, because an id in a URL is easy to change. For the model: RBAC, with roles mapped to permissions, is enough for many products; ABAC adds attribute rules like 'managers can approve loans under 10,000 in their region'; relationship-based access control, as in Google Zanzibar and its open-source descendants, handles sharing and hierarchies like folders and documents. I'd put the logic in a shared library or policy engine so it's consistent and auditable, scope every query by tenant, use unguessable ids as defence in depth, and add automated tests that try to access other tenants' resources on every endpoint.",
+  "points": [
+    {
+      "h": "Authentication is not authorisation",
+      "d": "A valid token tells you who; authorisation decides whether this identity may do this action on this object."
+    },
+    {
+      "h": "Object-level checks in the owning service",
+      "d": "Every read and write of a resource verifies tenant, ownership or permission for that specific object."
+    },
+    {
+      "h": "RBAC",
+      "d": "Users get roles; roles grant permissions. Simple and auditable; struggles with per-object sharing and complex conditions."
+    },
+    {
+      "h": "ABAC",
+      "d": "Policies over attributes of user, resource and context (region, amount, time). Flexible; needs careful testing and tooling."
+    },
+    {
+      "h": "Relationship-based (ReBAC)",
+      "d": "Permissions derived from relationships (owner, member of group, parent folder). Fits sharing and hierarchies."
+    },
+    {
+      "h": "Centralise the policy",
+      "d": "A shared library or policy engine (OPA, Cedar, Zanzibar-style services) so rules are consistent, testable and logged."
+    },
+    {
+      "h": "Test for broken access control",
+      "d": "Automated tests that use one tenant's credentials against another tenant's resource ids on every endpoint."
+    }
+  ],
+  "decision": "RBAC plus tenant scoping for most B2B products; add ABAC conditions for business rules; adopt ReBAC when users share resources in hierarchies. Always enforce object-level checks in the owning service.",
+  "numbers": [
+    "OWASP lists broken object-level authorisation as the top API security risk in its API Security Top 10, which reflects how common the bug is."
+  ],
+  "pitfalls": [
+    "Relying on the gateway or front-end to hide unauthorised actions.",
+    "Trusting tenant or user ids from request parameters.",
+    "Authorisation logic copy-pasted across services, drifting apart.",
+    "Sequential ids that make enumeration trivial when a check is missed."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle admin or support access to customer data?",
+      "a": "Explicit, time-limited elevated roles with justification, full audit logging, and ideally customer-visible access logs."
+    },
+    {
+      "q": "Where should list endpoints filter?",
+      "a": "In the query itself, scoped by tenant and permission, never by fetching everything and filtering in memory."
+    },
+    {
+      "q": "When is a central authorisation service worth it?",
+      "a": "When many services need consistent, relationship-based permissions; it adds a network dependency, so cache decisions carefully."
+    }
+  ],
+  "example": "A pen test found that changing an invoice id in the URL returned another tenant's invoice. The fix added a shared authorisation library checking (tenant, role, invoice) in every handler, row-level security as a second layer, and a CI suite that replays every endpoint with a different tenant's token.",
+  "related": [
+    "handle-multi-tenant-data-isolation",
+    "sessions-vs-jwt-revocation",
+    "audit-logs-tamper-evident",
+    "design-gateway-evolve-independently-services"
+  ],
+  "sources": [
+    {
+      "title": "OWASP API Security Top 10 (2023): Broken object level authorization",
+      "url": "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    },
+    {
+      "title": "Pang et al.: Zanzibar, Google's consistent global authorization system",
+      "url": "https://research.google/pubs/zanzibar-googles-consistent-global-authorization-system/"
+    }
+  ]
+}

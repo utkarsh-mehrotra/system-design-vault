@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Restart everything\" or \"add capacity and wait.\"",
+    "why": "In a metastable failure, a feedback loop (retries, cache misses, queue backlog, timeouts) keeps load above capacity. Restarting can make it worse with cold caches and reconnect storms, and new capacity is often swamped by the same loop.",
+    "probe": "Recognising sustaining feedback loops and breaking them by shedding load.",
+    "say": "\"This looks metastable: something like retries or a cold cache is keeping load above capacity. I'd break the loop by shedding load hard, disabling retries, letting caches warm, and ramping traffic back gradually.\""
+  },
+  "thesis": "A metastable failure is one where a temporary trigger pushes the system into a bad state that a feedback loop then sustains, even after the trigger disappears. Recovery means breaking the loop, usually by drastically reducing load, not waiting or restarting.",
+  "pitch": "The pattern: a system runs fine near capacity, a trigger like a deploy, a brief dependency slowdown, or a cache flush pushes it over, and something then keeps it there. Common sustaining effects are retries that multiply load, requests timing out after the server already did the work so all work is wasted, cold caches pushing everything to the database, queues full of stale requests whose clients have gone, and reconnect storms. The system is stuck in a stable bad state. Getting out means reducing load below the level that sustains the loop: shed traffic aggressively, turn off client retries, drop queued requests older than their deadline, serve stale or degraded results, warm caches, then ramp traffic back gradually. Prevention is about removing the amplifiers: retry budgets, deadline propagation, bounded queues with LIFO or age-based dropping, and keeping enough headroom that small triggers don't tip you over.",
+  "points": [
+    {
+      "h": "Trigger vs sustaining effect",
+      "d": "The trigger starts it; the sustaining effect (a feedback loop) keeps it going after the trigger ends. Fix the loop, not just the trigger."
+    },
+    {
+      "h": "Common amplifiers",
+      "d": "Retries, timeouts wasting completed work, cold caches, queue backlogs of dead requests, and reconnect storms."
+    },
+    {
+      "h": "Goodput collapse",
+      "d": "Throughput stays high but useful completions fall because work finishes after clients have given up."
+    },
+    {
+      "h": "Recover by cutting load",
+      "d": "Shed traffic hard, disable retries, drop expired queued work, and only then bring traffic back gradually."
+    },
+    {
+      "h": "Don't restart blindly",
+      "d": "Restarts empty caches and trigger reconnection spikes, often deepening the hole."
+    },
+    {
+      "h": "Prevent with damping",
+      "d": "Retry budgets, deadlines, bounded queues, admission control and spare capacity remove the loops' fuel."
+    }
+  ],
+  "decision": "Build in damping (budgets, deadlines, shedding) before an incident, and keep an operator lever to cut load sharply. In an incident, suspect metastability whenever the system doesn't recover after the trigger is removed.",
+  "numbers": [
+    "Retry amplification: with 3 attempts per request and a 60% failure rate, load is roughly 1 + 0.6 + 0.36 ≈ 2x the original, which can keep a system above capacity indefinitely."
+  ],
+  "pitfalls": [
+    "Waiting for the system to recover by itself.",
+    "Adding instances that all join the same retry storm.",
+    "Restarting everything at once with cold caches.",
+    "Queues that keep serving requests whose clients timed out long ago."
+  ],
+  "followups": [
+    {
+      "q": "How do you know it's metastable rather than still overloaded by the trigger?",
+      "a": "The trigger is gone (the deploy is rolled back, the dependency is healthy), but error rates, retries or queue age stay high."
+    },
+    {
+      "q": "What lever would you build for operators?",
+      "a": "A load-shedding control that admits only a percentage of traffic or only critical traffic, plus a switch to disable client and server retries."
+    },
+    {
+      "q": "How do caches cause metastability?",
+      "a": "After a flush, misses overload the database, slowing everything, so caches can't refill fast enough; a feedback loop that only shedding or warming breaks."
+    }
+  ],
+  "example": "A brief network blip made API calls time out; clients retried three times, quadrupling load. The blip ended in 20 seconds, but the service stayed down for 40 minutes until operators shed 70% of traffic and disabled SDK retries via a feature flag; it recovered within two minutes.",
+  "related": [
+    "retries-amplifying-outage-design-retries",
+    "design-admission-control-service-stays",
+    "handle-cache-stampede-thundering-herd",
+    "list-ways-three-tier-service"
+  ],
+  "sources": [
+    {
+      "title": "Bronson et al.: Metastable failures in distributed systems (HotOS 2021)",
+      "url": "https://sigops.org/s/conferences/hotos/2021/papers/hotos21-s11-bronson.pdf"
+    },
+    {
+      "title": "Marc Brooker: Metastability and distributed systems",
+      "url": "https://brooker.co.za/blog/2021/05/24/metastable.html"
+    }
+  ]
+}

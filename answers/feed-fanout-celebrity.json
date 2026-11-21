@@ -1,0 +1,78 @@
+{
+  "trap": {
+    "wrong": "\"Fan-out on write: when someone posts, push it into every follower's feed.\"",
+    "why": "A celebrity with 50 million followers turns one post into 50 million writes, delaying everyone's feed and costing huge write capacity, mostly for inactive users.",
+    "probe": "The hybrid approach and the costs of each side.",
+    "say": "\"Hybrid: fan-out on write for normal accounts into precomputed feeds, but for accounts above a follower threshold, pull their recent posts at read time and merge, and skip precomputing feeds for inactive users.\""
+  },
+  "thesis": "Fan-out on write precomputes feeds for fast reads but explodes for accounts with huge followings. Fan-out on read is cheap to write but slow to read. Production feeds use a hybrid: push for normal accounts, pull for celebrities, and precompute only for active users.",
+  "pitch": "With fan-out on write, a new post is inserted into each follower's feed list, so reading a feed is a single fast lookup. That works when follower counts are modest, but a celebrity post means millions of writes, which delays delivery and wastes work on followers who won't open the app this week. With fan-out on read, the feed is assembled at read time by fetching recent posts from everyone you follow and merging them; writes are cheap, but reads are expensive if you follow thousands of accounts. The hybrid takes the best of both: normal accounts fan out on write into cached feed lists (often only post ids, capped at a few hundred), celebrity accounts above a threshold are excluded from fan-out, and at read time their recent posts are fetched and merged with the precomputed list. I'd only maintain precomputed feeds for recently active users and rebuild on return. Ranking adds another layer, but the delivery mechanics are the same.",
+  "points": [
+    {
+      "h": "Fan-out on write",
+      "d": "Push post ids into followers' feed lists at post time. Fast reads; write cost proportional to follower count."
+    },
+    {
+      "h": "Fan-out on read",
+      "d": "Pull recent posts from followed accounts at read time. Cheap writes; read cost proportional to accounts followed."
+    },
+    {
+      "h": "Hybrid for celebrities",
+      "d": "Accounts above a follower threshold skip fan-out; their posts are merged in at read time."
+    },
+    {
+      "h": "Only for active users",
+      "d": "Precompute feeds for users active recently; rebuild on demand for returning users, saving most of the write volume."
+    },
+    {
+      "h": "Store ids, not content",
+      "d": "Feed lists hold post ids (and scores); post content is fetched and cached separately, so edits and deletes don't require rewriting feeds."
+    },
+    {
+      "h": "Cap and trim",
+      "d": "Keep only the most recent few hundred items per feed; older content is fetched by pagination from sources."
+    },
+    {
+      "h": "Async fan-out workers",
+      "d": "Fan-out runs on a queue with prioritisation so large fan-outs don't block small ones."
+    }
+  ],
+  "decision": "Hybrid fan-out with a follower-count threshold, precomputation only for active users, and id-only feed lists in a fast store. Tune the threshold from write cost and read latency data.",
+  "numbers": [
+    "A post from a 50-million-follower account under pure push is 50 million feed writes; at 500,000 writes/s that takes 100 seconds of fan-out capacity for one post.",
+    "Read-time merge for celebrities: if a user follows 20 celebrities, merging 20 recent-post lists of 50 ids each is cheap and cacheable."
+  ],
+  "pitfalls": [
+    "Pure push with no celebrity handling.",
+    "Precomputing feeds for millions of inactive users.",
+    "Storing full post content in each feed, making edits and deletes expensive.",
+    "No prioritisation, so celebrity fan-outs delay everyone."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a deleted post?",
+      "a": "Since feeds store ids, mark the post deleted and filter at read time; optionally clean feed lists lazily."
+    },
+    {
+      "q": "Where does ranking fit?",
+      "a": "Candidate generation (from the hybrid feed) then a ranking step that scores candidates per user; ranked results can be cached briefly."
+    },
+    {
+      "q": "What threshold makes an account a 'celebrity'?",
+      "a": "Set it from cost data, often tens of thousands to a million followers, and also consider post frequency."
+    }
+  ],
+  "example": "A social app with pure fan-out on write saw feed delays of several minutes whenever a top creator posted. Excluding accounts above 100,000 followers from fan-out and merging their posts at read time brought delivery delay under 5 seconds and cut feed writes by 70%.",
+  "related": [
+    "design-fan-out-fan-pipeline",
+    "caching-story-hot-keys-large",
+    "realtime-delivery-polling-websockets",
+    "chat-ordering-receipts-multidevice"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 1 (Twitter home timeline example)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

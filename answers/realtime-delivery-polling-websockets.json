@@ -1,0 +1,82 @@
+{
+  "trap": {
+    "wrong": "\"WebSockets for anything real-time.\"",
+    "why": "WebSockets add stateful connections to manage at scale: sticky routing, reconnect storms, fan-out across servers, and proxies or firewalls that interfere. Many 'real-time' needs are one-way and fit SSE or polling.",
+    "probe": "Matching the transport to direction, frequency and scale, and the server-side fan-out architecture.",
+    "say": "\"Polling for infrequent updates, SSE for server-to-client streams over plain HTTP, WebSockets only when I need low-latency two-way messaging; and in every case a pub/sub layer behind the connection servers to route messages.\""
+  },
+  "thesis": "Choose by direction and frequency: polling for infrequent updates, long polling as a fallback, server-sent events for one-way server push, WebSockets for frequent two-way messaging. The hard part is the backend: stateful connection servers, routing messages to the right connection, and handling reconnects.",
+  "pitch": "If updates are rare, like a report finishing, polling with backoff is simplest and works everywhere. Long polling holds a request open until there's data, reducing latency without new protocols, but each message costs a new request. Server-sent events give a one-way stream over HTTP, with automatic reconnection and resume via Last-Event-ID, a great fit for notifications, live scores and dashboards. WebSockets give full-duplex messaging for chat, collaboration and games, at the cost of managing long-lived stateful connections. Whatever the transport, the architecture behind it matters more: connection servers hold client connections and subscribe to a pub/sub layer (Redis, Kafka, NATS) keyed by user or channel, so any backend service can publish and the right connection server delivers. I'd plan for reconnect storms after deploys with jitter, missed-message catch-up on reconnect, per-connection memory, and graceful draining.",
+  "points": [
+    {
+      "h": "Polling",
+      "d": "Simplest; fine for infrequent updates. Use backoff and conditional requests (ETags) to limit load."
+    },
+    {
+      "h": "Long polling",
+      "d": "Server holds the request until data arrives or a timeout; lower latency than polling, works through most proxies."
+    },
+    {
+      "h": "Server-sent events",
+      "d": "One-way streaming over HTTP with built-in reconnect and resume. Good for feeds, notifications and progress updates."
+    },
+    {
+      "h": "WebSockets",
+      "d": "Bidirectional, low-latency messaging over one connection. Needed for chat, collaboration, multiplayer and trading UIs."
+    },
+    {
+      "h": "Connection servers plus pub/sub",
+      "d": "Separate stateful edge servers holding connections from stateless services; route messages via a pub/sub layer keyed by user or topic."
+    },
+    {
+      "h": "Reconnects and catch-up",
+      "d": "Clients reconnect with jittered backoff and resume from a last-seen id; the server replays missed messages from a store."
+    },
+    {
+      "h": "Capacity per connection",
+      "d": "Memory and file descriptors per connection limit how many each server holds; plan horizontal scaling and draining."
+    }
+  ],
+  "decision": "Polling for low-frequency updates; SSE for server push; WebSockets for interactive two-way use. Always with a pub/sub routing layer and a catch-up mechanism for missed messages.",
+  "numbers": [
+    "A connection server holding 100,000 idle WebSockets at roughly 20–50 KB each needs several GB of memory; 5 million concurrent users needs dozens of such servers.",
+    "Polling 1 million clients every 30 seconds is about 33,000 requests/s even when nothing changes."
+  ],
+  "pitfalls": [
+    "WebSockets with no pub/sub layer, so services can't reach users connected to other servers.",
+    "All clients reconnecting at once after a deploy.",
+    "No resume or catch-up, so messages sent during reconnects are lost.",
+    "Corporate proxies breaking WebSockets with no fallback."
+  ],
+  "followups": [
+    {
+      "q": "How do you send a message to a user connected to some server among 50?",
+      "a": "Each connection server subscribes to channels for its connected users in the pub/sub layer; publishers send to the user's channel without knowing the server."
+    },
+    {
+      "q": "How do you deploy connection servers without dropping users?",
+      "a": "Drain gradually: stop new connections, send reconnect instructions in batches with jitter, and let clients reconnect to new servers."
+    },
+    {
+      "q": "Why not just use push notifications for mobile?",
+      "a": "Use them when the app is backgrounded; use a live connection when the app is open and needs low latency."
+    }
+  ],
+  "example": "A trading app uses SSE for price updates on its web dashboard and WebSockets only for the order-entry screen. Connection servers subscribe to Redis channels per user and per instrument; clients resume from the last sequence number after reconnects.",
+  "related": [
+    "chat-ordering-receipts-multidevice",
+    "presence-at-scale",
+    "graceful-shutdown-draining",
+    "choose-load-balancing-strategy-long"
+  ],
+  "sources": [
+    {
+      "title": "MDN: Using server-sent events",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+    },
+    {
+      "title": "MDN: The WebSocket API",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
+    }
+  ]
+}

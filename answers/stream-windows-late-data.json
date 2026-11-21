@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Group events by the minute they arrive.\"",
+    "why": "Processing time isn't event time. Mobile clients, retries and network delays deliver events late, so grouping by arrival puts them in the wrong window and makes results depend on load.",
+    "probe": "Event time vs processing time, watermarks, allowed lateness, and how late updates reach downstream.",
+    "say": "\"Window by event time, use watermarks to decide when a window is probably complete, allow some lateness with updates, and send very late events to a side output or correct them in batch.\""
+  },
+  "thesis": "Correct streaming aggregates use event time, not arrival time. Watermarks estimate how far event time has progressed so windows can close; allowed lateness lets late events update results; and anything later than that is handled explicitly, not silently dropped.",
+  "pitch": "Every event carries the time it happened. If I group by arrival time, a phone that was offline for ten minutes dumps its events into the wrong minute, and the numbers change with network conditions. So I'd use event-time windows: tumbling one-minute windows keyed by event time. The question is when a window is done. A watermark is the processor's estimate that it has seen all events up to time T, typically the maximum event time seen minus an expected delay, say 30 seconds. When the watermark passes the end of a window, it emits a result. Events arriving after that but within an allowed-lateness period update the window and emit a corrected result, so downstream must handle updates (upserts keyed by window). Events later than that go to a side output for logging or batch correction. Choosing the watermark delay trades latency for completeness, and I'd measure the actual lateness distribution to set it.",
+  "points": [
+    {
+      "h": "Event time vs processing time",
+      "d": "Event time is when it happened; processing time is when it arrived. Business metrics need event time."
+    },
+    {
+      "h": "Window types",
+      "d": "Tumbling (fixed, non-overlapping), sliding (overlapping), and session windows (gaps of inactivity). Choose by question."
+    },
+    {
+      "h": "Watermarks",
+      "d": "A moving estimate of event-time progress; windows fire when the watermark passes their end."
+    },
+    {
+      "h": "Latency vs completeness",
+      "d": "A longer watermark delay waits for more late events; a shorter one gives faster but less complete results."
+    },
+    {
+      "h": "Allowed lateness and updates",
+      "d": "Late events within the allowance re-emit updated results; sinks must upsert by window key."
+    },
+    {
+      "h": "Very late events",
+      "d": "Route to a side output and reconcile with batch recomputation rather than dropping silently."
+    },
+    {
+      "h": "Measure lateness",
+      "d": "Track the distribution of event-time lag per source to set watermark delays from data."
+    }
+  ],
+  "decision": "Event-time windows with watermarks set from measured lateness, allowed lateness with upserting sinks, and batch recomputation for corrections when exactness matters (billing).",
+  "numbers": [
+    "Example: 95% of mobile events arrive within 20 seconds and 99.9% within 10 minutes. A 30-second watermark gives fast results; 10 minutes of allowed lateness corrects almost everything; the rest goes to a nightly batch fix."
+  ],
+  "pitfalls": [
+    "Windowing by arrival time.",
+    "Sinks that append window results instead of upserting, double-counting on updates.",
+    "Watermarks stuck because one partition is idle, so windows never close.",
+    "Dropping late events silently."
+  ],
+  "followups": [
+    {
+      "q": "One Kafka partition has no traffic and the watermark stalls. Why?",
+      "a": "The watermark is the minimum across partitions; an idle partition holds it back. Mark idle sources so they're excluded."
+    },
+    {
+      "q": "How do you handle client clocks that are wrong?",
+      "a": "Validate event times against server receipt time, clamp or flag implausible values, and prefer server timestamps where client time isn't trustworthy."
+    },
+    {
+      "q": "When would you use processing time?",
+      "a": "For operational monitoring of the pipeline itself (throughput, lag), where arrival time is what matters."
+    }
+  ],
+  "example": "A ride app's per-minute trip metrics drifted during network outages because events were grouped by arrival. Switching to event-time windows with a 45-second watermark and 15 minutes of allowed lateness, with upserts into the dashboard store, made charts stable and correct after brief delays.",
+  "related": [
+    "exactly-once-practice-kafka-flink",
+    "clocks-ordering-lww",
+    "ad-event-counting-attribution",
+    "view-counting-trending"
+  ],
+  "sources": [
+    {
+      "title": "Tyler Akidau: Streaming 101",
+      "url": "https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/"
+    },
+    {
+      "title": "Apache Flink documentation: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  ]
+}

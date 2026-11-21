@@ -1,0 +1,82 @@
+{
+  "trap": {
+    "wrong": "\"When the event happens, POST it to the customer's URL.\"",
+    "why": "A synchronous call ties your request path to every customer's endpoint health, loses events when they're down, and one slow customer can exhaust your workers.",
+    "probe": "Async delivery, retries with backoff, per-endpoint isolation, signing, idempotency and replay.",
+    "say": "\"Events go to a durable queue; delivery workers POST with signatures and short timeouts, retry with exponential backoff for a day or more, isolate each endpoint so a slow one can't starve others, and customers can replay from a delivery log.\""
+  },
+  "thesis": "Webhooks are at-least-once, asynchronous deliveries to systems you don't control. Make delivery durable and retried, isolate endpoints from each other, sign payloads, include ids for deduplication, and give customers visibility and replay.",
+  "pitch": "When an event occurs, I'd write it to a durable outbox or queue, never call the customer inline. Delivery workers send it with a short timeout and an HMAC signature plus timestamp in headers, so customers can verify authenticity and reject replays. Any non-2xx or timeout triggers retries with exponential backoff and jitter over a long window, for example up to three days, after which the event is marked failed and the endpoint possibly disabled with a notification. Each endpoint gets isolation: per-endpoint queues or concurrency limits, so one slow customer can't consume all workers. Events carry a unique id and type so customers can deduplicate, and I'd document that ordering isn't guaranteed, or include a sequence number per resource. Customers get a dashboard of deliveries and responses, the ability to replay, and a way to fetch current state via the API so a missed webhook is recoverable. Payloads should be thin where possible, with ids and type, so stale or out-of-order events matter less.",
+  "points": [
+    {
+      "h": "Durable, asynchronous delivery",
+      "d": "Record events in an outbox or queue in the same transaction as the change, then deliver from workers."
+    },
+    {
+      "h": "Retries with backoff",
+      "d": "Exponential backoff with jitter over hours to days; treat 4xx like 410 as permanent, timeouts and 5xx as retryable."
+    },
+    {
+      "h": "Per-endpoint isolation",
+      "d": "Concurrency limits or separate queues per endpoint so a slow customer can't starve deliveries to others."
+    },
+    {
+      "h": "Signing and replay protection",
+      "d": "HMAC signature over body and timestamp, with secret rotation support; customers reject old timestamps."
+    },
+    {
+      "h": "Idempotency and ordering",
+      "d": "Unique event ids for dedupe; no ordering guarantee unless you add per-resource sequence numbers."
+    },
+    {
+      "h": "Thin events and fetch-back",
+      "d": "Send ids and types and let customers fetch the current state, reducing staleness and payload versioning problems."
+    },
+    {
+      "h": "Observability for customers",
+      "d": "Delivery logs, response codes, manual replay, and alerts or auto-disable for endpoints failing for days."
+    }
+  ],
+  "decision": "Queue-backed delivery with long retry windows, per-endpoint isolation, signed payloads and customer-facing replay. Thin payloads unless customers strongly need full objects.",
+  "numbers": [
+    "Example retry schedule: 1 min, 5 min, 30 min, 2 h, 6 h, then every 12 h up to 3 days, about 10 attempts.",
+    "Timeout of 5–10 seconds per attempt keeps workers from being tied up by slow endpoints."
+  ],
+  "pitfalls": [
+    "Synchronous webhook calls in the request path.",
+    "Shared worker pools where one slow endpoint blocks all customers.",
+    "No signatures, so attackers can forge events.",
+    "Promising ordering you can't deliver."
+  ],
+  "followups": [
+    {
+      "q": "A customer's endpoint has been failing for a week. What do you do?",
+      "a": "Stop retrying after the window, disable the endpoint, notify the customer, and let them replay from the log once fixed."
+    },
+    {
+      "q": "How do customers verify signatures safely?",
+      "a": "Compute the HMAC over the raw body and timestamp with their secret, compare in constant time, and reject timestamps older than a few minutes."
+    },
+    {
+      "q": "How do you handle very high-volume customers?",
+      "a": "Batch events per delivery, offer streaming alternatives, or apply rate limits agreed with them."
+    }
+  ],
+  "example": "A payments platform moved webhook calls from the request path to an outbox and per-merchant delivery queues with 3-day retries and signed payloads. When a large merchant's endpoint went down for 6 hours, other merchants were unaffected and the merchant replayed missed events from the dashboard.",
+  "related": [
+    "design-outbox-inbox-pattern-reliable",
+    "design-dead-letter-queues-retry",
+    "retries-amplifying-outage-design-retries",
+    "payment-state-machine-provider"
+  ],
+  "sources": [
+    {
+      "title": "Stripe documentation: Webhooks",
+      "url": "https://docs.stripe.com/webhooks"
+    },
+    {
+      "title": "Standard Webhooks specification",
+      "url": "https://www.standardwebhooks.com/"
+    }
+  ]
+}

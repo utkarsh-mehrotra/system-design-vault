@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Lots of partitions, say 1,000, so we never run out of parallelism.\"",
+    "why": "Partitions cost broker memory, file handles, replication traffic and recovery time, and more partitions make rebalances and ordering changes harder. Increasing them later also remaps keys.",
+    "probe": "Sizing from throughput and consumer parallelism, and understanding rebalance mechanics.",
+    "say": "\"I size partitions from target throughput divided by per-partition consumer throughput, with headroom for growth, and reduce rebalance pain with cooperative rebalancing, static membership and well-tuned poll and session timeouts.\""
+  },
+  "thesis": "Partition count sets the ceiling on consumer parallelism and affects ordering, so choose it from throughput needs with growth headroom, not as 'as many as possible'. Rebalances pause consumption; reduce them with cooperative rebalancing, static group membership and correct timeout tuning.",
+  "pitch": "I'd size partitions as the larger of target throughput divided by what one consumer can process per partition, and the number of consumers I expect at peak, plus headroom, because adding partitions later changes which partition a key maps to and breaks per-key ordering during the transition. Too many partitions has costs too: more open files and memory on brokers, longer leader elections and recovery, and longer rebalances. Rebalances happen when consumers join, leave, or are considered dead because they didn't poll or heartbeat in time. With the old eager protocol, every consumer gives up all partitions and processing stops for the whole group. Fixes: use cooperative incremental rebalancing so only moving partitions pause; static membership so a restarting pod reclaims its partitions without triggering a rebalance; and set max.poll.interval.ms above the worst-case batch processing time, or reduce batch size, so slow processing isn't mistaken for death.",
+  "points": [
+    {
+      "h": "Size from throughput",
+      "d": "partitions ≥ target throughput ÷ per-partition consumer throughput, and ≥ peak consumer count, plus growth headroom."
+    },
+    {
+      "h": "Adding partitions later remaps keys",
+      "d": "New messages for a key may land on a different partition, breaking per-key ordering during the change."
+    },
+    {
+      "h": "Cost of many partitions",
+      "d": "Broker memory and file handles, replication load, longer failover and rebalance times."
+    },
+    {
+      "h": "Why rebalances happen",
+      "d": "Consumers joining or leaving, missed heartbeats (session timeout) or exceeding max poll interval while processing."
+    },
+    {
+      "h": "Cooperative rebalancing",
+      "d": "Incremental protocols move only the partitions that need to move, instead of stopping the whole group."
+    },
+    {
+      "h": "Static membership",
+      "d": "Consumers with a stable group.instance.id can restart without triggering a rebalance within the session timeout."
+    },
+    {
+      "h": "Tune processing vs poll interval",
+      "d": "Smaller batches or longer max.poll.interval.ms so slow processing doesn't evict consumers."
+    }
+  ],
+  "decision": "Moderate partition counts sized for 2–3 years of growth, cooperative rebalancing and static membership for consumer groups, and alerts on rebalance frequency and consumer lag.",
+  "numbers": [
+    "Example: 60 MB/s target, each consumer handles 5 MB/s per partition → at least 12 partitions; with 2x growth headroom, 24–32.",
+    "If processing a poll batch can take 4 minutes, the default max.poll.interval.ms of 5 minutes leaves little margin; reduce max.poll.records or raise the interval."
+  ],
+  "pitfalls": [
+    "Thousands of partitions for modest throughput.",
+    "Increasing partitions on a keyed topic without planning for ordering.",
+    "Eager rebalancing with frequent deploys, stalling the whole group.",
+    "Slow per-batch processing that exceeds the poll interval and causes rebalance loops."
+  ],
+  "followups": [
+    {
+      "q": "Consumer lag spikes during every deploy. Why?",
+      "a": "Each restarted consumer triggers a rebalance that pauses partitions. Static membership and cooperative rebalancing reduce the pause."
+    },
+    {
+      "q": "How do you increase parallelism without more partitions?",
+      "a": "Key-level concurrency inside each consumer, processing different keys from one partition in parallel while keeping per-key order."
+    },
+    {
+      "q": "How do you migrate to more partitions safely?",
+      "a": "Create a new topic with the desired count, dual-write or mirror, switch consumers, then retire the old topic."
+    }
+  ],
+  "example": "A payments consumer group of 30 pods saw processing pause for 20–40 seconds on every rolling deploy. Enabling cooperative-sticky assignment and static membership shortened pauses to seconds and only for the partitions on the restarting pod.",
+  "related": [
+    "keep-ordering-also-need-parallelism",
+    "exactly-once-practice-kafka-flink",
+    "design-backpressure-high-traffic-system"
+  ],
+  "sources": [
+    {
+      "title": "Apache Kafka documentation: Consumer configs",
+      "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+    },
+    {
+      "title": "Confluent: Incremental cooperative rebalancing in Apache Kafka",
+      "url": "https://www.confluent.io/blog/incremental-cooperative-rebalancing-in-kafka/"
+    }
+  ]
+}

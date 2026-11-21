@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"They're inside our private network, so internal calls are trusted.\"",
+    "why": "Network location isn't identity. One compromised service or misconfigured route gives an attacker access to everything internal. Zero trust assumes the network is hostile.",
+    "probe": "Workload identity, mTLS, per-call authorisation, and propagating end-user context.",
+    "say": "\"Every workload gets a cryptographic identity (mTLS certificates from SPIFFE or the mesh), services authorise which callers may call which endpoints, and end-user context travels as a signed token so downstream services can enforce user-level permissions.\""
+  },
+  "thesis": "Internal calls need real authentication and authorisation: each workload has a short-lived cryptographic identity, connections use mutual TLS, services authorise callers per endpoint, and end-user identity is propagated in signed tokens rather than trusted headers.",
+  "pitch": "I'd give every service a workload identity issued automatically, such as a SPIFFE id via SPIRE or the service mesh's certificate authority, with short-lived certificates rotated automatically, so there are no long-lived shared secrets. Connections use mTLS, so both sides prove who they are and traffic is encrypted. Then authorisation: the payments service accepts calls to 'create payout' only from the disbursement service, expressed as policy in the mesh or in the service. Third, user context: when a request originates from a user, the edge validates their token and passes a signed, short-lived internal token or the original token downstream, so a service can check 'may this user do this', not just 'may this service call me'. Plain headers like X-User-Id are forgeable by any compromised service. I'd also log caller identity on every call for audit, and keep a break-glass path for operations.",
+  "points": [
+    {
+      "h": "Workload identity",
+      "d": "Each service instance gets an identity bound to what it is (service, environment), issued and rotated automatically."
+    },
+    {
+      "h": "Mutual TLS",
+      "d": "Both client and server present certificates; traffic is encrypted and authenticated. A service mesh can do this transparently."
+    },
+    {
+      "h": "Service-level authorisation",
+      "d": "Allow-lists of which services may call which endpoints or methods, enforced at the mesh or in the service."
+    },
+    {
+      "h": "Propagate user context securely",
+      "d": "Signed tokens carrying user identity and scopes, verified downstream; never trust bare identity headers."
+    },
+    {
+      "h": "No long-lived shared secrets",
+      "d": "API keys shared among services leak and are hard to rotate; short-lived certificates or tokens avoid that."
+    },
+    {
+      "h": "Audit caller identity",
+      "d": "Log which workload and which user initiated each sensitive call."
+    }
+  ],
+  "decision": "mTLS with automatically issued workload identities everywhere, service-level allow-lists for sensitive endpoints, and signed user-context tokens for user-initiated calls.",
+  "numbers": [
+    "Certificate lifetimes of hours (rather than years) limit the usefulness of a stolen certificate; rotation must therefore be fully automated."
+  ],
+  "pitfalls": [
+    "Trusting anything from inside the VPC.",
+    "X-User-Id headers accepted without verification.",
+    "Shared API keys between services checked into config.",
+    "mTLS enabled but no authorisation, so any internal service can call anything."
+  ],
+  "followups": [
+    {
+      "q": "How do you migrate an existing fleet to mTLS?",
+      "a": "Deploy the mesh or sidecars in permissive mode (accept both), observe traffic and identities, then switch services to strict mode one by one."
+    },
+    {
+      "q": "How do batch jobs authenticate?",
+      "a": "The same workload identity system, with identities for jobs and narrow permissions, not a shared admin credential."
+    },
+    {
+      "q": "What's token exchange?",
+      "a": "Swapping an incoming user token for a downstream token scoped to the next service (RFC 8693), limiting what each hop can do."
+    }
+  ],
+  "example": "After an SSRF bug let an attacker call internal admin endpoints, a company rolled out a service mesh with SPIFFE identities and strict mTLS, plus per-endpoint allow-lists. The same bug class would now be rejected because the vulnerable service isn't authorised to call admin APIs.",
+  "related": [
+    "sessions-vs-jwt-revocation",
+    "authorization-models-idor",
+    "secrets-rotation",
+    "design-gateway-evolve-independently-services"
+  ],
+  "sources": [
+    {
+      "title": "SPIFFE: Secure Production Identity Framework for Everyone",
+      "url": "https://spiffe.io/docs/latest/spiffe-about/overview/"
+    },
+    {
+      "title": "NIST SP 800-207: Zero trust architecture",
+      "url": "https://csrc.nist.gov/pubs/sp/800/207/final"
+    }
+  ]
+}

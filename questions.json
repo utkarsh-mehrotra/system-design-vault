@@ -76,7 +76,8 @@
         "Multi-region & outages",
         "Releases & rollback",
         "SLOs",
-        "Recovery"
+        "Recovery",
+        "Health checks & lifecycle"
       ]
     },
     {
@@ -88,7 +89,10 @@
         "Poison messages & dead letters",
         "Ordering",
         "Schedulers & long-running jobs",
-        "Event schema evolution"
+        "Event schema evolution",
+        "Fan-out & feeds",
+        "Webhooks",
+        "Stream processing"
       ]
     },
     {
@@ -98,7 +102,8 @@
         "Service boundaries & gateway",
         "Versioning, compatibility & deprecation",
         "Rate limits & quotas",
-        "Partial failure"
+        "Partial failure",
+        "API styles & real-time"
       ]
     },
     {
@@ -1253,6 +1258,40 @@
       ]
     },
     {
+      "id": "metastable-failures",
+      "cat": "reliability",
+      "topic": "Failure modes & degradation",
+      "level": "advanced",
+      "source": "mine",
+      "q": "The original trigger is gone, but the system stays down. What's happening, and how do you get out of it?",
+      "also": [],
+      "a": [
+        "A metastable failure is one where a temporary trigger pushes the system into a bad state that a feedback loop then sustains, even after the trigger disappears. Recovery means breaking the loop, usually by drastically reducing load, not waiting or restarting."
+      ],
+      "tags": [
+        "Reliability",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "third-party-worse-sla",
+      "cat": "reliability",
+      "topic": "Failure modes & degradation",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Your service promises 99.95%, but a critical third-party provider offers only 99.5%. How do you design around it?",
+      "also": [],
+      "a": [
+        "You can't be more available than your synchronous critical path. If a dependency is less reliable than your target, remove it from the synchronous path, make it redundant with a second provider, degrade gracefully when it's down, or lower your promise."
+      ],
+      "tags": [
+        "Reliability",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
       "id": "retries-amplifying-outage-design-retries",
       "cat": "reliability",
       "topic": "Retries, breakers & bulkheads",
@@ -1401,6 +1440,40 @@
       "legacy": [
         71
       ]
+    },
+    {
+      "id": "health-checks-liveness-readiness",
+      "cat": "reliability",
+      "topic": "Health checks & lifecycle",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design health checks for a service. What should liveness and readiness actually check?",
+      "also": [],
+      "a": [
+        "Liveness answers 'should this process be restarted?' and must only fail when restarting would help. Readiness answers 'should this instance receive traffic now?'. Neither should cascade a shared dependency failure into mass restarts or removing every instance."
+      ],
+      "tags": [
+        "Reliability",
+        "Operations"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "graceful-shutdown-draining",
+      "cat": "reliability",
+      "topic": "Health checks & lifecycle",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Every deploy causes a small spike of errors. How do you shut instances down gracefully?",
+      "also": [],
+      "a": [
+        "Graceful shutdown is a sequence: stop receiving new traffic, let routing changes propagate, finish in-flight work within a deadline, release resources cleanly, then exit. Skipping any step turns every deploy and scale-in into a burst of user-visible errors."
+      ],
+      "tags": [
+        "Reliability",
+        "Operations"
+      ],
+      "legacy": []
     },
     {
       "id": "event-driven-request-response-order",
@@ -1594,6 +1667,74 @@
         29,
         115
       ]
+    },
+    {
+      "id": "feed-fanout-celebrity",
+      "cat": "streaming",
+      "topic": "Fan-out & feeds",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design a home feed: fan-out on write or on read? What about users with millions of followers?",
+      "also": [],
+      "a": [
+        "Fan-out on write precomputes feeds for fast reads but explodes for accounts with huge followings. Fan-out on read is cheap to write but slow to read. Production feeds use a hybrid: push for normal accounts, pull for celebrities, and precompute only for active users."
+      ],
+      "tags": [
+        "Scaling",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "outgoing-webhooks-design",
+      "cat": "streaming",
+      "topic": "Webhooks",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design outgoing webhooks to customers' endpoints. What happens when their endpoint is slow or down?",
+      "also": [],
+      "a": [
+        "Webhooks are at-least-once, asynchronous deliveries to systems you don't control. Make delivery durable and retried, isolate endpoints from each other, sign payloads, include ids for deduplication, and give customers visibility and replay."
+      ],
+      "tags": [
+        "APIs",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "stream-windows-late-data",
+      "cat": "streaming",
+      "topic": "Stream processing",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Compute per-minute metrics from a stream where events arrive late and out of order. How do windows and watermarks work?",
+      "also": [],
+      "a": [
+        "Correct streaming aggregates use event time, not arrival time. Watermarks estimate how far event time has progressed so windows can close; allowed lateness lets late events update results; and anything later than that is handled explicitly, not silently dropped."
+      ],
+      "tags": [
+        "Messaging",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "kafka-partitions-rebalance",
+      "cat": "streaming",
+      "topic": "Stream processing",
+      "level": "advanced",
+      "source": "mine",
+      "q": "How many Kafka partitions should a topic have, and why do consumer rebalances keep stalling processing?",
+      "also": [],
+      "a": [
+        "Partition count sets the ceiling on consumer parallelism and affects ordering, so choose it from throughput needs with growth headroom, not as 'as many as possible'. Rebalances pause consumption; reduce them with cooperative rebalancing, static group membership and correct timeout tuning."
+      ],
+      "tags": [
+        "Messaging",
+        "Scaling"
+      ],
+      "legacy": []
     },
     {
       "id": "draw-service-boundaries-lending-platform",
@@ -1797,6 +1938,125 @@
         33,
         124
       ]
+    },
+    {
+      "id": "rest-grpc-graphql",
+      "cat": "apis",
+      "topic": "API styles & real-time",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "REST, gRPC or GraphQL: how do you choose for a given API?",
+      "also": [],
+      "a": [
+        "Choose an API style by who consumes it and how: REST for broad, cacheable, public interfaces; gRPC for typed, efficient internal communication and streaming; GraphQL for client-driven aggregation across many backends. Each has distinct costs in caching, security and operations."
+      ],
+      "tags": [
+        "APIs",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "realtime-delivery-polling-websockets",
+      "cat": "apis",
+      "topic": "API styles & real-time",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Push updates to clients in real time: polling, long polling, server-sent events or WebSockets?",
+      "also": [],
+      "a": [
+        "Choose by direction and frequency: polling for infrequent updates, long polling as a fallback, server-sent events for one-way server push, WebSockets for frequent two-way messaging. The hard part is the backend: stateful connection servers, routing messages to the right connection, and handling reconnects."
+      ],
+      "tags": [
+        "APIs",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "bulk-batch-apis-partial",
+      "cat": "apis",
+      "topic": "API styles & real-time",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design a bulk API that creates 10,000 records in one request. What happens when some of them fail?",
+      "also": [],
+      "a": [
+        "Bulk APIs must define partial success explicitly: per-item status and errors, per-item idempotency so retries are safe, size limits, and asynchronous processing for large batches. All-or-nothing transactions are only appropriate for small batches that must be atomic."
+      ],
+      "tags": [
+        "APIs",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "sessions-vs-jwt-revocation",
+      "cat": "security",
+      "topic": "Authentication & sessions",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Sessions or JWTs for authentication? How do you log a user out everywhere or revoke a stolen token?",
+      "also": [],
+      "a": [
+        "Server-side sessions are easy to revoke but need a lookup per request; JWTs avoid the lookup but can't be revoked before expiry without extra state. The standard compromise is short-lived access tokens with server-side, rotating refresh tokens, and storing tokens where scripts can't steal them."
+      ],
+      "tags": [
+        "Security",
+        "APIs"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "service-to-service-auth",
+      "cat": "security",
+      "topic": "Authentication & sessions",
+      "level": "advanced",
+      "source": "mine",
+      "q": "How should internal services authenticate and authorise calls to each other?",
+      "also": [],
+      "a": [
+        "Internal calls need real authentication and authorisation: each workload has a short-lived cryptographic identity, connections use mutual TLS, services authorise callers per endpoint, and end-user identity is propagated in signed tokens rather than trusted headers."
+      ],
+      "tags": [
+        "Security",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "authorization-models-idor",
+      "cat": "security",
+      "topic": "Authorization",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design authorisation for a multi-tenant API. How do you stop users accessing other people's resources?",
+      "also": [],
+      "a": [
+        "Authorisation has to be enforced where the resource lives, for every object access, not just at the edge. Choose a model that fits (RBAC for roles, ABAC for attribute rules, relationship-based for sharing), centralise the policy logic, and test explicitly for cross-tenant and cross-user access."
+      ],
+      "tags": [
+        "Security",
+        "APIs"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "secrets-rotation",
+      "cat": "security",
+      "topic": "Secrets & encryption",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "How do you manage secrets, and rotate a database password or API key without downtime?",
+      "also": [],
+      "a": [
+        "Store secrets in a dedicated secrets manager with access control and audit, deliver them to workloads at runtime, and rotate using an overlap period where both old and new credentials are valid. Better still, replace static secrets with short-lived, automatically issued credentials."
+      ],
+      "tags": [
+        "Security",
+        "Operations"
+      ],
+      "legacy": []
     },
     {
       "id": "should-each-layer-log-must",

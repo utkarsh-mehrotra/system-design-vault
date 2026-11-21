@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Process them in one transaction and return 200 or 500.\"",
+    "why": "One bad record fails all 10,000, a huge transaction locks tables and times out, and a retry after a timeout may duplicate everything that did commit.",
+    "probe": "Per-item results, idempotency, async processing for big batches, and limits.",
+    "say": "\"Validate up front, process items independently with per-item results and an idempotency key per item, and for large batches accept the job asynchronously and report results per item when it finishes.\""
+  },
+  "thesis": "Bulk APIs must define partial success explicitly: per-item status and errors, per-item idempotency so retries are safe, size limits, and asynchronous processing for large batches. All-or-nothing transactions are only appropriate for small batches that must be atomic.",
+  "pitch": "I'd first ask whether the batch must be atomic. Usually it doesn't: importing 10,000 contacts where 12 are invalid should import the other 9,988 and report the 12. So each item is processed independently and the response lists a status per item, with an error code and message for failures. Every item carries a client-supplied id or idempotency key so that retrying the batch, or just the failed items, doesn't duplicate successes. For large batches I'd accept the request with 202 and a job id, process it in chunks in the background, and expose progress and a per-item result file. I'd enforce limits on items per request and payload size, validate schema up front so obviously malformed batches fail fast, and rate-limit bulk endpoints separately so one import doesn't starve interactive traffic. If atomicity is truly required, keep batches small enough for a single transaction.",
+  "points": [
+    {
+      "h": "Decide atomic vs independent",
+      "d": "Most bulk operations are independent; atomic batches need small sizes and a single transaction."
+    },
+    {
+      "h": "Per-item results",
+      "d": "Return status and error per item, in the same order or keyed by client id, so clients can retry only failures."
+    },
+    {
+      "h": "Per-item idempotency",
+      "d": "Client-supplied keys or external ids per item make whole-batch retries safe."
+    },
+    {
+      "h": "Async for large batches",
+      "d": "202 with a job id, chunked background processing, progress endpoint and a downloadable result."
+    },
+    {
+      "h": "Limits and validation",
+      "d": "Maximum items and bytes per request, early schema validation, clear errors for violations."
+    },
+    {
+      "h": "Protect other traffic",
+      "d": "Separate rate limits and worker pools for bulk operations so imports don't hurt interactive requests."
+    },
+    {
+      "h": "Status codes",
+      "d": "200 with per-item results (or 207 Multi-Status) for synchronous partial success; avoid 500 when most items succeeded."
+    }
+  ],
+  "decision": "Independent processing with per-item results and idempotency by default; synchronous for small batches (hundreds), asynchronous jobs for thousands or more; atomic only when the business requires it and the batch is small.",
+  "numbers": [
+    "Example limits: synchronous bulk up to 500 items or 5 MB; larger batches via async jobs processed in chunks of 1,000 items."
+  ],
+  "pitfalls": [
+    "One giant transaction for thousands of items.",
+    "No per-item idempotency, so retries duplicate records.",
+    "Returning only an overall status, forcing clients to guess which items failed.",
+    "Bulk jobs sharing worker pools with interactive requests."
+  ],
+  "followups": [
+    {
+      "q": "A client times out halfway through a synchronous bulk call. What now?",
+      "a": "With per-item idempotency keys they can resend the whole batch safely; already-created items return their existing result."
+    },
+    {
+      "q": "Should bulk support mixed operations (create, update, delete)?",
+      "a": "Only if clients really need it; it complicates validation and results. Separate endpoints per operation are easier to reason about."
+    },
+    {
+      "q": "How do you report results for 1 million items?",
+      "a": "A result file (CSV or JSON lines) in object storage linked from the job status, rather than a huge response body."
+    }
+  ],
+  "example": "A CRM's import endpoint accepted up to 500 contacts synchronously with per-item results and external ids for idempotency. Larger files went through an async job returning a results file; a customer's 2-million-row import completed in 40 minutes with 3,100 rows flagged.",
+  "related": [
+    "track-status-long-running-jobs",
+    "build-idempotency-write-api-clients",
+    "design-per-tenant-rate-limits",
+    "large-file-uploads"
+  ],
+  "sources": [
+    {
+      "title": "Google Cloud: API design guide (batch methods)",
+      "url": "https://cloud.google.com/apis/design/design_patterns"
+    },
+    {
+      "title": "RFC 4918: 207 Multi-Status",
+      "url": "https://www.rfc-editor.org/rfc/rfc4918#section-11.1"
+    }
+  ]
+}

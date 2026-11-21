@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"GraphQL, because clients get exactly what they need\" (or \"gRPC because it's faster\") for everything.",
+    "why": "Each style fits a different audience. GraphQL adds query cost control, caching and authorisation complexity; gRPC is poorly supported in browsers and harder for public partners; REST is weak for chatty internal calls and flexible client queries.",
+    "probe": "Matching style to consumers, caching, evolution and operational cost.",
+    "say": "\"REST for public and partner APIs where caching and simplicity matter, gRPC for internal service-to-service calls with strict contracts and streaming, GraphQL as an aggregation layer for diverse front-ends, with query cost limits.\""
+  },
+  "thesis": "Choose an API style by who consumes it and how: REST for broad, cacheable, public interfaces; gRPC for typed, efficient internal communication and streaming; GraphQL for client-driven aggregation across many backends. Each has distinct costs in caching, security and operations.",
+  "pitch": "REST over HTTP and JSON is the lingua franca: every language and tool understands it, HTTP caching and CDNs work naturally, and it's easy for partners to adopt, which is why public APIs default to it. Its weakness is chattiness and over- or under-fetching for complex UIs. gRPC uses Protobuf contracts over HTTP/2: compact, fast, strongly typed with generated clients, and supports streaming in both directions. It's excellent between internal services, but browsers need a proxy (gRPC-Web), it's harder to debug by hand, and HTTP caching doesn't apply. GraphQL lets clients ask for exactly the fields they need across many resources in one request, great for front-ends aggregating many services. Its costs: arbitrary queries can be expensive, so you need depth and cost limits, persisted queries and per-field authorisation; HTTP caching mostly doesn't work; and N+1 resolver problems need batching. Many organisations use all three: REST publicly, gRPC internally, GraphQL as a BFF for apps.",
+  "points": [
+    {
+      "h": "REST strengths",
+      "d": "Universal tooling, HTTP semantics, cacheable GETs, easy for third parties, simple to debug with curl."
+    },
+    {
+      "h": "REST weaknesses",
+      "d": "Multiple round trips for complex views, over- and under-fetching, looser contracts unless you use OpenAPI rigorously."
+    },
+    {
+      "h": "gRPC strengths",
+      "d": "Protobuf contracts, generated clients, efficient binary encoding, HTTP/2 multiplexing and streaming, deadlines built in."
+    },
+    {
+      "h": "gRPC weaknesses",
+      "d": "Limited browser support, harder manual debugging, no HTTP caching, and L4 load balancers balance connections rather than requests."
+    },
+    {
+      "h": "GraphQL strengths",
+      "d": "Client-shaped queries, one request for many resources, strong schema and introspection, good for diverse front-ends."
+    },
+    {
+      "h": "GraphQL weaknesses",
+      "d": "Query cost and abuse control, N+1 resolvers, field-level authorisation, little HTTP caching, harder rate limiting."
+    },
+    {
+      "h": "Mixing is normal",
+      "d": "Public REST, internal gRPC, and a GraphQL or REST BFF per front-end is a common, reasonable combination."
+    }
+  ],
+  "decision": "Public and partner APIs: REST with OpenAPI. Internal high-volume or streaming: gRPC. Front-end aggregation over many services: GraphQL with persisted queries and cost limits, or a REST BFF if the team prefers simplicity.",
+  "numbers": [
+    "Protobuf payloads are typically several times smaller than equivalent JSON and faster to parse, which matters for high-volume internal calls more than for public APIs."
+  ],
+  "pitfalls": [
+    "Public GraphQL without query depth and cost limits.",
+    "gRPC behind an L4 load balancer, sending all requests from a client to one backend.",
+    "Choosing GraphQL to avoid designing APIs, then hitting authorisation and caching problems.",
+    "REST endpoints that mirror database tables, forcing many round trips."
+  ],
+  "followups": [
+    {
+      "q": "How do you rate-limit GraphQL?",
+      "a": "By query cost (computed from fields and list sizes) rather than request count, plus persisted queries so only known queries run."
+    },
+    {
+      "q": "How do you version each style?",
+      "a": "REST: additive changes plus versions for breaks. gRPC: Protobuf field rules (never reuse numbers). GraphQL: additive fields and @deprecated, avoiding versions."
+    },
+    {
+      "q": "Can you cache GraphQL?",
+      "a": "Persisted queries over GET can be cached at the edge; otherwise rely on client caches and server-side resolver caching."
+    }
+  ],
+  "example": "A fintech exposes REST with OpenAPI to partners, uses gRPC between its 40 internal services, and runs a GraphQL gateway for its mobile and web apps with persisted queries and per-query cost limits.",
+  "related": [
+    "design-gateway-evolve-independently-services",
+    "version-public-api-cannot-force",
+    "choose-load-balancing-strategy-long",
+    "realtime-delivery-polling-websockets"
+  ],
+  "sources": [
+    {
+      "title": "gRPC documentation: Introduction",
+      "url": "https://grpc.io/docs/what-is-grpc/introduction/"
+    },
+    {
+      "title": "GraphQL: Security (query depth and cost)",
+      "url": "https://graphql.org/learn/security/"
+    }
+  ]
+}

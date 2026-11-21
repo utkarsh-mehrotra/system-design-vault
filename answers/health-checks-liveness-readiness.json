@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"The health check pings the database and every dependency, and the instance is restarted if any fail.\"",
+    "why": "When a shared dependency is slow, every instance fails its deep check at once: the load balancer removes them all or the orchestrator restarts them all, turning a dependency blip into a full outage.",
+    "probe": "Separating liveness from readiness, shallow vs deep checks, and avoiding correlated failure.",
+    "say": "\"Liveness only checks that the process can make progress; readiness checks it can serve, mostly its own state; dependency health goes to metrics and alerts, not to restart decisions, and load balancers fail open if every instance looks unhealthy.\""
+  },
+  "thesis": "Liveness answers 'should this process be restarted?' and must only fail when restarting would help. Readiness answers 'should this instance receive traffic now?'. Neither should cascade a shared dependency failure into mass restarts or removing every instance.",
+  "pitch": "I'd make liveness shallow: can the process respond at all, is the event loop or thread pool not deadlocked. If it fails, a restart probably helps. Readiness is about whether this instance should get traffic: it's finished starting up, caches are warm, it's not shutting down, and it isn't overloaded. I'd be careful about including dependencies in either. If every instance checks the shared database and the database is slow, all instances go unready together and the load balancer has nowhere to send traffic, or the orchestrator restarts everything into a stampede. So dependency health belongs in metrics and alerting, and in circuit breakers that degrade responses, not in liveness. Where readiness does consider dependencies, the load balancer should fail open: if all targets are unhealthy, keep sending traffic rather than none. And separate startup probes give slow-starting services time without inflating liveness timeouts.",
+  "points": [
+    {
+      "h": "Liveness: restart only when it helps",
+      "d": "Check the process can respond and isn't stuck. Failing liveness for reasons a restart won't fix just adds restarts."
+    },
+    {
+      "h": "Readiness: can this instance serve now?",
+      "d": "Startup finished, warmed up, not draining, not overloaded. It controls traffic routing, not restarts."
+    },
+    {
+      "h": "Avoid shared-dependency checks in liveness",
+      "d": "A slow database shouldn't restart every app instance; that makes recovery slower and adds load."
+    },
+    {
+      "h": "Correlated failure is the danger",
+      "d": "Any check that fails on all instances at once for the same reason can remove all capacity simultaneously."
+    },
+    {
+      "h": "Fail open at the load balancer",
+      "d": "If every target fails health checks, route to all of them anyway (many balancers support this) rather than serving nothing."
+    },
+    {
+      "h": "Startup probes",
+      "d": "Give slow initialisation its own probe so liveness thresholds can stay tight."
+    },
+    {
+      "h": "Deep checks for monitoring",
+      "d": "Synthetic transactions and dependency checks belong in monitoring and alerting with humans in the loop."
+    }
+  ],
+  "decision": "Shallow liveness, self-focused readiness, dependency health in metrics and circuit breakers, and fail-open behaviour when everything looks unhealthy.",
+  "numbers": [
+    "Example probe settings: liveness every 10 s, fail after 3 misses; readiness every 5 s, fail after 2; startup probe allowing up to a few minutes for initialisation."
+  ],
+  "pitfalls": [
+    "Liveness checks that call the database.",
+    "Readiness that fails on every instance when one downstream is slow.",
+    "Health endpoints that do expensive work and add load.",
+    "Using the same endpoint for liveness and readiness."
+  ],
+  "followups": [
+    {
+      "q": "Should readiness ever check dependencies?",
+      "a": "Only instance-specific ones, like a local sidecar or a per-instance connection pool, and with fail-open protection at the balancer."
+    },
+    {
+      "q": "How does readiness help during deploys?",
+      "a": "New instances receive traffic only after warming up, and draining instances turn unready so traffic moves away before shutdown."
+    },
+    {
+      "q": "What's a synthetic check?",
+      "a": "An external probe that exercises a real user path (log in, fetch a page) to detect user-visible failures independently of internal health."
+    }
+  ],
+  "example": "A service's liveness probe queried the database with a 1-second timeout. During a 30-second database slowdown, Kubernetes restarted all 40 pods, which then reconnected simultaneously and prolonged the outage. Liveness became a simple in-process check, and database health moved to alerts and a circuit breaker.",
+  "related": [
+    "graceful-shutdown-draining",
+    "list-ways-three-tier-service",
+    "metastable-failures",
+    "design-graceful-degradation-instead-hard"
+  ],
+  "sources": [
+    {
+      "title": "Kubernetes documentation: Liveness, readiness and startup probes",
+      "url": "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+    },
+    {
+      "title": "AWS Builders' Library: Implementing health checks",
+      "url": "https://aws.amazon.com/builders-library/implementing-health-checks/"
+    }
+  ]
+}

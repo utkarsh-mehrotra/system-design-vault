@@ -1,0 +1,82 @@
+{
+  "trap": {
+    "wrong": "\"We'll add retries and a circuit breaker.\"",
+    "why": "Retries and breakers help with blips, but a provider that's down for hours a month still breaks your SLA if your critical path depends on it synchronously.",
+    "probe": "Taking the dependency off the critical path, redundancy across providers, and honest SLO maths.",
+    "say": "\"Either it leaves the synchronous path (queue the work and complete later), or I add a second provider with failover, or I serve degraded results; and I won't promise more than the composite availability allows.\""
+  },
+  "thesis": "You can't be more available than your synchronous critical path. If a dependency is less reliable than your target, remove it from the synchronous path, make it redundant with a second provider, degrade gracefully when it's down, or lower your promise.",
+  "pitch": "A 99.5% provider can be down about 3.6 hours a month; if every request needs it synchronously, my 99.95% promise, about 22 minutes of downtime a month, is impossible. So I'd consider, in order: Can the call be asynchronous? Accept the request, queue the work, complete it when the provider is back, and tell the user it's pending; for sending emails, generating documents or many verifications, that works. Can I have two providers? Route between them with health-based failover; it costs integration work and contract fees, but it's how payment and messaging systems reach high availability. Can I degrade? Cached results, a simpler check, or allowing low-risk actions to proceed with later verification. Then I'd measure the provider's real availability and latency, negotiate an SLA with credits, and make sure my SLO for that journey reflects what's achievable.",
+  "points": [
+    {
+      "h": "Do the availability maths",
+      "d": "Serial dependencies multiply: 99.95% × 99.5% ≈ 99.45%. You can't promise more than the product of your synchronous path."
+    },
+    {
+      "h": "Move off the synchronous path",
+      "d": "Queue work and complete it later with a pending state and notifications. Most of the dependency's downtime then becomes delay, not failure."
+    },
+    {
+      "h": "Redundant providers",
+      "d": "Two providers with health-checked failover push availability up substantially, if their failures are independent."
+    },
+    {
+      "h": "Graceful degradation",
+      "d": "Serve cached or approximate results, or allow low-risk actions with deferred verification."
+    },
+    {
+      "h": "Protect yourself from it",
+      "d": "Timeouts, bulkheads and circuit breakers so its slowness doesn't consume your capacity."
+    },
+    {
+      "h": "Measure and negotiate",
+      "d": "Track its real availability and latency; use data in contract negotiations and in choosing providers."
+    },
+    {
+      "h": "Set honest SLOs per journey",
+      "d": "Journeys that depend on the provider get an SLO that reflects it, or the design changes."
+    }
+  ],
+  "decision": "Async plus queue for work that can wait, a second provider for critical synchronous needs (payments, auth, messaging), degradation for enrichments. Never promise availability the composite path can't deliver.",
+  "numbers": [
+    "99.5% availability allows about 3.6 hours of downtime per 30 days; 99.95% allows about 22 minutes.",
+    "Two independent providers each at 99.5% with perfect failover: unavailability ≈ 0.005² = 0.0025%, about 99.9975% (in practice lower, since failover and correlation aren't perfect)."
+  ],
+  "pitfalls": [
+    "Promising an SLA above your dependencies' composite availability.",
+    "Assuming two providers fail independently when they share infrastructure.",
+    "Failover paths never tested until the outage.",
+    "Retrying aggressively against a provider that's down, wasting capacity."
+  ],
+  "followups": [
+    {
+      "q": "How do you test failover to the second provider?",
+      "a": "Route a small share of real traffic to it continuously, so it's always exercised, and run game days that disable the primary."
+    },
+    {
+      "q": "What if there's no alternative provider?",
+      "a": "Make the flow asynchronous, cache aggressively, and communicate the dependency's limits in your own SLO and product design."
+    },
+    {
+      "q": "How do you handle a slow, not dead, provider?",
+      "a": "Tight timeouts and a circuit breaker on slow-call rate, then the same async or fallback path as for an outage."
+    }
+  ],
+  "example": "A lending app's identity verification provider had multi-hour outages. The team made verification asynchronous (applications continue to a 'verifying' state), added a second provider with automatic failover for the instant-decision path, and set the instant-journey SLO to match. Applications kept flowing through the next outage.",
+  "related": [
+    "design-graceful-degradation-instead-hard",
+    "choose-size-circuit-breakers-bulkheads",
+    "choose-between-synchronous-asynchronous-communication",
+    "llm-provider-limits-fallback"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Service level objectives",
+      "url": "https://sre.google/sre-book/service-level-objectives/"
+    },
+    {
+      "title": "AWS Builders' Library: Avoiding fallback in distributed systems",
+      "url": "https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/"
+    }
+  ]
+}
