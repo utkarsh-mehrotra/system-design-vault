@@ -219,7 +219,6 @@ body.is-split #pane{display:block;position:sticky;top:16px;max-height:calc(100vh
       <select id="cat" aria-label="Category"></select>
       <div class="dd"><button type="button" class="ddbtn" id="dd-lvl" aria-expanded="false" aria-controls="pn-lvl">Level<span class="ddn" id="n-lvl"></span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-lvl" hidden></div></div>
       <div class="dd"><button type="button" class="ddbtn" id="dd-tags" aria-expanded="false" aria-controls="pn-tags">Tags<span class="ddn" id="n-tags"></span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-tags" hidden></div></div>
-      <div class="dd"><button type="button" class="ddbtn" id="dd-st" aria-expanded="false" aria-controls="pn-st">Status<span class="ddn" id="n-st"></span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-st" hidden></div></div>
     </div>
     <div class="active" id="active" hidden></div>
   </div>
@@ -329,11 +328,10 @@ $("pn-tags").innerHTML='<input class="ddsearch" id="tagq" type="search" placehol
 $("tagq").oninput=function(e){tagQ=e.target.value.toLowerCase();drawChips()};
 function drawChips(){
   $("pn-lvl").innerHTML=opt('data-lvl=""',!st.lvl,"All levels",items.length,true)+Object.keys(LV).map(function(k){return opt('data-lvl="'+k+'"',st.lvl===k,gauge(k)+LV[k],lvlCount[k]||0,true)}).join("");
-  $("pn-st").innerHTML=opt('data-st="todo"',st.todo,"Unreviewed only",items.filter(function(x){return!done[x.id]}).length)+opt('data-st="deep"',st.deep,"In-depth only",items.filter(function(x){return x.answer}).length);
   $("taglist").innerHTML=tagsByUse.filter(function(g){return!tagQ||g.toLowerCase().indexOf(tagQ)>=0}).map(function(g){return opt('data-tag="'+esc(g)+'"',!!st.tags[g],esc(g),tagCount[g])}).join("")||'<p class="note" style="padding:8px 10px;margin:0">No tags match.</p>';
   var nt=Object.keys(st.tags).length,ns=(st.todo?1:0)+(st.deep?1:0);
-  $("n-lvl").textContent=st.lvl?"1":"";$("n-tags").textContent=nt||"";$("n-st").textContent=ns||"";
-  $("dd-lvl").classList.toggle("on",!!st.lvl);$("dd-tags").classList.toggle("on",nt>0);$("dd-st").classList.toggle("on",ns>0);
+  $("n-lvl").textContent=st.lvl?"1":"";$("n-tags").textContent=nt||"";
+  $("dd-lvl").classList.toggle("on",!!st.lvl);$("dd-tags").classList.toggle("on",nt>0);
   var a=[];
   if(st.cat)a.push(['data-rm="cat"',cats[st.cat].name]);
   if(st.lvl)a.push(['data-rm="lvl"',LV[st.lvl]]);
@@ -346,7 +344,7 @@ function drawChips(){
 /* dropdown behaviour */
 var openDD=null;
 function closeDD(){if(!openDD)return;$("pn-"+openDD).hidden=true;$("dd-"+openDD).setAttribute("aria-expanded","false");openDD=null}
-["lvl","tags","st"].forEach(function(k){
+["lvl","tags"].forEach(function(k){
   $("dd-"+k).onclick=function(e){
     e.stopPropagation();var was=openDD===k;closeDD();if(was)return;
     openDD=k;$("pn-"+k).hidden=false;$("dd-"+k).setAttribute("aria-expanded","true");
@@ -400,7 +398,6 @@ function metaHTML(x){
     '<span>'+x.tags.map(esc).join(" · ")+'</span>'+
     (x.source==="ref"?'<span>ref list</span>':"")+
     (x.also.length?'<span>+'+x.also.length+' similar</span>':"")+
-    (x.answer?'<span class="deep-tag">in-depth</span>':"")+
     (done[x.id]?'<span class="ok">✓ reviewed</span>':"");
 }
 var depthMode="full";
