@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Blue-green, so we can roll back instantly.\"",
+    "why": "Blue-green switches all traffic at once, so a bug hits everyone before you notice, and rollback doesn't undo database migrations or data written by the new version.",
+    "probe": "Blast radius, detection, rollback limits, and data compatibility for each strategy.",
+    "say": "\"Canary for most changes, because it limits blast radius and catches problems with real traffic; blue-green when I need a fast full switch; rolling as the cheap default; and for all of them, schema changes must be backward compatible because rollback doesn't undo data.\""
+  },
+  "thesis": "Deployment strategies trade blast radius, speed and cost. Rolling replaces instances gradually; blue-green switches all traffic between two environments; canary exposes a small slice first and expands on healthy metrics. None of them protect against incompatible data changes.",
+  "pitch": "Rolling deploys replace instances in batches: cheap and simple, but old and new versions serve traffic together, and rolling back means another rolling deploy. Blue-green runs a full copy of the new version alongside the old, tests it, then switches traffic at once; rollback is switching back, which is fast, but every user sees a bad change at the same moment, and it costs double capacity during the switch. Canary sends a small percentage of traffic, say 1%, to the new version, compares error rates and latency against the baseline automatically, and expands in steps or rolls back. That's the best protection against bugs that only show up with real traffic. The common blind spot is data: if the new version runs a destructive migration or writes data the old version can't read, no strategy saves you. So schema changes follow expand and contract, new behaviour sits behind flags, and the pipeline can roll back automatically on metric regressions.",
+  "points": [
+    {
+      "h": "Rolling",
+      "d": "Replace instances in batches; low cost; mixed versions during rollout; slower rollback."
+    },
+    {
+      "h": "Blue-green",
+      "d": "Two full environments; instant switch and switch-back; full blast radius on switch; double capacity during deploys."
+    },
+    {
+      "h": "Canary",
+      "d": "Small percentage first, automated comparison with the baseline, stepwise expansion. Smallest blast radius and best detection."
+    },
+    {
+      "h": "Automated analysis",
+      "d": "Canary only helps if metrics (errors, latency, business KPIs) are compared automatically with rollback thresholds."
+    },
+    {
+      "h": "Rollback doesn't undo data",
+      "d": "Migrations and data written by the new version persist; design schema changes so the old version still works."
+    },
+    {
+      "h": "Flags complement deploys",
+      "d": "Ship code dark and enable behaviour gradually with feature flags, separating deploy from release."
+    }
+  ],
+  "decision": "Canary with automated analysis for user-facing services; rolling for low-risk internal services; blue-green for systems needing atomic cutover or where mixed versions are a problem. Always pair with backward-compatible schema changes and feature flags.",
+  "numbers": [
+    "Canary detection: at 1% of 10,000 req/s, the canary sees 100 req/s; a 2% error-rate increase shows up as about 2 extra errors per second, detectable within a few minutes."
+  ],
+  "pitfalls": [
+    "Blue-green as a reason to skip canary analysis.",
+    "Canaries without automated comparison, relying on someone watching dashboards.",
+    "Destructive migrations in the same deploy as code changes.",
+    "Canary traffic too small or unrepresentative to reveal problems."
+  ],
+  "followups": [
+    {
+      "q": "How do you canary a change to a background worker?",
+      "a": "Route a fraction of partitions or jobs to new workers and compare success rate, duration and output correctness."
+    },
+    {
+      "q": "What metrics should gate a canary?",
+      "a": "Error rate, latency percentiles, saturation, and a key business metric (like checkout completions) compared with the baseline over the same period."
+    },
+    {
+      "q": "When are mixed versions a problem?",
+      "a": "When old and new versions disagree on data formats, caches or protocols; that's what backward-compatible changes prevent."
+    }
+  ],
+  "example": "A payments team moved from blue-green to canary after a blue-green switch sent 100% of traffic to a version with a currency-rounding bug. With canary at 1%, then 10%, then 50%, an automated check on payment success rate rolled back a similar bug within 6 minutes at 1% exposure.",
+  "related": [
+    "plan-rollback-release-has-already",
+    "design-mistakes-cheap-not-catastrophic",
+    "global-config-pushes",
+    "graceful-shutdown-draining"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE workbook: Canarying releases",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    },
+    {
+      "title": "AWS Builders' Library: Automating safe, hands-off deployments",
+      "url": "https://aws.amazon.com/builders-library/automating-safe-hands-off-deployments/"
+    }
+  ]
+}

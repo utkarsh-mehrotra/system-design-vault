@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"10 million DAU means 10 million requests a day, so about 115 QPS.\"",
+    "why": "It confuses users with requests, ignores peak-to-average ratio, read/write mix, fan-out and replication, so the estimate is off by orders of magnitude.",
+    "probe": "A structured method with explicit assumptions for actions per user, peak factor, sizes and growth.",
+    "say": "\"DAU times actions per user gives daily requests; divide by 86,400 for average QPS, multiply by a peak factor of 2–5x; for storage, items per day times size times replication times retention, plus growth headroom.\""
+  },
+  "thesis": "Good estimates make every assumption explicit: users to actions, actions to requests (including fan-out), average to peak, items to bytes (including metadata, indexes and replication), and today to the planning horizon. Round numbers are fine; missing factors aren't.",
+  "pitch": "I'd go step by step and say the assumptions out loud. Requests: 10 million DAU × 20 actions per day = 200 million requests a day; divided by about 100,000 seconds (86,400 rounded) that's roughly 2,000 QPS average; peak is often 2 to 5 times average, so plan for 6,000 to 10,000 QPS, and split reads and writes, say 10:1. Fan-out: if each page view triggers five backend calls, internal QPS is five times higher. Storage: 10 million users × 2 posts a day × 1 KB = 20 GB a day of raw data; add indexes and metadata (often 1.5 to 2x), replication (3x), and five years of retention, so about 20 GB × 2 × 3 × 365 × 5 ≈ 220 TB, plus media stored separately. Bandwidth: QPS × response size. Then I'd sanity-check against known capacities, such as what one database node or one server can handle, to turn numbers into machine counts.",
+  "points": [
+    {
+      "h": "Users to requests",
+      "d": "DAU × actions per user per day; state the assumption and be ready to adjust it."
+    },
+    {
+      "h": "Average to peak",
+      "d": "Divide by ~10^5 seconds per day for average; multiply by a peak factor (2–5x, more for event-driven spikes)."
+    },
+    {
+      "h": "Read/write split and fan-out",
+      "d": "Separate reads from writes, and multiply by downstream calls per request for internal load."
+    },
+    {
+      "h": "Storage",
+      "d": "Items per day × size × (indexes and metadata) × replication × retention, with media sized separately."
+    },
+    {
+      "h": "Bandwidth",
+      "d": "Peak QPS × average response size, for egress cost and network limits; CDN offload reduces origin bandwidth."
+    },
+    {
+      "h": "Growth",
+      "d": "Plan for the horizon (often 1–3 years) with a growth rate, not just today."
+    },
+    {
+      "h": "Translate to machines",
+      "d": "Compare against per-node capacities to get counts, then add headroom for failures."
+    }
+  ],
+  "decision": "Use powers of ten and round numbers, state each assumption, and sanity-check the result against known system limits. Precision matters less than not missing a factor.",
+  "numbers": [
+    "Handy constants: ~86,400 seconds per day (use 10^5 for quick maths); 1 million requests per day ≈ 12 QPS average; 1 KB × 1 billion = 1 TB.",
+    "Worked example: 50M DAU × 10 reads/day = 500M reads/day ≈ 5,800 QPS average, ≈ 17,000–29,000 QPS at 3–5x peak."
+  ],
+  "pitfalls": [
+    "Treating DAU as requests per day.",
+    "Forgetting peak factor, replication or indexes.",
+    "Ignoring media size, which often dwarfs structured data.",
+    "False precision: four significant figures on guessed inputs."
+  ],
+  "followups": [
+    {
+      "q": "How do you estimate peak factor?",
+      "a": "From existing traffic patterns (peak hour vs daily average) or analogous products; event-driven products (sports, sales) can spike far above typical ratios."
+    },
+    {
+      "q": "How much does replication change storage?",
+      "a": "Typically 3x for durable databases, plus backups; object storage durability is included in its price but cross-region copies add more."
+    },
+    {
+      "q": "How do you estimate cache size?",
+      "a": "The hot fraction of data (often 10–20% of daily accessed items) times item size, checked against hit-ratio needs."
+    }
+  ],
+  "example": "Estimating a messaging app: 20M DAU × 40 messages sent/day = 800M messages/day ≈ 9,000 writes/s average, ~30,000 at peak; 800M × 300 bytes × 2 (indexes) × 3 (replication) ≈ 1.4 TB/day, about 2.6 PB over five years before compression, which shapes the decision to tier old messages to cheaper storage.",
+  "related": [
+    "size-system-50-000-requests",
+    "walk-one-request-dns-database",
+    "read-traffic-grows-10x-one"
+  ],
+  "sources": [
+    {
+      "title": "Jeff Dean: Numbers everyone should know (latency numbers)",
+      "url": "https://gist.github.com/jboner/2841832"
+    }
+  ]
+}

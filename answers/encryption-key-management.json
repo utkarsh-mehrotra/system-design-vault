@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Yes, the disks are encrypted at rest and we use HTTPS.\"",
+    "why": "Disk encryption protects against stolen drives, not against anyone with database or application access, which is how most breaches happen. Without key management and access separation, 'encrypted' means little.",
+    "probe": "Threat model, envelope encryption, KMS, application-level encryption for sensitive fields, and key rotation.",
+    "say": "\"In transit: TLS everywhere including internal. At rest: storage encryption with KMS-managed keys for the baseline, plus application-level envelope encryption for sensitive fields, with keys in a KMS, separated access, rotation and audit.\""
+  },
+  "thesis": "Encryption only helps against the threats it's designed for. Storage encryption covers lost disks and backups; application-level field encryption protects sensitive data from people and systems with database access. Both depend on key management: keys in a KMS or HSM, envelope encryption, least-privilege access, rotation and audit.",
+  "pitch": "I'd start with the threat model. TLS protects data in transit, including between internal services. Storage-level encryption at rest, for disks, database storage, backups and object storage, protects against stolen media or a mishandled snapshot, and is basically free with cloud KMS integration. But a compromised application or a database user reads plaintext. For high-risk fields like national ids, bank account numbers and health data, I'd add application-level encryption: the application encrypts the field before storing it, using envelope encryption, where a per-record or per-tenant data key encrypts the data and a key-encryption key in the KMS encrypts the data key. The KMS enforces who can decrypt and logs every use. Keys rotate: new data keys for new writes, re-wrapping or re-encrypting old data over time. Per-tenant keys allow crypto-shredding for deletion and customer-managed keys for enterprise customers. The cost is that encrypted fields can't be queried directly, so I'd use tokens or keyed hashes for lookups.",
+  "points": [
+    {
+      "h": "Start from the threat",
+      "d": "Lost media, cloud operator access, compromised app, malicious insider, or leaked backups each need different controls."
+    },
+    {
+      "h": "In transit everywhere",
+      "d": "TLS for external and internal traffic, ideally mTLS between services, with modern ciphers and certificate automation."
+    },
+    {
+      "h": "Storage encryption at rest",
+      "d": "Disk, database, backup and object storage encryption with KMS keys; a baseline that covers physical and snapshot exposure."
+    },
+    {
+      "h": "Application-level field encryption",
+      "d": "Encrypt sensitive fields in the app so database access alone doesn't reveal them."
+    },
+    {
+      "h": "Envelope encryption",
+      "d": "Data keys encrypt data; a KMS-held key encrypts data keys. Fast local crypto, central control over decryption."
+    },
+    {
+      "h": "Key management",
+      "d": "Keys in KMS or HSM, least-privilege decrypt permissions, audit logs of key use, and scheduled rotation."
+    },
+    {
+      "h": "Searchability trade-off",
+      "d": "Encrypted fields can't be indexed or searched directly; use keyed hashes (blind indexes) or tokenisation for lookups."
+    }
+  ],
+  "decision": "TLS everywhere and storage encryption as the baseline for all data; application-level envelope encryption for the most sensitive fields; per-tenant keys where crypto-shredding or customer-managed keys are required.",
+  "numbers": [
+    "Envelope encryption keeps KMS calls low: one KMS call to unwrap a data key, then local encryption of many records with it (cached for a short period)."
+  ],
+  "pitfalls": [
+    "Treating disk encryption as protection against application-level breaches.",
+    "Encryption keys stored next to the data or in application config.",
+    "No rotation plan, so keys live forever.",
+    "Encrypting a field that's needed for search with no lookup strategy."
+  ],
+  "followups": [
+    {
+      "q": "How do you rotate a key encrypting billions of records?",
+      "a": "Rotate the key-encryption key and re-wrap data keys (cheap), and re-encrypt data gradually in the background if the policy requires new data keys."
+    },
+    {
+      "q": "How do you look up a customer by national id if it's encrypted?",
+      "a": "Store a keyed hash (HMAC) of the normalised id as a blind index and query by that."
+    },
+    {
+      "q": "What does crypto-shredding mean?",
+      "a": "Deleting the key that encrypts a subject's or tenant's data makes all copies, including backups, unreadable."
+    }
+  ],
+  "example": "A lender encrypted bank account numbers and national ids at the application layer with per-tenant data keys wrapped by a KMS key. A later incident where an attacker read database replicas exposed only ciphertext for those fields, and decryption attempts showed up in KMS audit logs.",
+  "related": [
+    "secrets-rotation",
+    "tokenization-pci-pii",
+    "design-retention-soft-delete-legal",
+    "consent-audit-access"
+  ],
+  "sources": [
+    {
+      "title": "AWS KMS: Envelope encryption",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#enveloping"
+    },
+    {
+      "title": "OWASP: Cryptographic storage cheat sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html"
+    }
+  ]
+}

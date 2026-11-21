@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"We have application logs; we'll search them if we need an audit trail.\"",
+    "why": "Application logs are sampled, mutable, retained briefly, missing who-did-what context, and writable by the same people being audited.",
+    "probe": "Structured actor-action-resource records, immutability or tamper evidence, retention, and access controls.",
+    "say": "\"A dedicated audit event stream with actor, action, resource, before/after, reason and request context, written append-only to storage with write-once retention or hash chaining, kept for the regulatory period, and queryable by authorised roles only.\""
+  },
+  "thesis": "Audit logs are a separate product from debugging logs: complete, structured records of who did what to which resource, when, from where and why, stored so they can't be silently altered, retained for the required period, and accessible under strict control.",
+  "pitch": "I'd define audit events explicitly for security-relevant and business-critical actions: logins, permission changes, data exports, changes to payout details, loan approvals, admin and support access. Each record has the actor (user or service, and on whose behalf), action, resource, timestamp, source IP and device, request or trace id, before and after values for changes (with sensitive values masked), and a reason or ticket for privileged actions. Events are written reliably, through an outbox so the audit record and the change commit together, never best-effort. Storage is append-only: write-once object storage with retention locks, or a hash chain where each entry includes the previous entry's hash so tampering is detectable. Access to read audit logs is itself restricted and audited. Retention follows regulation, often years. And I'd make it useful: searchable by resource and actor for investigations, and exposed to customers where appropriate, like an admin activity log.",
+  "points": [
+    {
+      "h": "Explicit audit events",
+      "d": "Define which actions are audited; don't rely on whatever happens to be logged."
+    },
+    {
+      "h": "Complete records",
+      "d": "Actor, on-behalf-of, action, resource, time, source, request id, before/after (masked) and justification."
+    },
+    {
+      "h": "Reliable writes",
+      "d": "Write audit events transactionally with the change (outbox) so neither can exist without the other."
+    },
+    {
+      "h": "Tamper evidence",
+      "d": "Write-once storage with retention locks, hash chaining, or a separate account the application can't delete from."
+    },
+    {
+      "h": "Restricted, audited access",
+      "d": "Only specific roles can read audit logs, and those reads are themselves logged."
+    },
+    {
+      "h": "Retention by regulation",
+      "d": "Keep for the legally required period, separate from short-lived operational logs."
+    },
+    {
+      "h": "Usable for investigations",
+      "d": "Indexed by actor, resource and time; customer-facing activity logs where helpful."
+    }
+  ],
+  "decision": "A dedicated, transactional audit stream into immutable storage, with a queryable index, for all privileged and sensitive actions. Operational logs stay separate and short-lived.",
+  "numbers": [
+    "Volume intuition: audit events are usually a small fraction of total log volume, so multi-year retention is affordable even when application logs keep only 30–90 days."
+  ],
+  "pitfalls": [
+    "Audit trails built from sampled application logs.",
+    "Admins able to delete or edit audit records.",
+    "Logging full sensitive values in before/after fields.",
+    "No audit of support or admin access to customer data."
+  ],
+  "followups": [
+    {
+      "q": "How does hash chaining work?",
+      "a": "Each record stores a hash of its contents plus the previous record's hash; changing any past record breaks every hash after it, which a verifier can detect."
+    },
+    {
+      "q": "Should audit logging failures block the action?",
+      "a": "For high-risk actions, yes: if the audit record can't be written, the action shouldn't proceed. Writing both in one transaction achieves this."
+    },
+    {
+      "q": "How do you handle erasure requests for audit data?",
+      "a": "Audit logs often have a legal basis for retention; keep identifiers minimal or pseudonymised, and document the basis."
+    }
+  ],
+  "example": "A lending platform records every change to borrower bank details with actor, before/after (last four digits only), IP and support ticket id, written via outbox to object storage with a 7-year retention lock. A fraud investigation traced an insider's changes in minutes.",
+  "related": [
+    "should-each-layer-log-must",
+    "authorization-models-idor",
+    "consent-audit-access",
+    "design-retention-soft-delete-legal"
+  ],
+  "sources": [
+    {
+      "title": "OWASP: Logging cheat sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+    },
+    {
+      "title": "AWS S3: Object Lock (write-once-read-many)",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html"
+    }
+  ]
+}

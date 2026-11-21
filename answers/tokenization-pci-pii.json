@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Encrypt card numbers in our database.\"",
+    "why": "Systems that store, process or transmit cardholder data are in PCI DSS scope even if encrypted, so the whole platform inherits the audit burden. The goal is to not hold the data at all.",
+    "probe": "Tokenisation, scope reduction, hosted fields or vaults, and isolating the sensitive zone.",
+    "say": "\"Card data never touches our servers: the client sends it straight to a payment provider's hosted fields or a tokenisation vault, and we store only tokens. The few systems that must see raw data live in a small, isolated, audited zone.\""
+  },
+  "thesis": "The best way to protect highly sensitive data is to not hold it. Tokenisation replaces card numbers or national ids with tokens everywhere except a small, isolated vault, ideally run by a payment provider, which shrinks compliance scope and breach impact.",
+  "pitch": "For card data, I'd use the payment provider's client-side components (hosted fields, iframes or mobile SDKs) so the card number goes directly from the customer's device to the provider, and my backend only receives a token or payment method id. That keeps most systems out of PCI DSS scope, leaving a much smaller self-assessment. For other sensitive data we must keep, like national ids or bank details, I'd run a tokenisation service: a small, isolated vault that stores the raw value encrypted and hands back a random token; every other system stores the token, and only a few authorised flows can detokenise, with each call audited. Tokens can be format-preserving if legacy systems need the shape, and the last four digits can be stored separately for display. The vault gets strict network isolation, minimal access, HSM or KMS-backed keys and its own monitoring. Logs, analytics and support tools only ever see tokens.",
+  "points": [
+    {
+      "h": "Avoid holding the data",
+      "d": "Client-side tokenisation through the payment provider keeps raw card numbers off your servers entirely."
+    },
+    {
+      "h": "Scope follows the data",
+      "d": "Any system that stores, processes or transmits cardholder data is in PCI scope, encryption or not. Fewer systems touching it means a smaller audit."
+    },
+    {
+      "h": "Tokenisation vault",
+      "d": "A small isolated service maps tokens to encrypted raw values; detokenisation is restricted and audited."
+    },
+    {
+      "h": "Tokens everywhere else",
+      "d": "Databases, logs, analytics, support tools and events use tokens or masked values only."
+    },
+    {
+      "h": "Display without detokenising",
+      "d": "Store last four digits, card brand and expiry separately for UI and support needs."
+    },
+    {
+      "h": "Isolate the sensitive zone",
+      "d": "Separate network segment, minimal access, strong key management, and dedicated monitoring."
+    }
+  ],
+  "decision": "Payment provider tokens for cards wherever possible. An internal tokenisation vault for other highly sensitive identifiers. Encryption alone is not a scope-reduction strategy.",
+  "numbers": [
+    "Scope intuition: merchants that fully outsource card entry to a provider's hosted pages qualify for the shortest PCI self-assessment questionnaire, versus hundreds of controls for those who handle card data directly."
+  ],
+  "pitfalls": [
+    "Card numbers passing through your API 'just for a moment', which puts it in scope.",
+    "Raw sensitive values leaking into logs, analytics events or error messages.",
+    "A tokenisation vault that every service can call to detokenise.",
+    "Using reversible encoding and calling it a token."
+  ],
+  "followups": [
+    {
+      "q": "How do recurring payments work with tokens?",
+      "a": "The provider stores the card and returns a reusable payment method or network token that you charge later."
+    },
+    {
+      "q": "Support staff need to verify a customer's ID number. How?",
+      "a": "Have them enter what the customer says and compare against the vault (match/no match), rather than showing the raw value."
+    },
+    {
+      "q": "What about data in analytics?",
+      "a": "Use tokens or keyed hashes so joins still work, without exposing raw values to analysts."
+    }
+  ],
+  "example": "A marketplace was routing card numbers through its checkout API before calling the provider, putting 30 services in PCI scope. Switching to the provider's hosted fields meant the API only saw payment method tokens, shrinking scope to a few systems and removing card data from logs.",
+  "related": [
+    "encryption-key-management",
+    "payment-state-machine-provider",
+    "should-each-layer-log-must",
+    "consent-audit-access"
+  ],
+  "sources": [
+    {
+      "title": "PCI Security Standards Council: Tokenization product security guidelines",
+      "url": "https://www.pcisecuritystandards.org/documents/Tokenization_Product_Security_Guidelines.pdf"
+    },
+    {
+      "title": "Stripe documentation: Integration security guide",
+      "url": "https://docs.stripe.com/security/guide"
+    }
+  ]
+}

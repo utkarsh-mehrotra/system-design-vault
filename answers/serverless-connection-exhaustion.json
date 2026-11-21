@@ -1,0 +1,80 @@
+{
+  "trap": {
+    "wrong": "\"Serverless scales infinitely, so the database must be undersized; scale it up.\"",
+    "why": "Each concurrent function instance opens its own database connections, so a spike creates thousands of connections, more than the database can accept, regardless of CPU.",
+    "probe": "Connection pooling and proxies, concurrency limits, and serverless-friendly data access.",
+    "say": "\"Every concurrent function holds its own connections; I'd put a connection pooler or managed proxy in front of the database, cap function concurrency to what the database can handle, and reuse connections across invocations.\""
+  },
+  "thesis": "Serverless functions scale out to many concurrent instances, each with its own connections, which overwhelms relational databases built for a modest number of long-lived connections. Use connection proxies, concurrency caps and connection reuse, or data stores designed for this access pattern.",
+  "pitch": "A traditional service with 20 instances and a pool of 10 connections each uses 200 connections. A serverless function can scale to 2,000 concurrent executions during a spike, each opening its own connection, and the database hits its connection limit or spends its memory on connection overhead, failing everyone. Fixes, in order: put a connection pooler between functions and the database, such as RDS Proxy or PgBouncer, which multiplexes many client connections over a small pool; set reserved or maximum concurrency on the function so it can't exceed what the database can serve; open the connection outside the handler so warm invocations reuse it, and keep pool size at one per instance; and consider data access that fits serverless better, like HTTP-based database APIs or databases designed for many short connections. Cold starts add latency too, so latency-sensitive paths may need provisioned concurrency.",
+  "points": [
+    {
+      "h": "Connections scale with concurrency",
+      "d": "Each function instance holds its own connections; concurrency spikes multiply connections far beyond a normal service."
+    },
+    {
+      "h": "Databases have connection limits",
+      "d": "Relational databases allocate memory and processes per connection; thousands of connections degrade or reject new ones."
+    },
+    {
+      "h": "Connection proxies",
+      "d": "A pooler multiplexes many function connections onto a small set of database connections."
+    },
+    {
+      "h": "Cap function concurrency",
+      "d": "Reserved or maximum concurrency matched to database capacity prevents runaway scaling from overwhelming it."
+    },
+    {
+      "h": "Reuse connections",
+      "d": "Initialise clients outside the handler so warm invocations reuse them; keep per-instance pools tiny."
+    },
+    {
+      "h": "Cold starts",
+      "d": "First invocation latency from initialising runtime and connections; provisioned concurrency for latency-critical paths."
+    },
+    {
+      "h": "Serverless-friendly data stores",
+      "d": "HTTP data APIs, key-value stores or databases built for many short-lived connections avoid the problem."
+    }
+  ],
+  "decision": "Serverless with relational databases only behind a connection proxy and with concurrency caps. For very spiky workloads, consider stores designed for high connection churn.",
+  "numbers": [
+    "Example: database max_connections = 500; a function scaling to 1,500 concurrent executions with one connection each would exceed it threefold. A proxy with a 200-connection pool and a 400-execution concurrency cap keeps it safe."
+  ],
+  "pitfalls": [
+    "Opening a new connection per invocation inside the handler.",
+    "Unlimited function concurrency against a fixed-size database.",
+    "Large connection pools per function instance.",
+    "Ignoring cold-start latency on user-facing paths."
+  ],
+  "followups": [
+    {
+      "q": "Does a connection proxy add latency?",
+      "a": "A little per query, usually far less than the cost of opening new connections or failing at the limit."
+    },
+    {
+      "q": "What happens when concurrency is capped and traffic exceeds it?",
+      "a": "Requests are throttled; return 429 or queue the work, which is better than taking the database down."
+    },
+    {
+      "q": "When is serverless a poor fit?",
+      "a": "Steady high-throughput workloads where always-on instances are cheaper, or latency-critical paths sensitive to cold starts."
+    }
+  ],
+  "example": "A team moved an API to functions; during a campaign, concurrency hit 1,200 and Postgres refused connections, taking down unrelated services sharing the database. RDS Proxy, a concurrency cap of 300 and connection reuse fixed it.",
+  "related": [
+    "autoscaling-pitfalls",
+    "design-admission-control-service-stays",
+    "choose-size-circuit-breakers-bulkheads"
+  ],
+  "sources": [
+    {
+      "title": "AWS: Amazon RDS Proxy",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html"
+    },
+    {
+      "title": "AWS Lambda: Configuring reserved concurrency",
+      "url": "https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html"
+    }
+  ]
+}

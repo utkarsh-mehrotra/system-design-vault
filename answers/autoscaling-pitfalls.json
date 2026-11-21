@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Autoscale on CPU at 70% and we're covered.\"",
+    "why": "CPU is often not the bottleneck (I/O, connections, memory, queue depth), scaling takes minutes while spikes take seconds, and new instances can overload shared dependencies like the database.",
+    "probe": "Right scaling signal, scaling speed, warm-up, dependency limits, and scale-in behaviour.",
+    "say": "\"I'd scale on the real saturation signal (concurrency, queue depth or latency), keep headroom for the minutes scaling takes, warm new instances, cap how far scaling can push the database, and protect with load shedding while capacity arrives.\""
+  },
+  "thesis": "Autoscaling reacts in minutes to the metric you choose, so it fails when the metric isn't the bottleneck, the spike is faster than scaling, new instances start cold, or more instances overwhelm a shared dependency. Combine it with headroom, the right signals, warm-up and load shedding.",
+  "pitch": "Common reasons autoscaling disappoints: the signal is wrong, for example scaling on CPU when the service is limited by database connections or I/O wait, so CPU stays low while latency explodes. Scaling is slow: metrics are aggregated over a minute or two, then instances launch, pull images, start and warm caches, so five minutes pass while the spike lasts 30 seconds. New instances are cold: JIT and caches cause slow first requests, and receiving full traffic immediately makes them fail health checks. Dependencies don't scale: each new instance opens connections to the database, so scaling out exhausts connections and takes the database down. Scale-in can be too aggressive, killing instances mid-request or oscillating. So I'd scale on concurrency, queue depth or request rate per instance; keep enough headroom to absorb the first minutes; use scheduled or predictive scaling for known peaks; warm instances with slow start; cap instance counts and use connection poolers; and rely on load shedding for the seconds before capacity arrives.",
+  "points": [
+    {
+      "h": "Scale on the real bottleneck",
+      "d": "Concurrency, queue depth, request rate per instance or latency, not CPU by default."
+    },
+    {
+      "h": "Scaling takes minutes",
+      "d": "Metric windows, launch time, image pulls, startup and warm-up add up; plan headroom to cover that gap."
+    },
+    {
+      "h": "Predictive and scheduled scaling",
+      "d": "Scale ahead of known peaks (daily cycles, marketing events) instead of reacting."
+    },
+    {
+      "h": "Warm-up and slow start",
+      "d": "Pre-warm caches and use load balancer slow start so new instances aren't flooded while cold."
+    },
+    {
+      "h": "Protect shared dependencies",
+      "d": "Maximum instance counts, connection poolers and per-instance pool limits so scaling out doesn't exhaust the database."
+    },
+    {
+      "h": "Careful scale-in",
+      "d": "Cooldowns, graceful draining and asymmetric policies (scale out fast, scale in slowly) prevent flapping and dropped requests."
+    },
+    {
+      "h": "Shedding covers the gap",
+      "d": "Admission control protects the service in the seconds to minutes before new capacity is ready."
+    }
+  ],
+  "decision": "Autoscaling as a capacity-cost optimiser with headroom, not as spike protection. Scale on saturation signals, schedule known peaks, protect dependencies, and keep load shedding for sudden spikes.",
+  "numbers": [
+    "Time to capacity example: 60 s metric window + 90 s instance launch + 60 s startup and warm-up ≈ 3.5 minutes before new instances help."
+  ],
+  "pitfalls": [
+    "CPU-only scaling for I/O-bound services.",
+    "No maximum, so scaling out exhausts database connections.",
+    "Scale-in killing instances without draining.",
+    "Treating autoscaling as a replacement for capacity planning and load tests."
+  ],
+  "followups": [
+    {
+      "q": "How do you autoscale queue consumers?",
+      "a": "On queue depth or age of the oldest message relative to processing rate, bounded by what downstream systems can handle."
+    },
+    {
+      "q": "Why scale out fast and in slowly?",
+      "a": "Under-capacity hurts users immediately; over-capacity only costs money briefly. Slow scale-in also prevents oscillation."
+    },
+    {
+      "q": "What about Kubernetes cluster capacity?",
+      "a": "Pod autoscaling needs nodes to place pods on; cluster autoscaling adds more delay, so keep spare node capacity or overprovisioning placeholders."
+    }
+  ],
+  "example": "An API scaled on CPU at 70%, but during a sale latency rose while CPU stayed at 40%: the real limit was a 50-connection pool per instance against a slow database. Switching to scaling on in-flight requests, adding PgBouncer and a 20% headroom floor kept the next sale stable.",
+  "related": [
+    "design-admission-control-service-stays",
+    "serverless-connection-exhaustion",
+    "size-system-50-000-requests",
+    "graceful-shutdown-draining"
+  ],
+  "sources": [
+    {
+      "title": "Kubernetes documentation: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    },
+    {
+      "title": "AWS: Predictive scaling for Amazon EC2 Auto Scaling",
+      "url": "https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-predictive-scaling.html"
+    }
+  ]
+}

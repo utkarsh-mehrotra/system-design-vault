@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Config isn't code, so we push it instantly everywhere for speed.\"",
+    "why": "Config changes behaviour just like code, often more broadly, and many major outages started with a global config or data push that skipped the safeguards code deploys have.",
+    "probe": "Treating config like code: validation, staged rollout, automatic rollback, and last-known-good.",
+    "say": "\"Config goes through the same pipeline as code: version control, validation and tests, canary to one cell or region first, health checks between stages, automatic rollback, and services that keep the last known good config if a new one fails to load.\""
+  },
+  "thesis": "Dynamic configuration, feature flags, routing rules and data files can change the behaviour of every server at once, so they need the same safety as code: review, validation, staged rollout across failure domains, automatic rollback and fail-safe loading.",
+  "pitch": "The reason config outages are so large is that config systems are built for fast, global propagation, the opposite of a careful code rollout. I'd treat config as code: changes live in version control with review; a validation step checks schema, ranges and references, and ideally runs services against the new config in tests. Rollout is staged: one canary instance or cell, then one region, then the rest, with automated health checks between stages and an automatic revert if error rates rise. On the receiving side, services validate config before applying it and keep the last known good version if the new one fails to parse or load, rather than crashing. I'd also distinguish emergency switches, like kill switches meant to propagate instantly, from ordinary config, and make sure even emergency changes are logged and easy to revert.",
+  "points": [
+    {
+      "h": "Config changes behaviour",
+      "d": "Feature flags, limits, routing rules and data files are code by another name, often with global reach."
+    },
+    {
+      "h": "Version control and review",
+      "d": "Every change has an author, a reviewer, a diff and history, so reverts are easy and auditable."
+    },
+    {
+      "h": "Validation before rollout",
+      "d": "Schema and semantic checks, plus tests or shadow evaluation against the new config."
+    },
+    {
+      "h": "Staged rollout",
+      "d": "Canary, one cell or zone, one region, then global, with health gates between stages."
+    },
+    {
+      "h": "Automatic rollback",
+      "d": "Revert to the previous version automatically when metrics regress during rollout."
+    },
+    {
+      "h": "Fail-safe loading",
+      "d": "Services keep running on the last known good config if the new one is invalid, instead of crashing or failing open dangerously."
+    },
+    {
+      "h": "Separate emergency switches",
+      "d": "Kill switches propagate fast by design but are pre-tested, limited in scope and logged."
+    }
+  ],
+  "decision": "All configuration goes through a staged, validated, reversible pipeline, except a small set of pre-approved emergency switches. Services must tolerate bad config by keeping the last good version.",
+  "numbers": [
+    "Staged rollout example: 1 canary cell for 10 minutes, 1 region for 30 minutes, then the remaining regions in two waves, so a bad change reaches at most a fraction of users before detection."
+  ],
+  "pitfalls": [
+    "Instant global propagation of every config change.",
+    "Services that crash on malformed config, so a bad push takes down the fleet.",
+    "Config changes that bypass review because they're 'just a value'.",
+    "No easy revert path or history."
+  ],
+  "followups": [
+    {
+      "q": "How do you test a config change before rollout?",
+      "a": "Validate against schemas, run integration tests with it, and evaluate it in shadow mode against real traffic where possible."
+    },
+    {
+      "q": "What if the config system itself is down?",
+      "a": "Services keep using cached last known good config; they shouldn't need the config service available to keep serving (static stability)."
+    },
+    {
+      "q": "Feature flags count as config?",
+      "a": "Yes: flag changes should be staged by percentage or cell and monitored like any other rollout."
+    }
+  ],
+  "example": "A company's rate-limit config contained a typo that set limits to zero and was pushed globally in seconds, rejecting all traffic. Afterwards, config moved to a staged pipeline (canary cell, then regions), with range validation and services that refuse to apply configs failing sanity checks.",
+  "related": [
+    "deploy-strategies-compared",
+    "design-mistakes-cheap-not-catastrophic",
+    "design-support-experiments-such-as",
+    "design-data-center-outage-scenarios"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Release engineering",
+      "url": "https://sre.google/sre-book/release-engineering/"
+    },
+    {
+      "title": "AWS AppConfig: Safe deployment of configuration",
+      "url": "https://docs.aws.amazon.com/appconfig/latest/userguide/what-is-appconfig.html"
+    }
+  ]
+}

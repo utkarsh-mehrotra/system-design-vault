@@ -1,0 +1,82 @@
+{
+  "trap": {
+    "wrong": "\"Active-active gives us the best availability, so let's do it.\"",
+    "why": "It multiplies infrastructure and operational cost, forces hard data choices (conflicts or partitioned ownership), and often fails to deliver if hidden dependencies stay single-region. Many outages are caused by bad changes, which multi-region doesn't prevent.",
+    "probe": "Whether you can price it, name the data problem, and compare against cheaper options.",
+    "say": "\"I'd quantify the downtime cost first. Active-active roughly doubles infrastructure and adds data-consistency work; often warm standby plus cell isolation and safer deploys gets most of the benefit for much less.\""
+  },
+  "thesis": "Active-active means serving production traffic from multiple regions at once, which can deliver very high availability and lower latency, but at the cost of roughly doubled infrastructure, complex data replication or partitioning, and much harder operations. Justify it with the cost of downtime, not as a default.",
+  "pitch": "I'd start with the business question: what does an hour of regional outage cost, and how often do regional outages happen compared with other causes like bad deploys? Then the costs. Infrastructure: each region must handle full load if another fails, so roughly 2x capacity, plus cross-region data transfer. Data: concurrent writes in two regions need either partitioned ownership (each customer has a home region) or conflict resolution, and strongly consistent global writes add cross-region latency to every write. Operations: deploys, migrations, monitoring and incident response across regions, plus hunting single-region dependencies like auth, CI/CD and third parties. Many teams find warm standby with tested failover, plus cell-based isolation and safer deploys, covers most risk at a fraction of the cost. Where active-active is justified, such as for global latency or huge downtime costs, I'd use home-region ownership per customer to avoid write conflicts.",
+  "points": [
+    {
+      "h": "Price downtime first",
+      "d": "Revenue and trust lost per hour of outage, multiplied by the likelihood of regional outages, sets the budget."
+    },
+    {
+      "h": "Capacity cost",
+      "d": "Each region needs headroom to absorb the other's traffic; roughly double the capacity of a single region."
+    },
+    {
+      "h": "Data is the hard part",
+      "d": "Partitioned home-region ownership, conflict-tolerant data types, or slow global consensus. Each has real complexity."
+    },
+    {
+      "h": "Hidden single-region dependencies",
+      "d": "Identity, secrets, CI/CD, DNS control planes and third-party services often break active-active in practice."
+    },
+    {
+      "h": "It doesn't fix most outages",
+      "d": "Bad deploys and config changes replicate to every region; deploy safety and cells address those."
+    },
+    {
+      "h": "Cheaper alternatives",
+      "d": "Multi-zone within a region, warm standby with tested failover, cell isolation, and progressive rollouts."
+    },
+    {
+      "h": "When it's worth it",
+      "d": "Global latency requirements, regulatory resilience demands, or downtime costs that dwarf infrastructure costs."
+    }
+  ],
+  "decision": "Default to multi-zone plus warm standby for regional disasters. Choose active-active when latency or downtime economics clearly justify it, and implement it with home-region ownership rather than multi-writer conflicts.",
+  "numbers": [
+    "Cost sketch: a single-region system at $200k/month might cost $400–450k/month active-active (capacity plus data transfer and tooling), before engineering time.",
+    "Regional outages are relatively rare compared with change-induced incidents, so compare the expected avoided downtime honestly."
+  ],
+  "pitfalls": [
+    "Choosing active-active without quantifying downtime cost.",
+    "Multi-writer data with last-writer-wins.",
+    "Assuming active-active protects against bad deploys.",
+    "Never testing that one region can actually carry the full load."
+  ],
+  "followups": [
+    {
+      "q": "How do you keep active-active from doubling deploy risk?",
+      "a": "Deploy region by region with canaries, so a bad change is caught in one region before reaching the other."
+    },
+    {
+      "q": "What's the difference from warm standby?",
+      "a": "Warm standby runs a smaller copy that scales up on failover, so failover takes minutes and costs less; active-active already serves traffic in both."
+    },
+    {
+      "q": "How does home-region ownership work?",
+      "a": "Each customer's writes go to one region, which replicates to the other for reads and failover; a directory routes requests."
+    }
+  ],
+  "example": "A fintech estimated a regional outage would cost about $300k per hour and occur maybe once every two years, while active-active would add $2.5M a year. They chose warm standby with quarterly failover drills and cell-based deploys, and reconsidered only when expanding to customers on other continents for latency.",
+  "related": [
+    "fail-over-between-two-regions",
+    "design-data-center-outage-scenarios",
+    "replication-topologies",
+    "design-cost-visibility-optimization-day"
+  ],
+  "sources": [
+    {
+      "title": "AWS Well-Architected: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    },
+    {
+      "title": "AWS Builders' Library: Static stability using Availability Zones",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  ]
+}
