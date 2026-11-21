@@ -66,7 +66,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .ibtn.sq{width:32px;padding:0;justify-content:center}
 
 /* workspace */
-.ws{flex:1;min-height:0;display:grid;grid-template-columns:minmax(330px,400px) 1fr}
+.ws{flex:1;min-height:0;display:grid;grid-template-columns:minmax(320px,35%) 1fr}
 .ws[hidden]{display:none}
 .side{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--panel)}
 .ctl{flex:none;padding:14px 14px 10px;display:grid;gap:10px;border-bottom:1px solid var(--line)}
@@ -239,6 +239,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
   .din{padding:18px 14px 32px}
   .dcard{padding:18px 16px}
   .tools .copy-lbl{display:none}
+  .saved{font-size:0;gap:0}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -271,9 +272,9 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
   <aside class="side" aria-label="Question index">
     <div class="ctl">
       <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input type="search" id="q" placeholder="Search questions, traps, domains" aria-label="Search questions"><kbd id="kkey" aria-hidden="true">⌘K</kbd></label>
-      <div class="pills" id="pills" role="group" aria-label="Category"></div>
       <div class="statusseg" id="statusseg" role="radiogroup" aria-label="Status"></div>
       <div class="frow">
+        <div class="dd"><button type="button" class="ddbtn" id="dd-cat" aria-expanded="false" aria-controls="pn-cat"><span id="catlbl">Category</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-cat" hidden></div></div>
         <div class="dd"><button type="button" class="ddbtn" id="dd-lvl" aria-expanded="false" aria-controls="pn-lvl">Level<span class="ddn" id="n-lvl"></span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-lvl" hidden></div></div>
         <div class="dd"><button type="button" class="ddbtn" id="dd-tags" aria-expanded="false" aria-controls="pn-tags">Tags<span class="ddn" id="n-tags"></span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-tags" hidden></div></div>
         <span class="cnt" id="count" aria-live="polite"></span>
@@ -386,8 +387,9 @@ function progress(){const n=items.filter(x=>status(x.id)==="solid").length;$("ma
 /* ---------- sidebar controls ---------- */
 function drawPills(){
   const base=items.filter(x=>match(x,"cat")).length;
-  $("pills").innerHTML='<button type="button" class="pill" data-cat="" aria-pressed="'+(!st.cat)+'">All <span class="n">'+base+'</span></button>'+
-    V.categories.map(c=>{const n=items.filter(x=>x.cat===c.id&&match(x,"cat")).length;return'<button type="button" class="pill" data-cat="'+c.id+'" aria-pressed="'+(st.cat===c.id)+'" title="'+esc(c.name)+'">'+esc(SHORT[c.id]||c.name)+' <span class="n">'+n+'</span></button>'}).join("");
+  $("pn-cat").innerHTML=opt('data-cat=""',!st.cat,"All categories",base,true)+V.categories.map(c=>opt('data-cat="'+c.id+'"',st.cat===c.id,esc(c.name),items.filter(x=>x.cat===c.id&&match(x,"cat")).length,true)).join("");
+  $("catlbl").textContent=st.cat?(SHORT[st.cat]||cats[st.cat].name):"Category";
+  $("dd-cat").classList.toggle("on",!!st.cat);
 }
 function drawStatus(){
   $("statusseg").innerHTML=Object.keys(STATUS).map(k=>{
@@ -406,6 +408,7 @@ function drawDropdowns(){
   $("n-lvl").textContent=st.lvl?"1":"";$("n-tags").textContent=nt||"";
   $("dd-lvl").classList.toggle("on",!!st.lvl);$("dd-tags").classList.toggle("on",nt>0);
   const a=[];
+  if(st.cat)a.push(['data-rm="cat"',esc(cats[st.cat].name)]);
   if(st.lvl)a.push(['data-rm="lvl"',LV[st.lvl]]);
   Object.keys(st.tags).forEach(g=>a.push(['data-rm="tag" data-tag="'+esc(g)+'"',esc(g)]));
   const box=$("active"),any=a.length||st.q||st.cat||st.status!=="all";box.hidden=!any;
@@ -413,23 +416,23 @@ function drawDropdowns(){
 }
 let openDD=null;
 function closeDD(){if(!openDD)return;$("pn-"+openDD).hidden=true;$("dd-"+openDD).setAttribute("aria-expanded","false");openDD=null}
-["lvl","tags"].forEach(k=>{
+["cat","lvl","tags"].forEach(k=>{
   $("dd-"+k).onclick=e=>{e.stopPropagation();const was=openDD===k;closeDD();if(was)return;openDD=k;$("pn-"+k).hidden=false;$("dd-"+k).setAttribute("aria-expanded","true");const f=k==="tags"?$("tagq"):$("pn-"+k).querySelector(".opt");if(f)f.focus()};
   $("pn-"+k).addEventListener("click",e=>{
-    e.stopPropagation();const b=e.target.closest("[data-lvl],[data-tag],[data-act]");if(!b)return;
+    e.stopPropagation();const b=e.target.closest("[data-cat],[data-lvl],[data-tag],[data-act]");if(!b)return;
+    if(b.hasAttribute("data-cat")){st.cat=b.getAttribute("data-cat");update();closeDD();$("list").scrollTop=0;$("dd-cat").focus();return}
     if(b.hasAttribute("data-lvl")){st.lvl=b.getAttribute("data-lvl");update();closeDD();$("dd-lvl").focus();return}
     if(b.getAttribute("data-act")==="cleartags"){st.tags={};update();return}
     const g=b.getAttribute("data-tag");if(st.tags[g])delete st.tags[g];else st.tags[g]=1;update();
   });
 });
 document.addEventListener("click",e=>{if(openDD&&!e.target.closest(".dd"))closeDD()});
-$("pills").addEventListener("click",e=>{const b=e.target.closest("[data-cat]");if(!b)return;st.cat=st.cat===b.dataset.cat?"":b.dataset.cat;update();$("list").scrollTop=0});
 $("statusseg").addEventListener("click",e=>{const b=e.target.closest("[data-status]");if(!b)return;st.status=b.dataset.status;update()});
 $("statusseg").addEventListener("keydown",e=>{if(e.key!=="ArrowLeft"&&e.key!=="ArrowRight")return;e.preventDefault();e.stopPropagation();const ks=Object.keys(STATUS),i=ks.indexOf(st.status);st.status=ks[(i+(e.key==="ArrowRight"?1:ks.length-1))%ks.length];update();$("statusseg").querySelector('[aria-checked="true"]').focus()});
 $("active").addEventListener("click",e=>{
   const b=e.target.closest("[data-rm],[data-act]");if(!b)return;
   if(b.getAttribute("data-act")==="clearall"){st=blank();$("q").value="";update();return}
-  const r=b.getAttribute("data-rm");if(r==="lvl")st.lvl="";else if(r==="tag")delete st.tags[b.getAttribute("data-tag")];update();
+  const r=b.getAttribute("data-rm");if(r==="cat")st.cat="";else if(r==="lvl")st.lvl="";else if(r==="tag")delete st.tags[b.getAttribute("data-tag")];update();
 });
 let qTimer;
 $("q").oninput=e=>{clearTimeout(qTimer);qTimer=setTimeout(()=>{st.q=e.target.value.trim().toLowerCase();update()},110)};
