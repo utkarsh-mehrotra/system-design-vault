@@ -16,7 +16,10 @@
     "Operations",
     "Architecture",
     "Leadership",
-    "Cost & compliance"
+    "Cost & compliance",
+    "Security",
+    "AI",
+    "Infrastructure"
   ],
   "categories": [
     {
@@ -38,7 +41,9 @@
         "Indexing",
         "Migrations & backfills",
         "Retention & deletion",
-        "Multi-tenancy"
+        "Multi-tenancy",
+        "Concurrency & replication",
+        "Specialised storage & queries"
       ]
     },
     {
@@ -56,7 +61,10 @@
         "Idempotency",
         "Consistency models & CAP",
         "Distributed transactions & reconciliation",
-        "Consensus & distributed IDs"
+        "Consensus & distributed IDs",
+        "Locks & clocks",
+        "Money & inventory correctness",
+        "Event sourcing & CQRS"
       ]
     },
     {
@@ -94,6 +102,16 @@
       ]
     },
     {
+      "id": "security",
+      "name": "Security & Identity",
+      "topics": [
+        "Authentication & sessions",
+        "Authorization",
+        "Secrets & encryption",
+        "Abuse & audit"
+      ]
+    },
+    {
       "id": "observability",
       "name": "Observability & Operations",
       "topics": [
@@ -101,6 +119,24 @@
         "Metrics, dashboards & alerts",
         "Latency debugging",
         "Runbooks & failure drills"
+      ]
+    },
+    {
+      "id": "infra",
+      "name": "Delivery & Infrastructure",
+      "topics": [
+        "Deployments & config",
+        "Autoscaling & serverless",
+        "Multi-region & estimation"
+      ]
+    },
+    {
+      "id": "ai",
+      "name": "AI & LLM Systems",
+      "topics": [
+        "Retrieval & vectors",
+        "Serving & cost",
+        "Quality & safety"
       ]
     },
     {
@@ -120,6 +156,24 @@
         "Trade-offs & design reviews",
         "Simplicity & over/under-engineering",
         "Design docs & ownership"
+      ]
+    },
+    {
+      "id": "domains",
+      "name": "Domain Traps",
+      "topics": [
+        "Fintech & lending",
+        "Adtech",
+        "E-commerce & marketplaces",
+        "Ride-hailing & delivery",
+        "Supply chain & logistics",
+        "Edtech",
+        "Media & streaming",
+        "Social & messaging",
+        "Travel & booking",
+        "SaaS & B2B",
+        "Gaming",
+        "Healthcare"
       ]
     }
   ],
@@ -447,6 +501,23 @@
       ]
     },
     {
+      "id": "secondary-indexes-sharded",
+      "cat": "data",
+      "topic": "Partitioning & hot keys",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Your data is sharded by user id, but you need to query by email or by order status. How do secondary indexes work in a sharded store?",
+      "also": [],
+      "a": [
+        "Secondary indexes in a sharded system are either local to each shard (cheap writes, scatter-gather reads) or global and partitioned by the indexed value (single-shard reads, cross-shard writes that are typically asynchronous). Choose by query frequency and how fresh the index must be."
+      ],
+      "tags": [
+        "Sharding",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
       "id": "design-indexes-table-takes-90",
       "cat": "data",
       "topic": "Indexing",
@@ -573,6 +644,108 @@
       ]
     },
     {
+      "id": "isolation-levels-anomalies",
+      "cat": "data",
+      "topic": "Concurrency & replication",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Your database runs at read committed. Which bugs can that cause, and when do you need something stronger?",
+      "also": [],
+      "a": [
+        "Isolation level decides which concurrency anomalies the database prevents for you. Most databases default to read committed, which still allows lost updates and write skew, so you must know which invariants need atomic updates, row locks, constraints or serializable isolation."
+      ],
+      "tags": [
+        "Databases",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "optimistic-pessimistic-concurrency",
+      "cat": "data",
+      "topic": "Concurrency & replication",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Optimistic or pessimistic concurrency control: how do you choose, and what breaks with each?",
+      "also": [],
+      "a": [
+        "Optimistic control lets everyone proceed and detects conflicts at write time (a version check); pessimistic control locks first so conflicts can't happen. Choose by conflict rate, cost of retrying, and how long the critical section is."
+      ],
+      "tags": [
+        "Databases",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "replication-topologies",
+      "cat": "data",
+      "topic": "Concurrency & replication",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Leader-follower, multi-leader or leaderless replication: what does each cost you, and which would you pick?",
+      "also": [],
+      "a": [
+        "Single-leader replication is simplest and gives one order of writes, at the cost of a write bottleneck and failover risk. Multi-leader allows writes in several places but requires conflict resolution. Leaderless (quorum) replication tolerates node failures without failover but needs careful quorum and repair design."
+      ],
+      "tags": [
+        "Databases",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "large-file-uploads",
+      "cat": "data",
+      "topic": "Specialised storage & queries",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design uploads of multi-gigabyte files from users with unreliable connections.",
+      "also": [],
+      "a": [
+        "Keep large bytes off your application servers. Clients upload directly to object storage using short-lived presigned URLs, in parts that can be retried and resumed, and your system tracks the upload as a resource with states, processing it asynchronously once complete."
+      ],
+      "tags": [
+        "Databases",
+        "APIs"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "approximate-counting-sketches",
+      "cat": "data",
+      "topic": "Specialised storage & queries",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Count unique visitors and top-K items across billions of events per day. Do you need exact answers?",
+      "also": [],
+      "a": [
+        "When the question is 'about how many' or 'which are the biggest', probabilistic structures give small, mergeable answers with bounded error: HyperLogLog for distinct counts, count-min sketch and heavy-hitter algorithms for frequencies and top-K, Bloom filters for membership. Use exact counting only where correctness matters."
+      ],
+      "tags": [
+        "Databases",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "geospatial-nearby-queries",
+      "cat": "data",
+      "topic": "Specialised storage & queries",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Find the nearest drivers, stores or users to a location quickly. How do you index location data?",
+      "also": [],
+      "a": [
+        "Spatial queries need a spatial index that groups nearby points: geohash prefixes, quadtrees, Google S2 or Uber H3 cells, or R-trees (PostGIS). Query the relevant cells and neighbours to get candidates, then rank by exact distance. Fast-moving points need an in-memory, frequently updated index."
+      ],
+      "tags": [
+        "Databases",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
       "id": "should-cache-client-edge-service",
       "cat": "caching",
       "topic": "Caching strategy",
@@ -683,6 +856,40 @@
       "legacy": [
         62
       ]
+    },
+    {
+      "id": "redis-down-fail-open",
+      "cat": "caching",
+      "topic": "Caching strategy",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Your Redis cache cluster goes down at peak. What happens, and how should the system behave?",
+      "also": [],
+      "a": [
+        "A cache that absorbs most reads is load-bearing infrastructure. When it fails, uncontrolled fall-through can take down the database. Design the failure mode: replication for the cache, bounded fall-through, degraded responses, and careful recovery with warming."
+      ],
+      "tags": [
+        "Caching",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "eviction-policies-working-set",
+      "cat": "caching",
+      "topic": "Caching strategy",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "How do you size a cache and choose an eviction policy?",
+      "also": [],
+      "a": [
+        "Size a cache to hold the working set (the keys reused within their useful lifetime), using the hit-ratio curve to find diminishing returns. Choose eviction by access pattern: LRU for recency, LFU for stable popularity, TTL for freshness, and protect against scans polluting the cache."
+      ],
+      "tags": [
+        "Caching",
+        "Scaling"
+      ],
+      "legacy": []
     },
     {
       "id": "design-pagination-massive-datasets-efficiently",
@@ -918,6 +1125,91 @@
         107,
         106
       ]
+    },
+    {
+      "id": "distributed-locks-fencing",
+      "cat": "consistency",
+      "topic": "Locks & clocks",
+      "level": "advanced",
+      "source": "mine",
+      "q": "You need a distributed lock so only one worker processes a job. How do you make it actually safe?",
+      "also": [],
+      "a": [
+        "A distributed lock is only as safe as what happens when the holder stalls. Leases expire, so two processes can believe they hold the lock. Safety comes from fencing tokens that the protected resource checks, or from making the operation idempotent so duplicates don't matter."
+      ],
+      "tags": [
+        "Consistency",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "clocks-ordering-lww",
+      "cat": "consistency",
+      "topic": "Locks & clocks",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Can you use timestamps to order events or resolve conflicts across machines?",
+      "also": [],
+      "a": [
+        "Physical clocks across machines are never perfectly in sync, so timestamps can't be trusted to order events or decide which write is newer. Use a single source of order (a sequencer or leader per key), logical clocks (Lamport, vector or hybrid logical clocks), or merges that don't depend on time."
+      ],
+      "tags": [
+        "Consistency",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "flash-sale-never-oversell",
+      "cat": "consistency",
+      "topic": "Money & inventory correctness",
+      "level": "advanced",
+      "source": "mine",
+      "q": "A flash sale has 1,000 units and 500,000 people trying to buy at once. How do you never oversell?",
+      "also": [],
+      "a": [
+        "Overselling is a concurrency bug; the spike is a load problem. Solve the first with atomic reservations against a single source of truth with expiring holds, and the second with admission control, a waiting room, and moving the hot counter off the main database path."
+      ],
+      "tags": [
+        "Consistency",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "double-entry-ledger-design",
+      "cat": "consistency",
+      "topic": "Money & inventory correctness",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design a ledger for a payments or lending product. Why double-entry, and what invariants must it enforce?",
+      "also": [],
+      "a": [
+        "A ledger records every movement of money as immutable, balanced journal entries: each transaction has entries that sum to zero across accounts. Balances are derived from entries, corrections are reversing entries, and posting is idempotent. This gives auditability and makes errors detectable."
+      ],
+      "tags": [
+        "Transactions",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "event-sourcing-cqrs-trap",
+      "cat": "consistency",
+      "topic": "Event sourcing & CQRS",
+      "level": "advanced",
+      "source": "mine",
+      "q": "When is event sourcing with CQRS the right call, and when is it a trap?",
+      "also": [],
+      "a": [
+        "Event sourcing stores state as an append-only sequence of domain events and derives current state by replay; CQRS separates write models from read models. Together they fit domains where history is central. Applied broadly, they add heavy costs in versioning, projections, consistency and data deletion."
+      ],
+      "tags": [
+        "Architecture",
+        "Messaging"
+      ],
+      "legacy": []
     },
     {
       "id": "list-ways-three-tier-service",

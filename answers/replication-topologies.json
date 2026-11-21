@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Multi-leader so every region can write locally.\"",
+    "why": "Multi-leader means concurrent writes to the same data in different places, which need conflict resolution. Last-writer-wins silently drops data, and invariants like balances can break.",
+    "probe": "Whether you understand write conflicts, replication lag and failover data loss for each topology.",
+    "say": "\"Single leader unless I truly need local writes in several regions; then I'd partition ownership so each record has one home leader, and use multi-leader or leaderless only for data that merges cleanly.\""
+  },
+  "thesis": "Single-leader replication is simplest and gives one order of writes, at the cost of a write bottleneck and failover risk. Multi-leader allows writes in several places but requires conflict resolution. Leaderless (quorum) replication tolerates node failures without failover but needs careful quorum and repair design.",
+  "pitch": "Single leader: all writes go to one node, which streams changes to followers. Reads scale with followers, writes are ordered, and conflicts don't exist, but the leader caps write throughput and failover can lose recent writes if replication is asynchronous. Multi-leader: several leaders, often one per region, accept writes and replicate to each other. Local writes are fast and survive a region partition, but two leaders can modify the same record concurrently, so you need conflict handling: last-writer-wins (loses data), custom merge, CRDTs, or avoiding conflicts by giving each record a home leader. Leaderless, as in Dynamo-style stores: clients write to several replicas and read from several, with quorums deciding overlap, read repair and anti-entropy fixing divergence. No failover step, high availability, but subtle consistency behaviour. For most systems I'd choose single leader per partition, with partitioned ownership if regions need local writes.",
+  "points": [
+    {
+      "h": "Single leader: simple ordering",
+      "d": "One write order, easy reasoning, mature tooling. Followers serve reads with replication lag."
+    },
+    {
+      "h": "Single leader: failover risk",
+      "d": "Async replication means a failover can lose the last writes; split brain is possible without fencing. Sync replication avoids loss but adds latency."
+    },
+    {
+      "h": "Multi-leader: local writes",
+      "d": "Useful for multi-region or offline clients. Every concurrent write to the same key is a potential conflict."
+    },
+    {
+      "h": "Conflict resolution options",
+      "d": "Last-writer-wins (simple, lossy), application merge, CRDTs (counters, sets), or avoiding conflicts by routing each key to one leader."
+    },
+    {
+      "h": "Leaderless: quorums",
+      "d": "Write to W of N, read from R of N; W + R > N gives overlap. Hinted handoff and sloppy quorums increase availability but weaken guarantees."
+    },
+    {
+      "h": "Repair mechanisms",
+      "d": "Read repair and background anti-entropy (Merkle trees) bring replicas back in line in leaderless systems."
+    }
+  ],
+  "decision": "Single leader per partition by default. Partitioned home-leader ownership for multi-region writes. Multi-leader with merges for collaborative or offline data. Leaderless for high-availability key-value workloads with commutative or tolerant data.",
+  "numbers": [
+    "Async replication lag of 500 ms at 2,000 writes/s means about 1,000 writes at risk on an unplanned leader failover."
+  ],
+  "pitfalls": [
+    "Multi-leader with last-writer-wins on data where losing a write matters.",
+    "Assuming quorum reads are linearizable.",
+    "Failover without fencing, leaving two leaders.",
+    "Ignoring replication lag in read paths."
+  ],
+  "followups": [
+    {
+      "q": "How do collaborative editors handle multi-leader conflicts?",
+      "a": "Operational transformation or CRDTs, which merge concurrent edits deterministically so all replicas converge."
+    },
+    {
+      "q": "What does W=1, R=1 with N=3 give you?",
+      "a": "Fast reads and writes but no overlap guarantee, so reads can be stale; fine for caches or metrics, not for critical state."
+    },
+    {
+      "q": "How do you make single-leader failover safe?",
+      "a": "A consensus-backed leader election, epochs or fencing on writes, and a stated RPO equal to replication lag."
+    }
+  ],
+  "example": "A global SaaS moved from a multi-leader setup with last-writer-wins, which occasionally lost settings changes, to single-leader-per-tenant with each tenant homed in one region. Cross-region conflicts disappeared, and only users far from their tenant's region saw higher write latency.",
+  "related": [
+    "fail-over-between-two-regions",
+    "reason-about-cap-trade-offs",
+    "raft-paxos-quorums-gossip-appear",
+    "give-users-read-writes-reads"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 5 (Replication)",
+      "url": "https://dataintensive.net/"
+    },
+    {
+      "title": "DeCandia et al.: Dynamo",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  ]
+}

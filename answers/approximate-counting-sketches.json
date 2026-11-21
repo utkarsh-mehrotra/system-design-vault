@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Store every user id in a set and count it\" or \"SELECT COUNT(DISTINCT user_id).\"",
+    "why": "Exact distinct counts and top-K over billions of events need memory proportional to the number of distinct items and are expensive to merge across time ranges. Most product uses tolerate about 1% error.",
+    "probe": "Whether you know probabilistic data structures and when approximation is acceptable.",
+    "say": "\"For dashboards I'd use HyperLogLog for distinct counts and count-min sketch or heavy-hitter algorithms for top-K, with a few KB per counter and around 1% error, and keep exact counts only where money depends on them.\""
+  },
+  "thesis": "When the question is 'about how many' or 'which are the biggest', probabilistic structures give small, mergeable answers with bounded error: HyperLogLog for distinct counts, count-min sketch and heavy-hitter algorithms for frequencies and top-K, Bloom filters for membership. Use exact counting only where correctness matters.",
+  "pitch": "Exact unique counts need to remember every id seen, which at billions of events means huge memory, and combining days means unioning huge sets. HyperLogLog estimates distinct counts using a few kilobytes per counter with a standard error around 1%, and two HLLs can be merged, so daily sketches combine into weekly or monthly counts cheaply. For top-K, a count-min sketch estimates frequencies in fixed memory, possibly overestimating, and algorithms like Space-Saving track heavy hitters directly. Bloom filters answer 'have I seen this before?' with no false negatives and a tunable false-positive rate. I'd ask first whether approximation is acceptable: dashboard unique visitors and trending items, yes; billing, ad spend and payouts, no, or at least reconciled with exact batch counts. Redis, Druid, BigQuery and many warehouses ship these structures built in.",
+  "points": [
+    {
+      "h": "Ask if approximate is acceptable",
+      "d": "Product analytics and trending usually tolerate small errors; billing and payouts don't."
+    },
+    {
+      "h": "HyperLogLog for distinct counts",
+      "d": "Fixed small memory, roughly 1% standard error at typical settings, mergeable across shards and time windows."
+    },
+    {
+      "h": "Count-min sketch for frequencies",
+      "d": "Fixed memory, estimates never undercount, error bounded by width and depth. Good for 'how often' queries."
+    },
+    {
+      "h": "Heavy hitters for top-K",
+      "d": "Space-Saving or count-min plus a heap tracks the most frequent items in bounded memory."
+    },
+    {
+      "h": "Bloom filters for membership",
+      "d": "Check 'seen before?' with no false negatives and configurable false positives; useful for dedupe and avoiding needless lookups."
+    },
+    {
+      "h": "Use built-in implementations",
+      "d": "Redis (PFADD/PFCOUNT), warehouses (APPROX_COUNT_DISTINCT) and stream processors provide these; avoid writing your own."
+    }
+  ],
+  "decision": "Approximate structures for analytics, trending and dedupe at scale; exact counting (often batch, reconciled) for anything financial or contractual.",
+  "numbers": [
+    "Redis HyperLogLog uses at most about 12 KB per key and has a standard error of 0.81%.",
+    "Exact distinct count of 1 billion 8-byte ids needs roughly 8 GB just for the ids, before set overhead."
+  ],
+  "pitfalls": [
+    "Using approximate counts for billing.",
+    "Summing HLL estimates instead of merging sketches, which double-counts overlapping users.",
+    "Bloom filters sized for today's volume, whose false-positive rate climbs as items grow.",
+    "COUNT(DISTINCT) over raw events on every dashboard load."
+  ],
+  "followups": [
+    {
+      "q": "How do you get weekly uniques from daily counts?",
+      "a": "Store a daily HyperLogLog sketch and merge seven of them; adding the daily numbers would double-count returning users."
+    },
+    {
+      "q": "How do you dedupe events with a Bloom filter safely?",
+      "a": "Use it as a fast pre-check; on a possible duplicate, confirm against an exact store if a false positive would drop a real event."
+    },
+    {
+      "q": "When is exact counting still needed in streaming?",
+      "a": "Ad billing, payouts and quotas. Count exactly in a batch or with idempotent keyed aggregates and reconcile with the streaming estimate."
+    }
+  ],
+  "example": "A content platform replaced per-article exact unique-reader sets (tens of GB in Redis) with per-article daily HyperLogLogs (about 12 KB each). Monthly uniques are now a merge of 30 sketches, accurate within about 1%, and memory fell by over 99%.",
+  "related": [
+    "view-counting-trending",
+    "ad-event-counting-attribution",
+    "boundary-between-oltp-olap-data"
+  ],
+  "sources": [
+    {
+      "title": "Redis documentation: HyperLogLog",
+      "url": "https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglogs/"
+    },
+    {
+      "title": "Flajolet et al.: HyperLogLog (2007)",
+      "url": "https://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf"
+    }
+  ]
+}

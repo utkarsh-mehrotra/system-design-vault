@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Store latitude and longitude, add an index on each, and compute distance for every row.\"",
+    "why": "Separate indexes on lat and lng don't answer 'near' efficiently, and computing distance to every row doesn't scale. Spatial indexing (geohash, quadtree, S2/H3, R-tree) narrows candidates first.",
+    "probe": "Whether you know spatial indexes, cell edge effects, and how to handle fast-moving points.",
+    "say": "\"I'd index by spatial cells (geohash, S2 or H3), query the target cell plus its neighbours, then compute exact distances on that small candidate set; for moving drivers, keep locations in memory keyed by cell.\""
+  },
+  "thesis": "Spatial queries need a spatial index that groups nearby points: geohash prefixes, quadtrees, Google S2 or Uber H3 cells, or R-trees (PostGIS). Query the relevant cells and neighbours to get candidates, then rank by exact distance. Fast-moving points need an in-memory, frequently updated index.",
+  "pitch": "Latitude and longitude indexes separately give you a band, not a circle, so the database still scans lots of rows. Spatial indexes map 2D locations into cells. Geohash encodes a location as a string where a shared prefix means nearby, so a prefix range query finds candidates; but two close points can sit on opposite sides of a cell boundary, so you always search neighbouring cells too. S2 and H3 provide hierarchical cells with better shape properties; H3's hexagons have uniform neighbours, which suits ride-hailing and delivery. For static data like stores, PostGIS with an R-tree (GiST) index handles 'within radius' and 'nearest' queries well. For moving drivers updating every few seconds, I'd keep current locations in memory, such as Redis GEO commands or a sharded in-memory index keyed by cell, rather than writing every update to a disk-based database.",
+  "points": [
+    {
+      "h": "Why plain indexes fail",
+      "d": "Two B-tree indexes can't efficiently answer a 2D proximity query; you end up scanning a large band and computing distance per row."
+    },
+    {
+      "h": "Cell-based indexes",
+      "d": "Geohash, S2 and H3 map points to cells at chosen resolutions. Nearby points mostly share cells or prefixes."
+    },
+    {
+      "h": "Search neighbours too",
+      "d": "Points near a cell edge have nearest neighbours in adjacent cells. Query the cell plus surrounding cells, then filter by exact distance."
+    },
+    {
+      "h": "Tree-based indexes",
+      "d": "R-trees (PostGIS GiST) and quadtrees index shapes and points directly; good for static or slowly changing data and complex geometry."
+    },
+    {
+      "h": "Choose resolution by density",
+      "d": "Dense cities need finer cells; rural areas need coarser cells or expanding-ring searches until enough candidates are found."
+    },
+    {
+      "h": "Moving points in memory",
+      "d": "Frequent location updates belong in an in-memory index (Redis GEO, custom sharded grid), with periodic persistence for history."
+    }
+  ],
+  "decision": "Static places: PostGIS or a search engine with geo support. High-frequency moving objects: in-memory cell index (H3 or geohash) sharded by region. Always query neighbours and refine with exact distance.",
+  "numbers": [
+    "Driver updates: 500,000 active drivers updating every 4 seconds is 125,000 writes/s, too many for a typical relational primary but fine for a sharded in-memory index.",
+    "Geohash precision: 6 characters is roughly a 1.2 km × 0.6 km cell; 7 characters roughly 150 m."
+  ],
+  "pitfalls": [
+    "Searching only the user's own cell and missing closer points across the boundary.",
+    "Using one cell size for dense cities and empty regions.",
+    "Writing every location ping to the main database.",
+    "Forgetting that longitude distance shrinks toward the poles when doing naive math."
+  ],
+  "followups": [
+    {
+      "q": "How do you find the K nearest when nearby cells are empty?",
+      "a": "Expanding-ring search: widen to neighbouring rings of cells until you have at least K candidates, then rank."
+    },
+    {
+      "q": "Why hexagons (H3) rather than squares?",
+      "a": "Each hexagon has six equidistant neighbours, which makes distance-based ring searches and aggregation more uniform."
+    },
+    {
+      "q": "How do you shard a geospatial index?",
+      "a": "By coarse region or cell prefix, with hot cities split further; keep queries near borders able to hit adjacent shards."
+    }
+  ],
+  "example": "A delivery app keeps courier locations in Redis keyed by H3 cells at resolution 8 and queries the order's cell plus one ring of neighbours, ranking about 50 candidates by road-network ETA. Store locations live in PostGIS for radius searches.",
+  "related": [
+    "driver-location-updates-scale",
+    "dispatch-matching-shortage",
+    "shard-data-user-tenant-region"
+  ],
+  "sources": [
+    {
+      "title": "Uber H3: Hexagonal hierarchical spatial index",
+      "url": "https://h3geo.org/"
+    },
+    {
+      "title": "Redis documentation: Geospatial",
+      "url": "https://redis.io/docs/latest/develop/data-types/geospatial/"
+    }
+  ]
+}

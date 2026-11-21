@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Each write gets a timestamp; the latest one wins.\"",
+    "why": "Clocks on different machines drift and jump. Last-writer-wins by wall-clock time can let an earlier write overwrite a later one and silently discard data.",
+    "probe": "Clock skew, logical clocks, and when you need a single sequencer instead.",
+    "say": "\"Wall clocks are fine for display and rough ordering, not for correctness. For ordering I'd use a single sequencer per key or logical clocks; for conflicts, version vectors or merge rules rather than last-writer-wins.\""
+  },
+  "thesis": "Physical clocks across machines are never perfectly in sync, so timestamps can't be trusted to order events or decide which write is newer. Use a single source of order (a sequencer or leader per key), logical clocks (Lamport, vector or hybrid logical clocks), or merges that don't depend on time.",
+  "pitch": "NTP keeps clocks close, typically within milliseconds, but not exact, and clocks can jump when corrected or during leap seconds and VM pauses. So two events 2 ms apart on different machines can be stamped in the wrong order, and last-writer-wins will keep the wrong one, silently. For ordering events per entity, I'd route writes through one owner, a leader or partition, that assigns sequence numbers. For causality across nodes, Lamport clocks give an order consistent with causality, and vector clocks detect truly concurrent updates so you can merge them. Hybrid logical clocks combine physical time with a logical counter, used by databases like CockroachDB. Spanner uses tightly bounded clock uncertainty with specialised hardware and waits out the uncertainty, which isn't something to assume in ordinary infrastructure. Timestamps remain useful for display, TTLs and rough analytics, just not for deciding which write wins.",
+  "points": [
+    {
+      "h": "Clock skew and jumps are normal",
+      "d": "NTP-synchronised clocks still differ by milliseconds or more, and can step backwards on correction. Monotonic clocks help within one machine only."
+    },
+    {
+      "h": "Last-writer-wins loses data",
+      "d": "If timestamps are wrong, LWW keeps the older value. Even with correct clocks, LWW discards concurrent updates rather than merging them."
+    },
+    {
+      "h": "Single sequencer per key",
+      "d": "The simplest correct ordering: one leader or partition owner assigns increasing sequence numbers for its keys."
+    },
+    {
+      "h": "Lamport and vector clocks",
+      "d": "Lamport clocks order events consistently with causality; vector clocks also reveal concurrency so conflicts can be detected and merged."
+    },
+    {
+      "h": "Hybrid logical clocks",
+      "d": "Combine physical time with a logical counter to stay close to wall time while preserving causality; common in distributed databases."
+    },
+    {
+      "h": "Where timestamps are fine",
+      "d": "Display, approximate analytics, TTLs and log correlation, with awareness of skew."
+    }
+  ],
+  "decision": "Order per entity through a single owner. Detect concurrency with version vectors where multiple writers exist. Use LWW only for data where losing a concurrent update is acceptable (caches, presence, last-seen).",
+  "numbers": [
+    "Typical NTP sync within a data centre is around a millisecond or better; across the internet it's often tens of milliseconds, and much worse during faults."
+  ],
+  "pitfalls": [
+    "Sorting events from many services by their local timestamps and treating it as truth.",
+    "LWW in multi-region replication for important data.",
+    "Using wall time for lease expiry across machines.",
+    "Assuming cloud clocks never jump."
+  ],
+  "followups": [
+    {
+      "q": "How does Spanner get away with timestamps?",
+      "a": "TrueTime exposes bounded uncertainty using GPS and atomic clocks, and commits wait out that uncertainty. Without such bounds, the approach isn't safe."
+    },
+    {
+      "q": "How do you order events from many producers into one stream?",
+      "a": "Assign order at a single point (the broker partition or a sequencer), or carry per-producer sequence numbers and accept only partial order."
+    },
+    {
+      "q": "When is LWW acceptable?",
+      "a": "When the data is a cache or 'latest status' where losing a concurrent update is harmless, like presence or last-seen time."
+    }
+  ],
+  "example": "A multi-region profile store used LWW by server timestamp. A clock 300 ms fast in one region caused older updates from there to overwrite newer ones from another. Moving to a home-region writer per user eliminated the conflicts.",
+  "related": [
+    "replication-topologies",
+    "keep-ordering-also-need-parallelism",
+    "generate-unique-ids-across-regions",
+    "reason-about-cap-trade-offs"
+  ],
+  "sources": [
+    {
+      "title": "Leslie Lamport: Time, clocks, and the ordering of events in a distributed system",
+      "url": "https://lamport.azurewebsites.net/pubs/time-clocks.pdf"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 8 (unreliable clocks)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

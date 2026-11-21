@@ -1,0 +1,76 @@
+{
+  "trap": {
+    "wrong": "\"Just add an index on email.\"",
+    "why": "In a sharded store, a local index on each shard still means asking every shard (scatter-gather). A global index has to be maintained across shards, usually asynchronously.",
+    "probe": "Local (document-partitioned) vs global (term-partitioned) indexes and their read/write trade-offs.",
+    "say": "\"Local indexes make writes cheap but reads scatter to every shard; a global index partitioned by the indexed value makes reads single-shard but writes touch two places, usually updated asynchronously.\""
+  },
+  "thesis": "Secondary indexes in a sharded system are either local to each shard (cheap writes, scatter-gather reads) or global and partitioned by the indexed value (single-shard reads, cross-shard writes that are typically asynchronous). Choose by query frequency and how fresh the index must be.",
+  "pitch": "Sharding by user id makes lookups by user id single-shard, but a lookup by email doesn't know which shard to ask. With local indexes, each shard indexes its own rows; a query by email goes to every shard and merges results. Writes stay local and consistent, but reads cost N shard requests and tail latency is the slowest shard. With a global index, the index itself is partitioned by email, so a lookup goes to one index shard and then to the data shard. Reads are cheap, but every write updates both the data shard and an index shard, often on different machines, so it's either a distributed transaction or, more commonly, an asynchronous update with a short window where the index is stale. For uniqueness, like 'emails must be unique', you need a global index that's updated synchronously or a dedicated uniqueness service. Low-cardinality fields like status are poor index keys and better served by a search or analytics store.",
+  "points": [
+    {
+      "h": "Local (document-partitioned) indexes",
+      "d": "Each shard indexes its own data. Writes are simple; reads by the indexed field scatter to all shards."
+    },
+    {
+      "h": "Global (term-partitioned) indexes",
+      "d": "The index is sharded by the indexed value. Reads hit one index shard; writes update data and index shards separately."
+    },
+    {
+      "h": "Global index freshness",
+      "d": "Most systems update global indexes asynchronously (for example DynamoDB global secondary indexes are eventually consistent), so reads may miss recent writes."
+    },
+    {
+      "h": "Uniqueness needs a global decision",
+      "d": "Unique emails or usernames require a single place that decides: a synchronously maintained global index or a lookup table keyed by the unique value."
+    },
+    {
+      "h": "Low-cardinality fields",
+      "d": "Indexing 'status' creates huge, hot index partitions. Use a search engine, materialised views or the warehouse for such queries."
+    },
+    {
+      "h": "Lookup tables as a pattern",
+      "d": "A separate table keyed by email storing the user id (and shard) is a simple, explicit global index."
+    }
+  ],
+  "decision": "Rare queries: local indexes and scatter-gather. Frequent lookups by a secondary key: a global index or lookup table, accepting async staleness unless uniqueness requires synchronous updates. Analytical or low-cardinality filters: a search or analytics store.",
+  "numbers": [
+    "Scatter-gather cost: a query to 64 shards whose individual p99 is 20 ms has a much higher chance of hitting at least one slow shard, so overall p99 can be several times worse than a single-shard read."
+  ],
+  "pitfalls": [
+    "Assuming a global secondary index is immediately consistent.",
+    "Scatter-gather queries on hot paths.",
+    "Enforcing uniqueness with an async index, allowing duplicates in the gap.",
+    "Indexing low-cardinality fields and creating hot partitions."
+  ],
+  "followups": [
+    {
+      "q": "How do you enforce unique emails across shards?",
+      "a": "A lookup table keyed by email with a conditional insert as part of signup, before or together with creating the user record."
+    },
+    {
+      "q": "How do you handle the staleness of an async global index?",
+      "a": "Read-your-writes handling for the writer (look up by primary key after a write), and design flows so the index is used for discovery, not for decisions needing fresh data."
+    },
+    {
+      "q": "When is scatter-gather fine?",
+      "a": "Low query volume, few shards, or admin and background queries where latency matters less."
+    }
+  ],
+  "example": "A marketplace sharded orders by buyer id. Seller dashboards needed orders by seller, so the team added a seller-to-order lookup table maintained by CDC with seconds of lag, and served status-based filters from a search index instead of database indexes.",
+  "related": [
+    "pick-partition-key-multi-tenant",
+    "shard-data-user-tenant-region",
+    "decide-between-sql-nosql-search"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (partitioning and secondary indexes)",
+      "url": "https://dataintensive.net/"
+    },
+    {
+      "title": "AWS DynamoDB: Using global secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html"
+    }
+  ]
+}

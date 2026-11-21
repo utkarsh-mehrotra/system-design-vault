@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Event source everything so we have a full audit trail and can replay.\"",
+    "why": "Event sourcing makes schema evolution, querying, privacy deletion and debugging much harder. An audit log or CDC gives most of the audit benefit at a fraction of the cost.",
+    "probe": "Whether you can weigh the real costs: event versioning, projections, eventual consistency, GDPR, team skill.",
+    "say": "\"I'd use event sourcing only where the history itself is the domain (ledgers, workflows needing temporal queries); elsewhere, current-state storage plus an audit log or CDC gives auditability without the complexity.\""
+  },
+  "thesis": "Event sourcing stores state as an append-only sequence of domain events and derives current state by replay; CQRS separates write models from read models. Together they fit domains where history is central. Applied broadly, they add heavy costs in versioning, projections, consistency and data deletion.",
+  "pitch": "Event sourcing earns its keep when the history is the product: ledgers, case management, workflows where you need 'what did we know on date X', or systems built around auditability and temporal queries. CQRS is useful when read and write shapes differ a lot, so you build read projections optimised for queries. The costs are real. Events are a permanent schema: you can't change old events, so you need upcasting and versioning forever. Every query needs a projection, projections lag the write side, and rebuilding them from years of events takes time. Deleting personal data from an immutable log needs crypto-shredding or careful design. Debugging means understanding event streams, not rows. And teams new to it often model CRUD updates as events, getting all the cost and none of the benefit. For most services I'd keep current-state tables with an audit table or CDC stream, and reach for event sourcing only in the parts of the domain where it clearly pays.",
+  "points": [
+    {
+      "h": "Where it fits",
+      "d": "Financial ledgers, order or case lifecycles with rich state transitions, systems needing temporal queries and full replay."
+    },
+    {
+      "h": "Events are a permanent contract",
+      "d": "Old events can't be changed; versioning, upcasting and tolerant readers are needed for the life of the system."
+    },
+    {
+      "h": "Projections and lag",
+      "d": "Reads come from projections built asynchronously. Users may not see their own writes immediately unless you design for it."
+    },
+    {
+      "h": "Rebuild cost",
+      "d": "Replaying years of events to rebuild a projection can take hours; snapshots help but add complexity."
+    },
+    {
+      "h": "Privacy and deletion",
+      "d": "Immutable logs conflict with erasure; keep personal data out of events or encrypt it per subject and destroy keys."
+    },
+    {
+      "h": "CQRS without event sourcing",
+      "d": "Separate read models (via CDC or outbox) give most query benefits while keeping a normal current-state write model."
+    },
+    {
+      "h": "Cheaper alternatives for audit",
+      "d": "Audit tables, CDC streams, or temporal tables in the database capture history without making it the source of truth."
+    }
+  ],
+  "decision": "Event sourcing for the specific aggregates where history and temporal reasoning are core. CQRS read models where query shapes diverge. Current state plus audit log or CDC everywhere else.",
+  "numbers": [
+    "Replay time grows with history: an aggregate type with 2 billion events replayed at 50,000 events/s takes about 11 hours to rebuild a projection without snapshots."
+  ],
+  "pitfalls": [
+    "Modelling CRUD as 'FieldUpdated' events.",
+    "No versioning strategy for event schemas.",
+    "Personal data stored in immutable events.",
+    "Every service event-sourced by default, multiplying complexity."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a user reading their own write with CQRS?",
+      "a": "Return the result from the write side, wait for the projection to reach the event's position, or read that aggregate directly from the event store."
+    },
+    {
+      "q": "How do you change the meaning of an old event?",
+      "a": "You don't; add a new event type and upcast old ones into the new shape when reading, keeping both readable."
+    },
+    {
+      "q": "Is an outbox the same as event sourcing?",
+      "a": "No. An outbox publishes events about state changes; the source of truth is still the current-state tables."
+    }
+  ],
+  "example": "A lending platform event-sourced only its loan servicing aggregate, where regulators ask what balance and interest were on a given date. Origination, customer profiles and documents stayed as normal tables with CDC into the warehouse, keeping most teams away from event-sourcing complexity.",
+  "related": [
+    "design-outbox-inbox-pattern-reliable",
+    "double-entry-ledger-design",
+    "evolve-event-schema-breaking-consumers",
+    "design-retention-soft-delete-legal"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Event sourcing",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    },
+    {
+      "title": "Martin Fowler: CQRS",
+      "url": "https://martinfowler.com/bliki/CQRS.html"
+    }
+  ]
+}

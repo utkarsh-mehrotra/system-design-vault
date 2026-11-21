@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"The client uploads the file to our API server, which writes it to S3.\"",
+    "why": "Proxying gigabytes through app servers ties up connections, memory and bandwidth, and a dropped connection restarts the whole upload.",
+    "probe": "Direct-to-storage uploads with presigned URLs, multipart and resumability, and post-upload processing.",
+    "say": "\"The API issues presigned multipart URLs; the client uploads parts directly to object storage, retries failed parts, completes the upload, and a storage event triggers async validation and processing.\""
+  },
+  "thesis": "Keep large bytes off your application servers. Clients upload directly to object storage using short-lived presigned URLs, in parts that can be retried and resumed, and your system tracks the upload as a resource with states, processing it asynchronously once complete.",
+  "pitch": "I'd model an upload as a resource. The client asks the API to start an upload with the file name, size and type; the API checks permissions and quotas, creates an upload record, starts a multipart upload in object storage, and returns presigned URLs for each part, valid for a short time. The client uploads parts in parallel directly to storage, retrying only failed parts, and can resume later by asking which parts are done. When all parts are uploaded, the client calls complete, storage assembles the object, and an event triggers processing: virus scanning, type validation, thumbnails or transcoding. Only after validation does the file become visible. I'd add a lifecycle rule to abort incomplete multipart uploads after a day or two, and enforce size limits and content types in the presigned policy so clients can't upload arbitrary data.",
+  "points": [
+    {
+      "h": "Direct-to-storage with presigned URLs",
+      "d": "App servers handle only metadata and authorisation; the bytes go straight to object storage, which scales for this."
+    },
+    {
+      "h": "Multipart uploads",
+      "d": "Split into parts (S3 allows parts from 5 MB, up to 10,000 parts per upload), upload in parallel, retry individual parts on failure."
+    },
+    {
+      "h": "Resumability",
+      "d": "Track completed parts (from storage or your upload record) so clients can resume after closing the app or losing connectivity."
+    },
+    {
+      "h": "Upload as a resource with states",
+      "d": "initiated, uploading, uploaded, processing, ready, rejected. The client and UI follow these states."
+    },
+    {
+      "h": "Validate after upload",
+      "d": "Scan for malware, check actual content type and size, and quarantine until checks pass."
+    },
+    {
+      "h": "Constrain what can be uploaded",
+      "d": "Presigned policies with content-length ranges and content types, per-user quotas, and short URL expiry."
+    },
+    {
+      "h": "Clean up",
+      "d": "Lifecycle rules to abort incomplete multipart uploads and delete rejected files."
+    }
+  ],
+  "decision": "Presigned multipart uploads for anything beyond a few megabytes; single presigned PUT for small files; never proxy large files through application servers unless you must transform them in-stream.",
+  "numbers": [
+    "A 5 GB file in 100 MB parts is 50 parts; a dropped connection costs at most one part (100 MB) of re-upload instead of the whole file.",
+    "S3 multipart limits: part size from 5 MB (except the last), up to 10,000 parts, objects up to 5 TB."
+  ],
+  "pitfalls": [
+    "Streaming uploads through the API tier.",
+    "Long-lived presigned URLs that can be shared or abused.",
+    "Making files visible before scanning.",
+    "Never cleaning up incomplete multipart uploads, which keep costing storage."
+  ],
+  "followups": [
+    {
+      "q": "How do you prevent someone uploading a 50 GB file when you allowed 2 GB?",
+      "a": "Set the expected size at initiation, issue a fixed number of parts with size constraints, and verify the final object size before accepting it."
+    },
+    {
+      "q": "How do you handle uploads from browsers?",
+      "a": "CORS configuration on the bucket for your origin, presigned URLs per part, and a client library that manages parallelism and retries."
+    },
+    {
+      "q": "How do you dedupe identical files?",
+      "a": "Compute a content hash client-side or after upload and reference existing objects, being careful about privacy across users."
+    }
+  ],
+  "example": "A document platform replaced API-proxied uploads with presigned multipart uploads. Upload failures on mobile fell sharply because retries were per 16 MB part, and API server memory spikes disappeared. A storage event queue drives scanning and OCR.",
+  "related": [
+    "track-status-long-running-jobs",
+    "video-transcoding-pipeline",
+    "should-cache-client-edge-service"
+  ],
+  "sources": [
+    {
+      "title": "AWS S3: Uploading and copying objects using multipart upload",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+    },
+    {
+      "title": "AWS S3: Sharing objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html"
+    }
+  ]
+}

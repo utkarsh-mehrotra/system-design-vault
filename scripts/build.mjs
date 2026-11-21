@@ -44,7 +44,7 @@ for (const f of existsSync(ansDir) ? readdirSync(ansDir).filter((f) => f.endsWit
   if (!isStr(a.decision)) e("decision required");
   if (!Array.isArray(a.pitfalls) || a.pitfalls.length < 2) e("pitfalls: at least 2");
   if (!Array.isArray(a.followups) || a.followups.length < 2 || a.followups.some((x) => !isStr(x.q) || !isStr(x.a))) e("followups: at least 2 {q, a}");
-  for (const r of a.related || []) if (!byId.has(r)) e(`related id not found: ${r}`);
+  for (const r of a.related || []) if (!byId.has(r)) (process.env.STRICT === "0" ? (m) => warnings.push(`${id}: ${m}`) : e)(`related id not found: ${r}`);
   for (const s of a.sources || []) if (!isStr(s.title) || !/^https:\/\//.test(s.url || "")) e(`bad source: ${JSON.stringify(s)}`);
   if (["scale", "data"].includes(q.cat) && !(a.numbers || []).length) warnings.push(`${id}: no numbers (expected for ${q.cat})`);
   if (a.deepDive && (!isStr(a.deepDive.title) || !Array.isArray(a.deepDive.steps))) e("deepDive: {title, steps:[{h,d}]}");

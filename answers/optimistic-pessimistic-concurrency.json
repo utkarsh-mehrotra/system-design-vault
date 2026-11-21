@@ -1,0 +1,76 @@
+{
+  "trap": {
+    "wrong": "\"Optimistic locking is always better because it doesn't block.\"",
+    "why": "Under high contention optimistic control turns into a retry storm: most writers fail and redo work. Pessimistic locking is the right tool for hot rows.",
+    "probe": "Matching the strategy to conflict rate and understanding the failure mode of each.",
+    "say": "\"Optimistic when conflicts are rare and retries are cheap; pessimistic when the same rows are contended or a retry is expensive or user-visible.\""
+  },
+  "thesis": "Optimistic control lets everyone proceed and detects conflicts at write time (a version check); pessimistic control locks first so conflicts can't happen. Choose by conflict rate, cost of retrying, and how long the critical section is.",
+  "pitch": "With optimistic concurrency, each row carries a version. You read it, do your work, and write with WHERE version = :seen; if zero rows change, someone else won and you retry or report a conflict. No locks are held, which suits web apps where users edit different records and conflicts are rare, and it works across requests, for example an edit form submitted minutes later. With pessimistic concurrency, you lock the row (SELECT FOR UPDATE) before reading and hold it until commit, so others wait. That suits hot rows such as an inventory counter or a ticket allocation, where optimistic retries would mostly fail. The failure modes differ: optimistic degrades into retry storms under contention; pessimistic risks lock waits, deadlocks and long-held locks if the transaction does slow work. I'd also consider avoiding the question entirely with atomic updates or queuing writes per key.",
+  "points": [
+    {
+      "h": "Optimistic: version check on write",
+      "d": "Read version, write with a version predicate, check affected rows. Conflicts surface as a retry or a 409 to the user."
+    },
+    {
+      "h": "Good for long, user-driven edits",
+      "d": "Locks can't be held across HTTP requests, so ETags and If-Match headers are the standard optimistic pattern for APIs."
+    },
+    {
+      "h": "Pessimistic: lock then act",
+      "d": "SELECT FOR UPDATE (or advisory locks) serialises access to the row for the transaction's duration."
+    },
+    {
+      "h": "Good for hot, short critical sections",
+      "d": "Counters, allocations and balances under contention. Keep the transaction short and never call external services while holding the lock."
+    },
+    {
+      "h": "Deadlocks and lock ordering",
+      "d": "Lock rows in a consistent order (for example by id) and set lock timeouts so deadlocks resolve quickly."
+    },
+    {
+      "h": "Sometimes avoid both",
+      "d": "Atomic single-statement updates, append-only designs, or a single writer per key remove the conflict instead of managing it."
+    }
+  ],
+  "decision": "Optimistic for low-contention edits and API resources (ETags). Pessimistic for short, contended critical sections. Atomic updates or per-key serialisation when the operation allows it.",
+  "numbers": [
+    "Rule of thumb: if more than a few percent of optimistic writes conflict, retries waste significant work and pessimistic locking or per-key queuing is usually better."
+  ],
+  "pitfalls": [
+    "Optimistic retries on a hot row, where nearly every attempt fails.",
+    "Holding row locks during network calls.",
+    "Inconsistent lock ordering causing deadlocks.",
+    "Forgetting to check the affected row count, so version conflicts are silently ignored."
+  ],
+  "followups": [
+    {
+      "q": "How do you implement optimistic concurrency in a REST API?",
+      "a": "Return an ETag with the resource; clients send If-Match on update; the server returns 412 Precondition Failed if the version changed."
+    },
+    {
+      "q": "A pessimistic lock is held while calling a payment provider. Problem?",
+      "a": "Yes: provider latency becomes lock time and blocks other writers. Record intent, release the lock, call the provider, then finalise with a state machine."
+    },
+    {
+      "q": "How do you detect too much contention?",
+      "a": "Track version-conflict rates, lock wait time and deadlock counts per table or endpoint."
+    }
+  ],
+  "example": "A CMS used optimistic versioning for article edits, showing editors a 'someone else saved first' merge screen. The seat-allocation service for events switched from optimistic to SELECT FOR UPDATE on the seat row after retries reached 60% during popular sales.",
+  "related": [
+    "isolation-levels-anomalies",
+    "flash-sale-never-oversell",
+    "distributed-locks-fencing"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Optimistic offline lock",
+      "url": "https://martinfowler.com/eaaCatalog/optimisticOfflineLock.html"
+    },
+    {
+      "title": "MDN: If-Match header",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Match"
+    }
+  ]
+}

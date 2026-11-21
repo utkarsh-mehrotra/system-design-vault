@@ -1,0 +1,82 @@
+{
+  "trap": {
+    "wrong": "\"Check stock, then decrement it\" (or \"cache the stock count in Redis and decrement it\").",
+    "why": "Check-then-act races oversell under concurrency, and a cache-only counter can lose decrements on failover or drift from the database.",
+    "probe": "Atomic reservation, a single source of truth for stock, reservation expiry, and protecting the system from the spike.",
+    "say": "\"Stock is decremented atomically with a conditional update or token-based reservation, reservations expire if unpaid, and a queue or waiting room in front keeps the spike from overwhelming the database.\""
+  },
+  "thesis": "Overselling is a concurrency bug; the spike is a load problem. Solve the first with atomic reservations against a single source of truth with expiring holds, and the second with admission control, a waiting room, and moving the hot counter off the main database path.",
+  "pitch": "Correctness first: the decrement must be atomic, for example UPDATE inventory SET available = available - 1 WHERE sku = :sku AND available > 0, checking the affected rows, or pre-generating 1,000 reservation tokens and letting each buyer claim one atomically. A successful claim creates a time-limited hold; if payment doesn't complete in, say, 10 minutes, the hold expires and the unit returns to stock. Load second: 500,000 people hitting one row will serialise on that row and overload everything around it. So I'd put a waiting room or queue in front to admit buyers at a rate the system handles, shard the counter into buckets (for example 10 buckets of 100 units) or keep the counter in an atomic in-memory store with durable logging, and serve the product page from cache. Orders are confirmed only when payment completes, and a reconciliation job checks holds, orders and stock agree.",
+  "points": [
+    {
+      "h": "Atomic decrement or token claim",
+      "d": "A conditional update on the stock row, or claiming one of N pre-created tokens, so two buyers can never take the same unit."
+    },
+    {
+      "h": "Holds with expiry",
+      "d": "Reserve on 'buy', confirm on payment, release on timeout. Without expiry, abandoned carts lock stock forever."
+    },
+    {
+      "h": "Single source of truth",
+      "d": "One authoritative stock record or token pool. Caches may display availability but never decide it."
+    },
+    {
+      "h": "Waiting room and admission control",
+      "d": "Admit users at a controlled rate, give them a queue position, and reject or defer the rest gracefully."
+    },
+    {
+      "h": "Shard the hot counter",
+      "d": "Split stock across N buckets so updates spread across rows or keys; a buyer tries a random bucket, then others."
+    },
+    {
+      "h": "Protect everything else",
+      "d": "Cache the product page, isolate the sale path from regular traffic, and rate-limit per user and per device."
+    },
+    {
+      "h": "Reconcile",
+      "d": "Compare holds, orders and stock after the sale to catch bugs, and fix with clear customer communication."
+    }
+  ],
+  "decision": "Atomic reservation with expiring holds for correctness, always. Add waiting rooms and counter sharding as scale requires. Deliberate overselling (with compensation) is a business decision, not an accident.",
+  "numbers": [
+    "A single hot row taking 2 ms per update serialises to about 500 updates per second; 10 buckets raise the ceiling to roughly 5,000 per second.",
+    "1,000 units with a 10-minute payment hold: if 30% abandon, those units return to stock within 10 minutes."
+  ],
+  "pitfalls": [
+    "Check-then-decrement in application code.",
+    "Redis-only counters with no durable record or reconciliation.",
+    "Holds that never expire.",
+    "Letting the spike hit the main database and taking down unrelated features."
+  ],
+  "followups": [
+    {
+      "q": "How do you make the waiting room fair?",
+      "a": "Randomise positions among users who arrived before the start, then serve in order; tie queue tokens to verified accounts to stop bots."
+    },
+    {
+      "q": "What if payment succeeds just after the hold expired and the unit was resold?",
+      "a": "Detect it at confirmation (hold no longer valid), refund automatically, and notify the customer; keep a small buffer if the business prefers to honour such orders."
+    },
+    {
+      "q": "How do you handle bots?",
+      "a": "Per-account and per-device limits, bot detection, verified accounts for the sale, and purchase limits per customer."
+    }
+  ],
+  "example": "A sneaker drop pre-created 2,000 reservation tokens in a sharded table. A waiting room admitted 3,000 users per minute; each claimed a token atomically and had 8 minutes to pay. The sale sold out in 14 minutes with zero oversells, and unpaid holds returned 240 units to the pool.",
+  "related": [
+    "isolation-levels-anomalies",
+    "optimistic-pessimistic-concurrency",
+    "design-admission-control-service-stays",
+    "booking-holds-no-double"
+  ],
+  "sources": [
+    {
+      "title": "PostgreSQL documentation: UPDATE",
+      "url": "https://www.postgresql.org/docs/current/sql-update.html"
+    },
+    {
+      "title": "AWS Builders' Library: Using load shedding to avoid overload",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  ]
+}

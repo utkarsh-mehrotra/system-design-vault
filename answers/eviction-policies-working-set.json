@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Use LRU and make the cache as big as we can afford.\"",
+    "why": "LRU can be flushed by one-off scans, LFU suits stable popularity, and size should come from the working set and the hit-ratio curve, not from budget.",
+    "probe": "Working set analysis, eviction trade-offs, and what eviction metrics tell you.",
+    "say": "\"I size from the working set and the hit-ratio curve from access logs, pick LRU for recency-driven access or LFU when popularity is stable, and watch eviction rate against hit ratio to see if the cache is too small or caching the wrong things.\""
+  },
+  "thesis": "Size a cache to hold the working set (the keys reused within their useful lifetime), using the hit-ratio curve to find diminishing returns. Choose eviction by access pattern: LRU for recency, LFU for stable popularity, TTL for freshness, and protect against scans polluting the cache.",
+  "pitch": "The working set is the set of keys that get reused before they'd expire anyway. I'd estimate it from access logs: replay them through cache simulations at different sizes and plot hit ratio against size. The curve usually flattens, and the knee is the economic size. Eviction policy depends on access shape. LRU evicts the least recently used key, good for recency-driven workloads like sessions and recently viewed items, but a big batch job scanning many keys once can push out the hot set. LFU evicts the least frequently used, good when popularity is stable, like a product catalogue, but slow to adapt when popularity shifts. Modern approximations, like Redis's approximated LRU and LFU with decay, or TinyLFU-style admission in Caffeine, handle both better. TTLs bound staleness regardless of eviction. Then monitor: high eviction plus low hit ratio means too small or wrong things cached; low evictions and a flat hit ratio mean you may be oversized.",
+  "points": [
+    {
+      "h": "Working set, not total data",
+      "d": "Only keys reused within their TTL matter. A billion items with a 5% hot set needs a cache sized for the hot set."
+    },
+    {
+      "h": "Hit-ratio curve",
+      "d": "Simulate cache sizes against real access logs; choose the size where extra memory adds little hit ratio."
+    },
+    {
+      "h": "LRU",
+      "d": "Recency-based; simple and good for most workloads; vulnerable to large one-time scans."
+    },
+    {
+      "h": "LFU",
+      "d": "Frequency-based; keeps consistently popular items; needs decay so old popularity doesn't stick forever."
+    },
+    {
+      "h": "Admission policies",
+      "d": "Only admit items likely to be reused (TinyLFU, second-hit admission) to keep scans from polluting the cache."
+    },
+    {
+      "h": "TTL is orthogonal",
+      "d": "TTL controls staleness; eviction controls memory pressure. Most caches need both."
+    },
+    {
+      "h": "Watch the right metrics",
+      "d": "Hit ratio by key class, eviction rate, memory usage, and object size distribution."
+    }
+  ],
+  "decision": "Start with LRU or an approximate LRU/LFU hybrid; switch to LFU or add admission control if scans or a stable popular set dominate. Size from the hit-ratio curve, revisited as traffic changes.",
+  "numbers": [
+    "Example: 200 million product keys, but 90% of reads hit 4 million of them. At 2 KB each, 8 GB holds the hot set; doubling to 16 GB might add only a couple of percentage points of hit ratio."
+  ],
+  "pitfalls": [
+    "Sizing by budget rather than working set.",
+    "LRU caches flushed by nightly batch jobs reading every key.",
+    "Ignoring object size, so a few large values evict many small hot ones.",
+    "No eviction metrics, so problems look like random latency spikes."
+  ],
+  "followups": [
+    {
+      "q": "A nightly export job tanks the morning hit ratio. Why?",
+      "a": "It scans many cold keys and LRU evicts the hot set. Bypass the cache for batch reads or use an admission policy."
+    },
+    {
+      "q": "How does Redis evict?",
+      "a": "Configurable maxmemory policies (allkeys-lru, allkeys-lfu, volatile-ttl and others), using approximations by sampling keys."
+    },
+    {
+      "q": "How do you handle very uneven object sizes?",
+      "a": "Separate caches or namespaces for large objects, size caps, or size-aware eviction."
+    }
+  ],
+  "example": "A recommendations cache sized at 64 GB had a 71% hit ratio. Replaying a week of logs showed the hot set fitted in 24 GB; switching to allkeys-lfu and bypassing the cache for batch scoring raised the hit ratio to 88% at 32 GB.",
+  "related": [
+    "measure-whether-cache-actually-helping",
+    "caching-story-hot-keys-large",
+    "design-cache-invalidation-rules-not",
+    "redis-down-fail-open"
+  ],
+  "sources": [
+    {
+      "title": "Redis documentation: Key eviction",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    },
+    {
+      "title": "Einziger, Friedman, Manes: TinyLFU, a highly efficient cache admission policy",
+      "url": "https://arxiv.org/abs/1512.00727"
+    }
+  ]
+}

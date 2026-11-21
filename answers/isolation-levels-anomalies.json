@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"We use transactions, so concurrent requests are safe.\"",
+    "why": "A transaction at read committed still allows lost updates, non-repeatable reads and write skew. Wrapping code in BEGIN/COMMIT doesn't serialise it.",
+    "probe": "Whether you can name the anomalies and pick the cheapest fix for each.",
+    "say": "\"Read committed allows lost updates and write skew. I'd fix lost updates with atomic or conditional updates or SELECT FOR UPDATE, and use serializable or explicit locking where an invariant spans several rows.\""
+  },
+  "thesis": "Isolation level decides which concurrency anomalies the database prevents for you. Most databases default to read committed, which still allows lost updates and write skew, so you must know which invariants need atomic updates, row locks, constraints or serializable isolation.",
+  "pitch": "Read committed only guarantees you don't see uncommitted data. Two transactions can both read a balance of 100, both subtract 30, and both write 70: a lost update. Two doctors can both check that at least one other doctor is on call and both go off call: write skew, because each transaction's check was valid against a snapshot but the combined result breaks the rule. Repeatable read or snapshot isolation fixes non-repeatable reads, and in some engines lost updates, but not write skew. Serializable prevents all of them at the cost of aborts and retries. So I'd handle each case with the cheapest correct tool: atomic updates like UPDATE ... SET balance = balance - 30 WHERE balance >= 30; SELECT FOR UPDATE to lock the rows a decision depends on; unique or check constraints for invariants the database can express; and serializable isolation with retry for complex multi-row invariants.",
+  "points": [
+    {
+      "h": "Know the anomalies",
+      "d": "Dirty read, non-repeatable read, phantom, lost update and write skew. Read committed prevents only dirty reads (and dirty writes)."
+    },
+    {
+      "h": "Lost update",
+      "d": "Read-modify-write cycles in application code overwrite each other. Fix with atomic in-database updates, compare-and-set on a version column, or row locks."
+    },
+    {
+      "h": "Write skew",
+      "d": "Two transactions read overlapping data, make decisions, and write different rows, together violating an invariant. Snapshot isolation doesn't prevent it."
+    },
+    {
+      "h": "Engine defaults differ",
+      "d": "PostgreSQL defaults to read committed and its repeatable read is snapshot isolation; MySQL InnoDB defaults to repeatable read with different locking behaviour. Don't assume the name means the same thing everywhere."
+    },
+    {
+      "h": "Serializable has a cost",
+      "d": "It prevents all anomalies but transactions can abort under contention, so the application must retry. Throughput falls on hot rows."
+    },
+    {
+      "h": "Constraints beat code checks",
+      "d": "Unique constraints, exclusion constraints and check constraints enforce invariants regardless of isolation level and concurrency."
+    }
+  ],
+  "decision": "Keep the default level for most work, use atomic updates and constraints for single-row invariants, SELECT FOR UPDATE or version checks for read-then-write logic, and serializable (with retries) only for multi-row invariants that can't be expressed otherwise.",
+  "numbers": [
+    "A hot row updated by many transactions under serializable or row locks serialises them: if each holds the lock for 5 ms, that row tops out around 200 updates per second."
+  ],
+  "pitfalls": [
+    "Checking a condition in application code, then writing, without a lock or conditional update.",
+    "Assuming repeatable read means the same in PostgreSQL and MySQL.",
+    "Turning on serializable without retry logic, so users see random failures.",
+    "Long transactions holding locks while calling external services."
+  ],
+  "followups": [
+    {
+      "q": "How would you stop two users booking the same meeting room slot?",
+      "a": "An exclusion or unique constraint on (room, slot), so the database rejects the second insert regardless of isolation level."
+    },
+    {
+      "q": "What's the difference between optimistic and pessimistic handling here?",
+      "a": "Pessimistic locks rows up front (SELECT FOR UPDATE); optimistic checks a version at write time and retries on conflict. Optimistic wins when conflicts are rare."
+    },
+    {
+      "q": "Why not just use serializable everywhere?",
+      "a": "More aborts and lower throughput on contended data, plus every caller needs retry logic. Use it where the invariant needs it."
+    }
+  ],
+  "example": "A wallet service lost money when two concurrent withdrawals each read the balance and wrote the result. Switching to UPDATE wallets SET balance = balance - :amt WHERE id = :id AND balance >= :amt, and checking the affected row count, fixed it without changing the isolation level.",
+  "related": [
+    "optimistic-pessimistic-concurrency",
+    "eventual-consistency-acceptable-payments-flow",
+    "flash-sale-never-oversell",
+    "double-entry-ledger-design"
+  ],
+  "sources": [
+    {
+      "title": "PostgreSQL documentation: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    },
+    {
+      "title": "Jepsen: Consistency models",
+      "url": "https://jepsen.io/consistency"
+    }
+  ]
+}

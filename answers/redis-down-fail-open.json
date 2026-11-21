@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"We fall back to the database, so nothing breaks.\"",
+    "why": "If the cache was absorbing 90% of reads, the database suddenly gets 10x its normal load and falls over too. A cache you depend on for capacity isn't optional.",
+    "probe": "Whether you treat the cache as load-bearing, and plan fallbacks, shedding and recovery.",
+    "say": "\"If the cache carries load the database can't, its loss is an outage unless I limit what falls through: concurrency caps on the database path, serving stale or degraded responses, shedding low-priority traffic, and warming before full recovery.\""
+  },
+  "thesis": "A cache that absorbs most reads is load-bearing infrastructure. When it fails, uncontrolled fall-through can take down the database. Design the failure mode: replication for the cache, bounded fall-through, degraded responses, and careful recovery with warming.",
+  "pitch": "First I'd ask what the cache is for. If it's only latency optimisation and the database can handle full load, falling back is fine. Usually it isn't: with a 90% hit ratio, losing the cache means ten times the database reads, at peak. So I'd design layers. Make the cache itself resilient: replicas with automatic failover, spread across zones, so a node loss isn't a cluster loss. Bound fall-through: a concurrency limit on database reads from the cache-miss path, request coalescing, and a small in-process cache for the hottest keys. Degrade: serve stale data from a local cache, hide expensive features, and shed low-priority traffic. For things like rate limiting or sessions stored in Redis, decide per feature whether to fail open (allow requests) or closed (reject), based on the risk. Recovery matters too: a cold cache causes a stampede, so warm hot keys and ramp traffic back gradually.",
+  "points": [
+    {
+      "h": "Know whether the cache is load-bearing",
+      "d": "Compare database capacity with peak load at a 0% hit ratio. If it can't cope, the cache is part of your capacity plan."
+    },
+    {
+      "h": "Make the cache resilient",
+      "d": "Replication, automatic failover and multi-zone placement turn many failures into brief blips."
+    },
+    {
+      "h": "Bound the fall-through",
+      "d": "Concurrency limits and coalescing on the miss path so the database sees a capped load; excess requests get degraded responses."
+    },
+    {
+      "h": "Local near-cache as a buffer",
+      "d": "A small in-process cache of hot keys keeps the most popular reads working during a remote cache outage."
+    },
+    {
+      "h": "Fail open vs closed per feature",
+      "d": "Rate limiting might fail open with local limits; session validation might fail closed for sensitive actions. Decide in advance."
+    },
+    {
+      "h": "Recover carefully",
+      "d": "Warm hot keys before routing full traffic, and ramp gradually to avoid a stampede on a cold cache."
+    }
+  ],
+  "decision": "Treat high-hit-ratio caches as tier-one dependencies with replication and runbooks. Always bound database fall-through. Document fail-open or fail-closed behaviour for every feature that relies on the cache.",
+  "numbers": [
+    "At 50,000 reads/s and a 90% hit ratio, the database normally sees 5,000 reads/s. With the cache down, it would see 50,000; if it can handle 12,000, the remaining 38,000/s must be coalesced, served stale or shed."
+  ],
+  "pitfalls": [
+    "Assuming database fallback is safe without checking capacity.",
+    "No concurrency limit on the miss path.",
+    "Using Redis for both caching and critical state (sessions, locks, rate limits) with one undocumented failure mode.",
+    "Restoring a cold cache to full traffic instantly."
+  ],
+  "followups": [
+    {
+      "q": "Should rate limiting fail open or closed when Redis is down?",
+      "a": "Usually open with per-instance local limits, so you don't block all users; for abuse-prone endpoints like login, stricter local limits or fail closed."
+    },
+    {
+      "q": "How do you test this?",
+      "a": "Game day: block access to the cache in staging and then briefly in production during low traffic, and watch database load and user metrics."
+    },
+    {
+      "q": "What about cache data loss on failover?",
+      "a": "Treat the cache as disposable; anything that must survive belongs in a durable store."
+    }
+  ],
+  "example": "A retailer's Redis primary failed and replica promotion took 40 seconds. Database reads jumped 8x and the database stalled. Afterwards they added a 2-second in-process near-cache, a semaphore capping database reads from the miss path, and stale-on-error responses; the next failover passed with a small latency bump.",
+  "related": [
+    "handle-cache-stampede-thundering-herd",
+    "design-graceful-degradation-instead-hard",
+    "design-per-tenant-rate-limits",
+    "caching-story-hot-keys-large"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    },
+    {
+      "title": "Redis documentation: High availability with Redis Sentinel",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/"
+    }
+  ]
+}

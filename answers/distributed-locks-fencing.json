@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Use Redis SET NX with a TTL\" (or Redlock) as the whole answer.",
+    "why": "A lock holder can pause (GC, network, VM migration) past the TTL; another worker takes the lock, and the first one wakes up and writes anyway. A lease alone can't prevent two writers.",
+    "probe": "Whether you know about process pauses, leases and fencing tokens checked by the resource.",
+    "say": "\"A lease from a consensus-backed store plus a fencing token: every write carries the token, and the storage rejects tokens older than the latest it has seen. Where possible, I'd make the work idempotent so a duplicate is harmless.\""
+  },
+  "thesis": "A distributed lock is only as safe as what happens when the holder stalls. Leases expire, so two processes can believe they hold the lock. Safety comes from fencing tokens that the protected resource checks, or from making the operation idempotent so duplicates don't matter.",
+  "pitch": "First I'd ask whether I need a lock for correctness or just for efficiency. If two workers occasionally doing the same job is merely wasteful, a simple Redis lock with a TTL is fine. If it's a correctness issue, like two workers charging a customer, a lease isn't enough: the holder can pause for longer than the TTL, the lock expires, a second worker acquires it, and then the first resumes and writes. The fix is fencing: the lock service issues a monotonically increasing token with each acquisition, the worker passes it with every write, and the storage rejects writes carrying a token lower than one it has already accepted. That needs a lock service with strong consistency, such as etcd or ZooKeeper, whose revision numbers work as tokens, and a resource that can check them. Even better, design the work to be idempotent or use conditional writes so correctness doesn't depend on the lock at all.",
+  "points": [
+    {
+      "h": "Efficiency lock vs correctness lock",
+      "d": "If occasional double execution is just wasted work, a best-effort lock is fine. If it corrupts data or moves money twice, you need fencing or idempotency."
+    },
+    {
+      "h": "Leases expire while you're paused",
+      "d": "GC pauses, CPU starvation, network delays and VM suspension can exceed any TTL. The holder doesn't know it lost the lock."
+    },
+    {
+      "h": "Fencing tokens",
+      "d": "Each lock grant has a strictly increasing number; the resource records the highest seen and rejects older ones. This makes a stale holder's writes harmless."
+    },
+    {
+      "h": "Use a consensus-backed lock service",
+      "d": "etcd, ZooKeeper or Consul provide linearizable leases and revision numbers. A single Redis instance or Redlock across independent nodes doesn't provide fencing tokens."
+    },
+    {
+      "h": "The resource must cooperate",
+      "d": "Fencing only works if the storage checks the token, for example a conditional write WHERE fence_token < :token."
+    },
+    {
+      "h": "Prefer idempotency or conditional writes",
+      "d": "If the operation itself is idempotent or guarded by a version check, a duplicate worker is safe and the lock becomes an optimisation."
+    }
+  ],
+  "decision": "Best-effort Redis lock for efficiency only. Consensus-backed lease plus fencing token for correctness. Best of all: idempotent operations and conditional writes so locks aren't the only safety net.",
+  "numbers": [
+    "Pause intuition: stop-the-world GC pauses of seconds have been observed in large JVM heaps, longer than many lock TTLs."
+  ],
+  "pitfalls": [
+    "Assuming a TTL lock prevents concurrent execution under pauses.",
+    "Relying on Redlock for correctness-critical mutual exclusion.",
+    "Fencing tokens issued but never checked by storage.",
+    "Holding locks across slow external calls, making expiry more likely."
+  ],
+  "followups": [
+    {
+      "q": "What if the storage can't check fencing tokens, like a third-party API?",
+      "a": "Use the third party's idempotency keys, or record intent locally and reconcile; the lock alone can't make it safe."
+    },
+    {
+      "q": "How do you choose the lease TTL?",
+      "a": "Longer than normal work time plus heartbeat margin, with the holder renewing periodically; but correctness must not depend on it."
+    },
+    {
+      "q": "How does leader election relate?",
+      "a": "It's the same problem: a leader lease plus an epoch number, with followers or storage rejecting requests from older epochs."
+    }
+  ],
+  "example": "A payout worker used a Redis lock with a 30-second TTL. A 45-second GC pause let a second worker run the same payout batch. The fix used etcd leases with the lease revision as a fencing token stored on each payout row, plus provider idempotency keys per payout.",
+  "related": [
+    "raft-paxos-quorums-gossip-appear",
+    "fail-over-between-two-regions",
+    "build-idempotency-write-api-clients",
+    "design-scheduler-millions-delayed-jobs"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: How to do distributed locking",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    },
+    {
+      "title": "etcd documentation: Leases and concurrency",
+      "url": "https://etcd.io/docs/v3.5/learning/api/"
+    }
+  ]
+}
