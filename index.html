@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Staff Design Vault</title>
+<title>System Design Vault</title>
 <meta name="description" content="A working index of staff-level system design questions, grouped by topic, each with the points a strong answer covers.">
-<meta property="og:title" content="Staff Design Vault">
+<meta property="og:title" content="System Design Vault">
 <meta property="og:description" content="Staff-level system design questions with answer outlines, grouped by topic.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#f3f4f1" media="(prefers-color-scheme: light)">
@@ -38,7 +38,7 @@
   --f:#6cc58f; --i:#e0a43d; --a:#f0806e; color-scheme:dark;
 }
 *{box-sizing:border-box}
-html{scroll-padding-top:64px}
+html{scroll-padding-top:16px}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--body)}
 .wrap{max-width:920px;margin:0 auto;padding:0 16px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -49,7 +49,8 @@ button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visi
 header{padding:40px 0 22px;border-bottom:2px solid var(--ink)}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .eyebrow{font:700 12px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
-.theme{font:500 12px var(--display);padding:6px 10px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;cursor:pointer}
+.theme{display:inline-grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:999px;cursor:pointer}
+.theme svg{width:16px;height:16px}
 h1{font:700 clamp(28px,5vw,42px)/1.1 var(--display);margin:12px 0 10px;text-wrap:balance}
 .lede{max-width:62ch;color:var(--muted);margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:8px 28px;margin-top:22px;font:500 13px var(--display);font-variant-numeric:tabular-nums}
@@ -58,24 +59,6 @@ h1{font:700 clamp(28px,5vw,42px)/1.1 var(--display);margin:12px 0 10px;text-wrap
 .bar{height:4px;background:var(--rule);margin-top:18px}
 .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
 
-.catnav{position:sticky;top:0;z-index:6;background:var(--bg);border-bottom:1px solid var(--rule)}
-.catbar{position:relative;padding-top:8px;padding-bottom:8px}
-#secbtn{display:flex;align-items:center;gap:12px;width:100%;max-width:520px;padding:8px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);cursor:pointer;text-align:left}
-#secbtn:hover{border-color:var(--muted)}
-.sec-name{font:600 14px var(--body);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sec-count{font:500 12px var(--display);color:var(--muted);font-variant-numeric:tabular-nums}
-.sec-bar{flex:0 0 72px;height:4px;background:var(--rule);border-radius:2px;overflow:hidden}
-.sec-bar i,.sm-bar i{display:block;height:100%;background:var(--accent);width:0}
-.sec-chev{font:700 12px var(--display);color:var(--muted);transition:transform .15s}
-#secbtn[aria-expanded=true] .sec-chev{transform:rotate(180deg)}
-.secmenu{position:absolute;left:16px;top:calc(100% - 2px);width:min(560px,calc(100% - 32px));max-height:calc(100vh - 90px);overflow:auto;background:var(--surface);border:1px solid var(--rule);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px}
-.secmenu[hidden]{display:none}
-.sm-item{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;padding:8px 10px;border:0;border-radius:6px;background:none;cursor:pointer;text-align:left}
-.sm-item:hover,.sm-item:focus-visible{background:color-mix(in srgb,var(--accent) 8%,transparent)}
-.sm-item.cur{background:color-mix(in srgb,var(--accent) 14%,transparent)}
-.sm-name{font:600 13px var(--body)}
-.sm-count{font:500 11px var(--display);color:var(--muted);font-variant-numeric:tabular-nums}
-.sm-bar{grid-column:1/-1;height:3px;background:var(--rule);border-radius:2px;overflow:hidden}
 
 .controls{padding:18px 0 4px;display:grid;gap:10px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -183,7 +166,7 @@ dialog#drill::backdrop{background:rgba(0,0,0,.45)}
 #pane{display:none}
 body.is-split .wrap{max-width:1280px}
 body.is-split .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:32px;align-items:start}
-body.is-split #pane{display:block;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow:auto;margin-top:28px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:24px 28px}
+body.is-split #pane{display:block;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;margin-top:28px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:24px 28px}
 .qrow{display:grid;grid-template-columns:28px 1fr;gap:12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--rule);border-left:3px solid transparent;padding:12px 8px 12px 5px;cursor:pointer}
 .qrow:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
 .qrow.sel{background:color-mix(in srgb,var(--accent) 12%,transparent);border-left-color:var(--accent)}
@@ -194,20 +177,19 @@ body.is-split #pane{display:block;position:sticky;top:64px;max-height:calc(100vh
 .pnav .btn[disabled]{opacity:.4;cursor:default}
 .hint{font:500 11px var(--display);color:var(--muted)}
 .hint kbd{font:inherit;border:1px solid var(--rule);border-radius:3px;padding:0 4px}
-@media (max-width:520px){.body{padding-left:4px}details.qa>summary{grid-template-columns:24px 1fr 14px}.fbody>.row{grid-template-columns:1fr;gap:4px}.glabel{padding-top:0}.secmenu{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.body{padding-left:4px}details.qa>summary{grid-template-columns:24px 1fr 14px}.fbody>.row{grid-template-columns:1fr;gap:4px}.glabel{padding-top:0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
 <header><div class="wrap">
   <div class="top"><div class="eyebrow">Staff-level system design</div><button class="theme" id="theme" type="button"></button></div>
-  <h1>Staff Design Vault</h1>
+  <h1>System Design Vault</h1>
   <p class="lede">A working index of design questions for senior and staff interviews. Each one comes with the points a strong answer covers. Progress is saved in this browser; export it to move between devices.</p>
   <div class="stats" id="stats"></div>
   <div class="bar" aria-hidden="true"><i id="prog"></i></div>
 </div></header>
 
-<nav class="catnav" aria-label="Sections"><div class="wrap catbar"><button type="button" id="secbtn" aria-expanded="false" aria-controls="secmenu" aria-haspopup="true"><span class="sec-name" id="secname"></span><span class="sec-count" id="seccount"></span><span class="sec-bar" aria-hidden="true"><i id="secprog"></i></span><span class="sec-chev" aria-hidden="true">&#9662;</span></button><div id="secmenu" class="secmenu" hidden></div></div></nav>
 
 <main class="wrap">
   <div class="controls">
@@ -308,7 +290,8 @@ function resetFilters(){st={q:"",lvl:"",cat:"",src:"",todo:false,deep:false,tags
 function activeCount(){return (st.lvl?1:0)+(st.src?1:0)+(st.todo?1:0)+(st.deep?1:0)+Object.keys(st.tags).length}
 
 /* ---------- theme ---------- */
-function themeLabel(){var t=store("sdv-theme")||"light";$("theme").textContent="Theme: "+t;$("theme").setAttribute("aria-label","Theme: "+t+". Click to change.")}
+var THEME_ICONS={light:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',dark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',auto:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>'};
+function themeLabel(){var t=store("sdv-theme")||"light";$("theme").innerHTML=THEME_ICONS[t]||THEME_ICONS.light;var l="Theme: "+t+" (click to change)";$("theme").setAttribute("aria-label",l);$("theme").title=l}
 $("theme").onclick=function(){
   var order=["light","dark","auto"],cur=store("sdv-theme")||"light",next=order[(order.indexOf(cur)+1)%3];
   store("sdv-theme",next);
@@ -485,7 +468,7 @@ function stats(){
   var n=nDone(items),adv=items.filter(function(x){return x.level==="advanced"}).length;
   $("stats").innerHTML='<div><b>'+items.length+'</b><span>questions</span></div><div><b>'+V.categories.length+'</b><span>categories</span></div><div><b>'+adv+'</b><span>advanced</span></div><div><b>'+n+'</b><span>reviewed</span></div>';
   $("prog").style.width=(n/items.length*100)+"%";
-  drawSecMenu();updateSecBtn();
+
 }
 function update(){writeURL();render()}
 
@@ -511,48 +494,6 @@ document.addEventListener("click",function(e){
   function ok(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy link"},1500)}
   if(navigator.clipboard)navigator.clipboard.writeText(url).then(ok,function(){prompt("Copy this link",url)});else prompt("Copy this link",url);
 });
-/* ---------- section picker ---------- */
-var SHORT={scale:"Scale",data:"Data",caching:"Caching",consistency:"Consistency",reliability:"Reliability",streaming:"Streaming",apis:"APIs",security:"Security",observability:"Observability",infra:"Infra",ai:"AI & LLM",evolution:"Evolution",judgment:"Judgment",domains:"Domains"};
-var curSec=null;
-function catProg(id){var all=items.filter(function(x){return x.cat===id});return{d:nDone(all),t:all.length}}
-function drawSecMenu(){
-  $("secmenu").innerHTML=V.categories.map(function(c){
-    var p=catProg(c.id);
-    return '<button type="button" class="sm-item'+(c.id===curSec?" cur":"")+'" data-cat="'+c.id+'"><span class="sm-name">'+esc(SHORT[c.id]||c.name)+'</span><span class="sm-count">'+p.d+'/'+p.t+'</span><span class="sm-bar" aria-hidden="true"><i style="width:'+(p.t?p.d/p.t*100:0)+'%"></i></span></button>';
-  }).join("");
-}
-function detectSec(){
-  var hs=document.querySelectorAll("h2.cat"),cur=hs.length?hs[0]:null;
-  for(var k=0;k<hs.length;k++){if(hs[k].getBoundingClientRect().top<130)cur=hs[k];else break}
-  return cur?cur.id.slice(4):(V.categories[0]&&V.categories[0].id);
-}
-function updateSecBtn(){
-  var id=detectSec();if(!id||!cats[id])return;
-  var changed=id!==curSec;curSec=id;var p=catProg(id);
-  $("secname").textContent=cats[id].name;
-  $("seccount").textContent=p.d+"/"+p.t;
-  $("secprog").style.width=(p.t?p.d/p.t*100:0)+"%";
-  $("secbtn").setAttribute("aria-label","Section: "+cats[id].name+", "+p.d+" of "+p.t+" reviewed. Open section list.");
-  if(changed&&!$("secmenu").hidden)drawSecMenu();
-}
-function closeSecMenu(){$("secmenu").hidden=true;$("secbtn").setAttribute("aria-expanded","false")}
-$("secbtn").onclick=function(e){
-  e.stopPropagation();
-  var open=$("secmenu").hidden;
-  if(open){drawSecMenu();$("secmenu").hidden=false;$("secbtn").setAttribute("aria-expanded","true");var c=$("secmenu").querySelector(".cur")||$("secmenu").querySelector(".sm-item");if(c)c.focus()}
-  else closeSecMenu();
-};
-$("secmenu").addEventListener("click",function(e){
-  var b=e.target.closest("[data-cat]");if(!b)return;
-  var id=b.dataset.cat;closeSecMenu();
-  if(!$("cat-"+id))resetFilters();
-  $("secbtn").focus({preventScroll:true});
-  var h=$("cat-"+id);if(h){h.scrollIntoView();curSec=null;updateSecBtn()}
-});
-document.addEventListener("click",function(e){if(!$("secmenu").hidden&&!e.target.closest(".catbar"))closeSecMenu()});
-document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!$("secmenu").hidden){closeSecMenu();$("secbtn").focus({preventScroll:true})}});
-var secTick=false;
-window.addEventListener("scroll",function(){if(secTick)return;secTick=true;requestAnimationFrame(function(){secTick=false;updateSecBtn()})},{passive:true});
 
 $("expand").onclick=function(){document.querySelectorAll("details.qa").forEach(function(d){d.open=true})};
 $("collapse").onclick=function(){document.querySelectorAll("details.qa").forEach(function(d){d.open=false})};

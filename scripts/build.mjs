@@ -94,7 +94,7 @@ writeFileSync(
 
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const src = { mine: "mine", ref: "ref", both: "mine + ref" };
-let md = `# Staff Design Vault\n\nGenerated from questions.json. [mine] = original question; [ref] = title from a third-party list. All answer outlines written independently.\n`;
+let md = `# System Design Vault\n\nGenerated from questions.json. [mine] = original question; [ref] = title from a third-party list. All answer outlines written independently.\n`;
 let n = 0;
 for (const c of data.categories) {
   const qs = data.questions.filter((q) => q.cat === c.id);

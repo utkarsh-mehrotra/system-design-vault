@@ -1,4 +1,4 @@
-# Staff Design Vault
+# System Design Vault
 
 Generated from questions.json. [mine] = original question; [ref] = title from a third-party list. All answer outlines written independently.
 
