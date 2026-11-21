@@ -60,6 +60,21 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .saved{display:inline-flex;align-items:center;gap:6px;font:500 11px "JetBrains Mono",monospace;color:var(--muted)}
 .saved::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);transition:box-shadow .3s}
 .saved.pulse::before{box-shadow:0 0 0 4px var(--ok-bg)}
+.saved.syncing::before{background:var(--warn)}
+.saved.error::before{background:var(--bad)}
+.auth{position:relative;display:inline-flex}
+.auth[hidden]{display:none}
+.gbtn{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:1px solid var(--line2);border-radius:7px;background:var(--raised);font:600 12.5px "Inter",sans-serif;color:var(--ink);cursor:pointer}
+.gbtn:hover{border-color:var(--muted)}
+.gbtn svg{width:15px;height:15px}
+.avatar{width:32px;height:32px;border-radius:50%;border:1px solid var(--line2);padding:0;overflow:hidden;cursor:pointer;background:var(--raised);display:grid;place-items:center;font:600 13px "Inter",sans-serif}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.amenu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;width:240px;background:var(--raised);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:12px}
+.amenu[hidden]{display:none}
+.amenu .who{font:600 13px "Inter",sans-serif;margin:0}
+.amenu .em{font:400 12px "Inter",sans-serif;color:var(--muted);margin:2px 0 10px;word-break:break-all}
+.amenu .st{font:500 11px "JetBrains Mono",monospace;color:var(--muted);margin:0 0 10px}
+.amenu button{width:100%}
 .ibtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:var(--raised);font:500 12.5px "Inter",sans-serif;color:var(--ink2);cursor:pointer}
 .ibtn:hover{border-color:var(--line2);color:var(--ink)}
 .ibtn svg{width:15px;height:15px;flex:none}
@@ -262,6 +277,7 @@ body.resizing{cursor:col-resize;user-select:none}
     <div class="prog" aria-live="polite"><b id="mastered"></b><div class="pbar" aria-hidden="true"><i id="mbar"></i></div></div>
     <span class="saved" id="saved">Saved locally</span>
     <button type="button" class="ibtn" id="reset" aria-label="Reset all progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="lbl">Reset</span></button>
+    <span class="auth" id="auth" hidden></span>
     <button type="button" class="ibtn sq" id="theme"></button>
     <span class="sr" id="msg" aria-live="polite"></span>
   </div>
@@ -300,6 +316,7 @@ body.resizing{cursor:col-resize;user-select:none}
 </div>
 
 <script src="data.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 (function(){
 "use strict";
@@ -332,7 +349,14 @@ const parse=k=>{try{return JSON.parse(store(k)||"{}")||{}}catch(e){return{}}};
 let done=parse(KEY),conf=parse(CKEY),drill=parse(DKEY);
 (function migrate(){const raw=store("sdv-done-v1");if(!raw||store(KEY))return;try{const old=JSON.parse(raw);items.forEach(q=>{if(q.legacy&&q.legacy.some(i=>old[i]))done[q.id]=1});store(KEY,JSON.stringify(done))}catch(e){}})();
 function pulse(){const s=$("saved");s.classList.add("pulse");clearTimeout(pulse.t);pulse.t=setTimeout(()=>s.classList.remove("pulse"),700)}
-function saveAll(){store(KEY,JSON.stringify(done));store(CKEY,JSON.stringify(conf));store(DKEY,JSON.stringify(drill));pulse()}
+function saveAll(fromSync){store(KEY,JSON.stringify(done));store(CKEY,JSON.stringify(conf));store(DKEY,JSON.stringify(drill));pulse();if(!fromSync&&window.SDV&&window.SDV.onLocalSave)window.SDV.onLocalSave()}
+/* bridge for optional cloud sync (firebase module below) */
+window.SDV={
+  snapshot:()=>({done:JSON.parse(JSON.stringify(done)),conf:JSON.parse(JSON.stringify(conf)),drill:JSON.parse(JSON.stringify(drill))}),
+  apply:s=>{done=s.done||{};conf=s.conf||{};drill=s.drill||{};saveAll(true);if(typeof render==="function")render()},
+  setSync:(label,state)=>{const el=$("saved");el.textContent=label;el.classList.toggle("syncing",state==="syncing");el.classList.toggle("error",state==="error")},
+  onLocalSave:null
+};
 const status=id=>conf[id]||(done[id]?"solid":"unseen");
 function setConf(id,c){
   if(status(id)===c){delete conf[id];delete done[id]}
@@ -675,6 +699,61 @@ render();
 if(mode==="drill")setMode("drill");
 if(sel){const r=$("qi-"+sel);if(r)r.scrollIntoView({block:"nearest"});if(MOBILE.matches&&byId[h0])document.body.classList.add("pane-open")}
 })();
+</script>
+<script type="module">
+/* Optional Google sign-in + Firestore progress sync. Inactive unless firebase-config.js sets window.FIREBASE_CONFIG. */
+const cfg=window.FIREBASE_CONFIG;
+if(cfg&&window.SDV){
+  const FV="10.12.2",base="https://www.gstatic.com/firebasejs/"+FV+"/";
+  const [{initializeApp},{getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,signOut,onAuthStateChanged},{getFirestore,doc,getDoc,setDoc,serverTimestamp}]=
+    await Promise.all([import(base+"firebase-app.js"),import(base+"firebase-auth.js"),import(base+"firebase-firestore.js")]);
+  const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),SDV=window.SDV;
+  const el=document.getElementById("auth"),esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const G='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+  let user=null,ref=null,timer=null,dirty=false,lastRev=+localStorage.getItem("sdv-sync-rev")||0,status="";
+  const setStatus=(t,s)=>{status=t;SDV.setSync(t,s);const st=document.getElementById("amenu-st");if(st)st.textContent=t};
+  const merge=(a,b)=>{ // a = local, b = cloud
+    const done={...(b.done||{}),...(a.done||{})};
+    const conf={...(a.conf||{}),...(b.conf||{})};
+    const drill={...(a.drill||{})};Object.entries(b.drill||{}).forEach(([k,v])=>{const l=drill[k];if(!l||(v.last||0)>(l.last||0))drill[k]=v});
+    return {done,conf,drill};
+  };
+  async function push(){
+    if(!ref)return;clearTimeout(timer);timer=null;
+    const rev=Date.now();setStatus("Syncing…","syncing");
+    try{await setDoc(ref,{...SDV.snapshot(),rev,updatedAt:serverTimestamp()});lastRev=rev;localStorage.setItem("sdv-sync-rev",String(rev));dirty=false;setStatus("Synced","ok")}
+    catch(e){console.warn("sync failed",e);setStatus("Sync failed","error")}
+  }
+  SDV.onLocalSave=()=>{if(!ref)return;dirty=true;setStatus("Syncing…","syncing");clearTimeout(timer);timer=setTimeout(push,1500)};
+  async function pull(initial){
+    if(!ref)return;
+    try{
+      const snap=await getDoc(ref),cloud=snap.exists()?snap.data():null;
+      if(initial){SDV.apply(cloud?merge(SDV.snapshot(),cloud):SDV.snapshot());await push();return}
+      if(cloud&&!dirty&&(cloud.rev||0)>lastRev){SDV.apply({done:cloud.done,conf:cloud.conf,drill:cloud.drill});lastRev=cloud.rev;localStorage.setItem("sdv-sync-rev",String(lastRev));setStatus("Synced","ok")}
+    }catch(e){console.warn("pull failed",e);setStatus("Sync failed","error")}
+  }
+  function draw(){
+    el.hidden=false;
+    if(!user){el.innerHTML='<button type="button" class="gbtn" id="gsign" title="Sign in to sync progress across devices">'+G+'<span class="lbl">Sign in</span></button>';
+      document.getElementById("gsign").onclick=async()=>{const p=new GoogleAuthProvider();p.setCustomParameters({prompt:"select_account"});try{await signInWithPopup(auth,p)}catch(e){if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"))signInWithRedirect(auth,p);else if(e&&e.code!=="auth/popup-closed-by-user"&&e.code!=="auth/cancelled-popup-request")alert("Sign-in failed: "+(e.message||e))}};
+      return}
+    const init=(user.displayName||user.email||"?").trim()[0].toUpperCase();
+    el.innerHTML='<button type="button" class="avatar" id="gav" aria-haspopup="true" aria-expanded="false" aria-label="Account: '+esc(user.email)+'">'+(user.photoURL?'<img src="'+esc(user.photoURL)+'" alt="" referrerpolicy="no-referrer">':init)+'</button>'+
+      '<div class="amenu" id="amenu" hidden><p class="who">'+esc(user.displayName||"Signed in")+'</p><p class="em">'+esc(user.email)+'</p><p class="st" id="amenu-st">'+esc(status||"Synced")+'</p><button type="button" class="tbtn" id="gout">Sign out</button></div>';
+    const av=document.getElementById("gav"),menu=document.getElementById("amenu");
+    av.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;av.setAttribute("aria-expanded",String(!menu.hidden))};
+    document.getElementById("gout").onclick=async()=>{if(dirty)await push();await signOut(auth)};
+  }
+  document.addEventListener("click",e=>{const m=document.getElementById("amenu");if(m&&!m.hidden&&!e.target.closest(".auth"))m.hidden=true});
+  onAuthStateChanged(auth,async u=>{
+    user=u;
+    if(u){ref=doc(db,"progress",u.uid);setStatus("Syncing…","syncing");draw();await pull(true)}
+    else{ref=null;clearTimeout(timer);SDV.setSync("Saved locally","ok");draw()}
+  });
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")pull(false);else if(dirty)push()});
+  window.addEventListener("pagehide",()=>{if(dirty)push()});
+}
 </script>
 </body>
 </html>

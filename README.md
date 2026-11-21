@@ -36,8 +36,9 @@ See `docs/answer-plan.md` for the plan to add in-depth answers (and the debate o
 | `sdv-drill-v1` | Trap drill spaced-repetition state per prompt |
 | `sdv-theme` | `dark` (default) or `light` |
 | `sdv-recall` | Whether "Hide outline (test yourself)" is on |
+| `sdv-sync-rev` | Revision of the last cloud sync (only when signed in) |
 
-Progress lives only in this browser's localStorage (no export/import); clearing site data resets it.
+Progress lives in this browser's localStorage; optional Google sign-in syncs it across devices via Firebase (see `docs/google-sync-setup.md`, config in `firebase-config.js`, rules in `firestore.rules`).
 
 ## Keyboard
 
