@@ -104,6 +104,10 @@ select{flex:0 1 280px}
 .count{font:500 13px var(--display);color:var(--muted)}
 .tools{display:flex;flex-wrap:wrap;gap:6px}
 .btn{font:500 12px var(--display);padding:7px 11px;border:1px solid var(--rule);background:var(--surface);border-radius:4px;cursor:pointer}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:4px;background:var(--surface);overflow:hidden}
+.seg button{font:500 12px var(--display);padding:7px 12px;border:0;background:none;color:var(--muted);cursor:pointer}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-checked=true]{background:var(--ink);color:var(--bg)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 
 h2.cat{font:700 13px var(--display);letter-spacing:.06em;text-transform:uppercase;margin:28px 0 0;padding:8px 0;border-bottom:1px solid var(--ink);display:flex;justify-content:space-between;gap:12px}
@@ -227,7 +231,7 @@ body.is-split #pane{display:block;position:sticky;top:16px;max-height:calc(100vh
     <div class="tools">
       <button class="btn primary" type="button" id="drillbtn">Trap drill</button>
       <button class="btn" type="button" id="layout" hidden></button>
-      <button class="btn" type="button" id="depth"></button>
+      <div class="seg" id="depth" role="radiogroup" aria-label="Answer depth"><button type="button" role="radio" data-depth="full">Full</button><button type="button" role="radio" data-depth="quick">Quick</button></div>
       <button class="btn" type="button" id="expand">Expand all</button>
       <button class="btn" type="button" id="collapse">Collapse all</button>
     </div>
@@ -476,9 +480,10 @@ function select(id,keepFocus){
   history.replaceState(null,"",location.pathname+location.search+"#"+id);
   pane();
 }
-function depthLabel(){$("depth").textContent="Depth: "+depth()}
+function depthLabel(){$("depth").querySelectorAll("[data-depth]").forEach(function(b){var on=b.dataset.depth===depthMode;b.setAttribute("aria-checked",on?"true":"false");b.tabIndex=on?0:-1})}
 depthLabel();
-$("depth").onclick=function(){depthMode=depthMode==="full"?"quick":"full";depthLabel();render()};
+$("depth").addEventListener("click",function(e){var b=e.target.closest("[data-depth]");if(!b||b.dataset.depth===depthMode)return;depthMode=b.dataset.depth;depthLabel();render()});
+$("depth").addEventListener("keydown",function(e){if(e.key!=="ArrowLeft"&&e.key!=="ArrowRight")return;e.preventDefault();depthMode=depthMode==="full"?"quick":"full";depthLabel();render();$("depth").querySelector('[aria-checked="true"]').focus()});
 $("layout").onclick=function(){store("sdv-layout",isSplit()?"list":"split");applyLayout();render()};
 WIDE.addEventListener("change",function(){applyLayout();render()});
 $("list").addEventListener("click",function(e){var b=e.target.closest("[data-sel]");if(b)select(b.dataset.sel)});
