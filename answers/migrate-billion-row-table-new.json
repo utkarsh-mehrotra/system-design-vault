@@ -1,0 +1,76 @@
+{
+  "thesis": "Migrate in phases that are each reversible: expand the schema, dual-write, backfill in throttled and resumable chunks, verify, shadow-read, cut over reads, then contract. At a billion rows the dangers are locks, replication lag and correctness drift, so every phase is observable and stoppable.",
+  "pitch": "I'd never do this as one big ALTER or copy. Phase one, expand: create the new table or columns without touching existing reads. Phase two, dual-write: the application writes both old and new shapes, ideally in one transaction, or via CDC from the old table, so new data lands in both. Phase three, backfill: copy existing rows in primary-key ranges with a throttle tied to replication lag and database load, idempotent and resumable from a checkpoint. Phase four, verify: row counts and checksums per key range, plus sampled deep comparisons. Phase five, shadow reads: read from both, serve the old, log mismatches. Phase six, cut over reads behind a flag, ramping gradually. Phase seven, stop writing the old shape and drop it only after a full cycle without rollback. At a billion rows the backfill might take days, which is fine as long as it's safe.",
+  "points": [
+    {
+      "h": "Expand without blocking",
+      "d": "Create new tables or nullable columns using online DDL where needed. Avoid operations that rewrite the table or take long exclusive locks."
+    },
+    {
+      "h": "Dual-write new data",
+      "d": "Application writes both shapes in one transaction, or a CDC pipeline mirrors changes from old to new. Choose one and make it idempotent."
+    },
+    {
+      "h": "Throttled, resumable backfill",
+      "d": "Process key ranges in batches (thousands of rows), checkpoint progress, and pause automatically when replication lag or latency rises. Upsert so reruns are safe and don't overwrite newer dual-written data."
+    },
+    {
+      "h": "Verify before trusting",
+      "d": "Compare counts and checksums per range, then sample rows for field-level comparison. Fix and re-run ranges that differ."
+    },
+    {
+      "h": "Shadow reads",
+      "d": "Read from both representations for a portion of traffic, serve the old result, and log mismatches. This catches transformation bugs with production queries."
+    },
+    {
+      "h": "Cut over gradually",
+      "d": "Switch reads behind a flag by percentage or by tenant. Keep dual writes running so rollback is a flag flip."
+    },
+    {
+      "h": "Contract last",
+      "d": "Stop old writes, wait a full business cycle, then drop old columns or tables. Archive if regulations require."
+    }
+  ],
+  "decision": "Use expand-and-contract with dual writes for any large table that must stay online. Use CDC-based copying when application changes are hard, and specialised online schema change tools (gh-ost, pt-online-schema-change) for in-place schema changes on MySQL.",
+  "numbers": [
+    "Backfill time: 1 billion rows at a throttled 20,000 rows/s is about 14 hours of pure copy time; with pauses for load, plan for one to three days.",
+    "Batch sizing: batches of 1,000–10,000 rows keep each transaction short, limiting lock time and replication bursts."
+  ],
+  "pitfalls": [
+    "Backfill overwriting rows that dual writes already updated with newer data; use version or timestamp checks.",
+    "Ignoring replication lag, so replicas fall minutes behind and read-your-writes breaks.",
+    "No checkpointing, so a failure at row 800 million restarts from zero.",
+    "Dropping the old column in the same release as the cutover."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle rows updated during the backfill?",
+      "a": "Dual writes keep the new table current; the backfill uses insert-if-absent or compares versions so it never overwrites a newer value."
+    },
+    {
+      "q": "How would you verify a billion rows efficiently?",
+      "a": "Checksums aggregated per key range in both stores; only ranges with mismatched checksums get row-level comparison."
+    },
+    {
+      "q": "What if you can't change the application to dual-write?",
+      "a": "Use CDC from the old table into the new one, or an online schema change tool that uses triggers or the binlog to keep a shadow table in sync."
+    }
+  ],
+  "example": "Moving a 1.2-billion-row transactions table to a partitioned layout: dual writes via the application, a backfill throttled to keep replica lag under 2 seconds that ran for 40 hours, checksum verification per million-id range, a week of shadow reads with zero mismatches, then a tenant-by-tenant read cutover.",
+  "related": [
+    "safely-backfill-data-production",
+    "schema-changes-downtime",
+    "plan-rollback-release-has-already",
+    "design-migration-paths-legacy-system"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Parallel change (expand and contract)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    },
+    {
+      "title": "GitHub: gh-ost, online schema migration for MySQL",
+      "url": "https://github.com/github/gh-ost"
+    }
+  ]
+}

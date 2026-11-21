@@ -1,0 +1,71 @@
+{
+  "thesis": "Use a queue when work can wait and you want buffering, retries, independent consumer speed or fan-out. Use direct RPC when the caller needs a response within a tight deadline. A queue in a path that needs a synchronous answer adds latency and failure modes without the benefits.",
+  "pitch": "I'd ask: does the caller need the result to respond? If yes, and the work is fast, RPC is simpler: one hop, immediate errors, easy tracing. If the work can complete later, a queue gives me durable buffering through spikes and consumer outages, built-in retries with dead-lettering, consumers scaled independently of producers, and the ability to add consumers without touching the producer. Queues also smooth load onto a fragile downstream such as a legacy system or rate-limited partner API. The costs: an extra component to run, at-least-once delivery so consumers must be idempotent, ordering only within a partition or group, and results that come back later. Request-reply over a queue exists, but if you need the answer in 100 ms, a direct call with a timeout and fallback is almost always better.",
+  "points": [
+    {
+      "h": "RPC for request-scoped answers",
+      "d": "Fast, bounded work whose result the caller needs. Simple semantics, immediate error feedback, and straightforward tracing."
+    },
+    {
+      "h": "Queues for deferrable work",
+      "d": "The producer records intent durably and returns; consumers process at their own pace."
+    },
+    {
+      "h": "Buffering and load levelling",
+      "d": "Queues absorb spikes and protect slow or fragile downstreams. Consumers can be sized for average load."
+    },
+    {
+      "h": "Retries and dead-lettering",
+      "d": "Failed messages are retried with backoff and eventually moved to a dead-letter queue for inspection, without the producer waiting."
+    },
+    {
+      "h": "Fan-out",
+      "d": "Topics with multiple subscriptions let several consumers process the same event independently."
+    },
+    {
+      "h": "Costs of queues",
+      "d": "Operating the broker, at-least-once delivery and idempotency, ordering constraints, monitoring of lag, and harder debugging across asynchronous hops."
+    }
+  ],
+  "decision": "RPC when the caller waits for the result and the deadline is tight. Queue when the work is slow, deferrable, needs retries independent of the caller, must survive consumer outages, or feeds multiple consumers. A task queue (one consumer per job) differs from a log or topic (many consumers, replay); choose by whether you need replay and fan-out.",
+  "numbers": [
+    "Latency: a direct in-region RPC adds about a millisecond of network time; a queue hop adds publish, broker persistence and consumer polling, typically milliseconds to tens of milliseconds, or more with batching."
+  ],
+  "pitfalls": [
+    "A queue in a synchronous user path, then polling for the result inside the request.",
+    "Assuming exactly-once delivery and skipping idempotency.",
+    "Using a queue to hide a consumer that can never keep up; the backlog only grows.",
+    "No dead-letter handling, so poison messages block or vanish."
+  ],
+  "followups": [
+    {
+      "q": "Queue or topic?",
+      "a": "A queue distributes each message to one consumer in a group (work distribution). A topic delivers each message to every subscribing group (fan-out). Many systems use topics with consumer groups to get both."
+    },
+    {
+      "q": "How would you rate-limit calls to a partner API that allows 50 requests per second?",
+      "a": "Put requests on a queue and run consumers that together don't exceed 50/s, with backoff on 429s. The queue absorbs bursts from your side."
+    },
+    {
+      "q": "When is RPC with retries enough?",
+      "a": "When failures are brief and the caller can wait for a few retries within its deadline. If outages are longer or work must survive restarts, use a durable queue."
+    }
+  ],
+  "example": "Invoice PDF generation moved from an RPC inside the 'complete order' request (adding 1.5 s and failing when the PDF service was down) to a queue. Orders now complete in 200 ms; PDFs are generated within a minute and retried on failure.",
+  "related": [
+    "choose-between-synchronous-asynchronous-communication",
+    "design-dead-letter-queues-retry",
+    "design-backpressure-high-traffic-system",
+    "track-status-long-running-jobs"
+  ],
+  "sources": [
+    {
+      "title": "Enterprise Integration Patterns: Point-to-point channel",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/PointToPointChannel.html"
+    },
+    {
+      "title": "Enterprise Integration Patterns: Publish-subscribe channel",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/PublishSubscribeChannel.html"
+    }
+  ]
+}

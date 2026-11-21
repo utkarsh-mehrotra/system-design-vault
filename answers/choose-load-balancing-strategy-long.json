@@ -1,0 +1,75 @@
+{
+  "thesis": "Short RPCs balance well per request with least-outstanding-requests or power-of-two-choices. Long-lived connections balance per connection, so the risk is imbalance over time; counter it with connection-aware placement, periodic rebalancing, slow start for new instances and graceful draining.",
+  "pitch": "For short RPCs, per-request balancing works: round robin is fine when instances and requests are uniform, but least outstanding requests or power of two choices, which picks two random backends and sends to the less loaded one, handles uneven request costs and slow instances much better with little coordination. For long-lived connections like WebSockets, gRPC streams or database connections, the load balancer only decides once per connection, so after a deploy or scale-out the new instances get few connections while old ones stay overloaded. There I'd use least-connections placement, slow start so new instances aren't flooded, connection lifetimes or server-initiated reconnects to rebalance gradually, and draining on scale-in, telling clients to reconnect elsewhere before the instance stops. If connections carry sticky state, consistent hashing limits how many move when the pool changes.",
+  "points": [
+    {
+      "h": "Round robin",
+      "d": "Simple and fair when requests cost the same and instances are identical. Degrades with heterogeneous requests or a slow instance, which still gets its full share."
+    },
+    {
+      "h": "Least outstanding requests",
+      "d": "Sends to the backend with the fewest in-flight requests. Naturally routes around slow instances. Requires the balancer to track in-flight counts."
+    },
+    {
+      "h": "Power of two choices",
+      "d": "Pick two backends at random and choose the less loaded. Gets most of the benefit of least-loaded without global state and avoids herding onto one 'best' instance."
+    },
+    {
+      "h": "Long-lived connections balance per connection",
+      "d": "gRPC over HTTP/2 multiplexes many requests on one connection, so an L4 balancer balances connections, not requests. Use L7 balancing or client-side balancing for gRPC."
+    },
+    {
+      "h": "Rebalancing over time",
+      "d": "Cap connection lifetime (for example minutes to an hour, with jitter) or have servers send GOAWAY or reconnect hints so load spreads after scale-out."
+    },
+    {
+      "h": "Slow start and draining",
+      "d": "New instances ramp traffic gradually to warm caches and JIT. On scale-in, stop new connections and ask clients to reconnect, waiting for in-flight work."
+    },
+    {
+      "h": "Consistent hashing for sticky state",
+      "d": "When connections depend on per-key state (sessions, partitions), consistent hashing moves only about 1/N of keys when a node joins or leaves."
+    }
+  ],
+  "decision": "Short RPCs: least outstanding requests or power of two choices at L7. Long-lived streams: least connections plus bounded lifetimes and server-driven rebalancing, with slow start and draining. Sticky state: consistent hashing with bounded load.",
+  "numbers": [
+    "Consistent hashing: adding a 10th node moves roughly 1/10 of keys, versus nearly all keys with modulo hashing.",
+    "Connection lifetime example: 30 minutes ± 20% jitter means a full fleet rebalances within about half an hour after scale-out, without a reconnect storm."
+  ],
+  "pitfalls": [
+    "Using an L4 balancer for gRPC and finding all requests from a client go to one backend.",
+    "No slow start: a fresh instance receives its full share of connections while caches are cold, and its latency spikes.",
+    "Killing instances without draining, forcing thousands of clients to reconnect at once.",
+    "Fixed connection lifetimes without jitter, causing synchronised reconnects."
+  ],
+  "followups": [
+    {
+      "q": "How does client-side load balancing compare?",
+      "a": "Clients get a list of backends (from service discovery) and balance themselves, avoiding an extra hop and handling per-request balancing over multiplexed connections. It needs good discovery and health information in every client."
+    },
+    {
+      "q": "What about WebSockets during a deploy?",
+      "a": "Drain gradually: stop new connections to old instances, send reconnect messages in batches with jitter, and let clients reconnect to new instances."
+    },
+    {
+      "q": "Why not always pick the least-loaded instance?",
+      "a": "With stale load information, every balancer picks the same 'best' instance and overloads it. Power of two choices avoids this herding."
+    }
+  ],
+  "example": "A chat service on WebSockets saw new instances sit idle after scale-out while old ones ran hot. Adding a 45-minute connection lifetime with jitter, least-connections placement and slow start evened load within an hour of each scale event.",
+  "related": [
+    "walk-one-request-dns-database",
+    "design-admission-control-service-stays",
+    "trade-offs-between-vertical-horizontal"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Load balancing in the datacenter",
+      "url": "https://sre.google/sre-book/load-balancing-datacenter/"
+    },
+    {
+      "title": "gRPC blog: gRPC load balancing",
+      "url": "https://grpc.io/blog/grpc-load-balancing/"
+    }
+  ]
+}

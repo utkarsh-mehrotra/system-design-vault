@@ -1,0 +1,80 @@
+{
+  "thesis": "Under a 20x spike you cannot serve everyone, so decide who gets served. Admission control rejects excess work early and cheaply, by priority and by tenant, keeps every queue bounded, and adapts concurrency limits to measured latency so the work you accept still completes on time.",
+  "pitch": "The goal is to keep goodput up: serve as many requests successfully as capacity allows rather than accepting everything and timing out everyone. I'd put admission control at the edge of the service. First, per-tenant and per-client quotas, so one client's spike doesn't consume everyone's capacity. Second, priority classes: interactive and revenue-critical requests over background and batch work, with lower classes shed first. Third, an adaptive concurrency limit that measures latency and lowers the number of in-flight requests when latency rises, like TCP congestion control. Fourth, bounded queues with short timeouts, rejecting rather than queueing when full, and preferring to drop requests that have waited long, since their clients have probably given up. Rejections are fast and explicit, 429 or 503 with Retry-After, so well-behaved clients back off. Autoscaling helps over minutes, but admission control protects you in the seconds before it does.",
+  "points": [
+    {
+      "h": "Protect goodput, not throughput",
+      "d": "Accepting more than you can process makes every request slow and many fail. Rejecting the excess keeps latency and success high for the work accepted."
+    },
+    {
+      "h": "Per-tenant quotas",
+      "d": "Token buckets per client or tenant isolate noisy neighbours, so a spike from one source mostly affects that source."
+    },
+    {
+      "h": "Priority-based shedding",
+      "d": "Classify requests (critical, normal, best-effort). Under pressure, shed best-effort first, then normal, keeping critical paths alive."
+    },
+    {
+      "h": "Adaptive concurrency limits",
+      "d": "Algorithms such as gradient or AIMD-style limits adjust allowed concurrency based on observed latency, finding capacity without manual tuning."
+    },
+    {
+      "h": "Bounded queues and deadlines",
+      "d": "Queues have a maximum length and a maximum wait. Drop requests whose deadline has passed; LIFO under overload can serve fresh requests that still have waiting clients."
+    },
+    {
+      "h": "Cheap, explicit rejection",
+      "d": "Reject before doing expensive work, with 429 or 503 and Retry-After, so clients back off rather than retry immediately."
+    },
+    {
+      "h": "Autoscaling is the second line",
+      "d": "Scaling takes minutes; admission control acts in milliseconds. Use both, and ensure scaling isn't blocked by the overload itself."
+    }
+  ],
+  "decision": "Every externally facing service gets per-client quotas, bounded queues and a concurrency limit. Priority shedding where traffic classes differ in value. Tune with load tests at several times peak.",
+  "numbers": [
+    "At 20x a normal 5,000 req/s, you receive 100,000 req/s. If capacity is 15,000 req/s, admission control must reject about 85% quickly, at a cost of perhaps microseconds each, rather than letting all 100,000 queue.",
+    "Rejection cost matters: if rejecting takes 0.1 ms of CPU and serving takes 5 ms, you can reject about 50 requests for the cost of serving one."
+  ],
+  "pitfalls": [
+    "Unbounded queues that turn a spike into minutes of latency for everyone.",
+    "Rejecting after doing most of the work (authentication, database lookups).",
+    "Global limits only, so one tenant's spike starves everyone.",
+    "Clients that retry 429s immediately, amplifying the spike."
+  ],
+  "followups": [
+    {
+      "q": "How do you classify priority?",
+      "a": "By endpoint and caller: checkout and login are critical; search suggestions and analytics beacons are best-effort. Carry the class in a header set at the edge."
+    },
+    {
+      "q": "Why LIFO under overload?",
+      "a": "With FIFO, every request waits behind old ones whose clients may have given up. LIFO serves the newest requests, which still have someone waiting, improving useful work done."
+    },
+    {
+      "q": "How does this interact with autoscaling?",
+      "a": "Shed load immediately, while autoscaling adds capacity over minutes. Make sure shedding metrics don't hide demand from the autoscaler; scale on offered load, not just served load."
+    }
+  ],
+  "example": "A ticketing API hit 25x traffic when sales opened. Per-account token buckets, best-effort shedding of seat-map refreshes, and an adaptive concurrency limit kept purchase requests at 99% success with p99 under 600 ms while 70% of traffic was rejected with Retry-After.",
+  "related": [
+    "design-backpressure-high-traffic-system",
+    "design-per-tenant-rate-limits",
+    "retries-amplifying-outage-design-retries",
+    "list-ways-three-tier-service"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Using load shedding to avoid overload",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    },
+    {
+      "title": "Google SRE book: Handling overload",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    },
+    {
+      "title": "Netflix: concurrency-limits library",
+      "url": "https://github.com/Netflix/concurrency-limits"
+    }
+  ]
+}

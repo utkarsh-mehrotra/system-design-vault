@@ -1,0 +1,76 @@
+{
+  "thesis": "OLTP serves many small, latency-sensitive transactions on current state; OLAP serves few large scans over history. Keep them in separate stores and move data across with change data capture, never with application dual writes, and treat lag, backfills and schema drift as first-class concerns.",
+  "pitch": "The boundary is about access pattern. The transactional database handles point reads and short writes with strict latency and correctness; analytics wants to scan billions of rows, aggregate across history and join widely, which would wreck OLTP latency if run there. So analytics lives in a columnar warehouse or lakehouse. Data crosses via change data capture from the database's log into a stream, then into the warehouse, which is reliable because it reads committed changes in order, unlike the application writing to both places. I'd also plan for an initial snapshot plus streaming, monitoring of lag, handling of schema changes through a registry or contract, and deletes, including legal erasure, flowing through to the analytical side.",
+  "points": [
+    {
+      "h": "Different access patterns, different engines",
+      "d": "OLTP: row-oriented, indexed point lookups, short transactions, high concurrency. OLAP: columnar storage, compression, vectorised scans over a few columns of many rows."
+    },
+    {
+      "h": "Don't run analytics on the primary",
+      "d": "Large scans evict hot pages from cache and hold resources, raising tail latency for customers. A read replica helps a little but still uses row storage that's slow for scans."
+    },
+    {
+      "h": "CDC over dual writes",
+      "d": "Reading the database log (binlog, WAL) captures every committed change in order, including those from scripts and migrations. Application dual writes miss failures and diverge."
+    },
+    {
+      "h": "Snapshot plus stream",
+      "d": "Start with a consistent snapshot, then apply changes from the log position at which it was taken. Tools like Debezium coordinate this."
+    },
+    {
+      "h": "Lag as an SLO",
+      "d": "Publish freshness, for example 'warehouse within 15 minutes of production', and alert on it. Consumers can then decide whether data is fresh enough for their use."
+    },
+    {
+      "h": "Schema drift and contracts",
+      "d": "A column rename in OLTP can break dashboards silently. Use a schema registry or data contracts, and test pipelines against schema changes before deployment."
+    },
+    {
+      "h": "Deletes and erasure flow through",
+      "d": "Propagate deletes as tombstones, and make sure erasure requests reach the warehouse, derived tables and backups according to policy."
+    }
+  ],
+  "decision": "Separate stores once analytics queries become heavy or broad. Use CDC for continuous movement; batch extracts are acceptable for daily reporting. Hybrid HTAP databases can serve light operational analytics but don't remove the need for a warehouse for broad historical analysis.",
+  "numbers": [
+    "Columnar compression on analytical data is often several times to ten times or more, and queries read only the columns they need, which is why scans that take minutes on a row store can take seconds in a warehouse.",
+    "CDC latency is typically seconds to a minute end to end; warehouse loading in micro-batches every few minutes is common."
+  ],
+  "pitfalls": [
+    "Application dual writes to the database and the warehouse that silently diverge.",
+    "Analysts querying the production primary 'just this once'.",
+    "No plan for schema changes, so pipelines break after a routine migration.",
+    "Deleted or erased data persisting forever in the warehouse."
+  ],
+  "followups": [
+    {
+      "q": "What if the business needs real-time analytics?",
+      "a": "Stream changes into a real-time analytical store or materialised views over the stream, with seconds of lag, and keep the warehouse for historical depth."
+    },
+    {
+      "q": "How do you handle a backfill of a year of data?",
+      "a": "Bulk export from a snapshot or replica into the warehouse, then resume CDC from the snapshot's log position so there's no gap or duplicate."
+    },
+    {
+      "q": "Who owns the data contract?",
+      "a": "The producing team owns the schema and its compatibility; the platform provides the registry and checks."
+    }
+  ],
+  "example": "A lending company streams its Postgres WAL through Debezium into Kafka and loads the warehouse every five minutes. Risk dashboards run there instead of on replicas, and production p99 latency drops during month-end reporting.",
+  "related": [
+    "model-data-differently-oltp-versus",
+    "decide-between-sql-nosql-search",
+    "design-outbox-inbox-pattern-reliable",
+    "design-retention-soft-delete-legal"
+  ],
+  "sources": [
+    {
+      "title": "Debezium: change data capture",
+      "url": "https://debezium.io/"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 3 (OLTP and OLAP storage)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

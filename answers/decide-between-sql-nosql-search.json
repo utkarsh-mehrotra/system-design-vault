@@ -1,0 +1,72 @@
+{
+  "thesis": "Choose from access patterns and consistency needs, not fashion. A relational database is the default for transactional data and flexible queries; key-value or wide-column stores fit very high-scale access by known keys; search engines are derived indexes for text and faceting, never the source of truth.",
+  "pitch": "I'd list the queries and invariants first. If the data has relationships, needs transactions, and the queries aren't all known up front, a relational database is the right default, and modern Postgres or MySQL scale further than people assume with indexing, replicas and partitioning. If access is overwhelmingly by known key at very high throughput with simple consistency needs, like sessions, user feeds or IoT time series, a key-value or wide-column store like DynamoDB or Cassandra gives predictable latency and horizontal scale, at the cost of designing your tables around your queries and losing ad hoc joins. Full-text search, relevance ranking, fuzzy matching and faceted filters belong in a search engine like Elasticsearch or OpenSearch, fed from the source of truth via CDC, because search indexes aren't designed to be your system of record. Often the answer is all three, each doing what it's good at.",
+  "points": [
+    {
+      "h": "Start from queries and invariants",
+      "d": "Write down the top queries, write patterns, consistency requirements and growth. The store choice should fall out of that list."
+    },
+    {
+      "h": "Relational as the default",
+      "d": "Transactions, constraints, joins, ad hoc queries and mature tooling. Scales a long way vertically, with read replicas and partitioning, before you need anything else."
+    },
+    {
+      "h": "Key-value and wide-column for known-key scale",
+      "d": "Predictable single-digit-millisecond access at huge scale when you know the access patterns. You model tables per query and give up joins and flexible querying."
+    },
+    {
+      "h": "Document stores for aggregate-shaped data",
+      "d": "Useful when data is read and written as a self-contained document with varying shape. Watch for needing cross-document transactions or joins later."
+    },
+    {
+      "h": "Search engines are derived indexes",
+      "d": "Great at text relevance, fuzzy matching, aggregations for facets. Eventually consistent, with weaker durability guarantees; rebuildable from the source of truth."
+    },
+    {
+      "h": "Operational cost counts",
+      "d": "Every new store adds backups, upgrades, monitoring, on-call knowledge and security review. Prefer fewer stores your team can run well."
+    }
+  ],
+  "decision": "Relational unless a specific access pattern or scale requirement rules it out. Add a key-value store for a well-understood, high-volume known-key workload. Add search as a derived index when users need text search or faceting. Avoid a store per service just because you can.",
+  "numbers": [
+    "A single well-tuned relational primary on modern hardware can handle thousands to tens of thousands of simple transactions per second; read replicas multiply read capacity.",
+    "Managed key-value stores advertise consistent single-digit-millisecond latency at practically unbounded scale when keys are well distributed."
+  ],
+  "pitfalls": [
+    "Choosing NoSQL for scale you don't have, then rebuilding joins and transactions in application code.",
+    "Using a search engine as the primary store and losing data on cluster problems.",
+    "Modelling a key-value store like a relational one and needing scans for common queries.",
+    "Adding a new store per team without the operational capacity to run it."
+  ],
+  "followups": [
+    {
+      "q": "When would you move off relational?",
+      "a": "When a specific workload exceeds what partitioning and replicas can handle, or needs a data model (graph traversal, time series at very high ingest) that relational handles poorly. Move that workload, not everything."
+    },
+    {
+      "q": "How do you keep search in sync?",
+      "a": "CDC or an outbox stream from the source of truth into the indexer, idempotent upserts by id, and a full reindex job for recovery."
+    },
+    {
+      "q": "What about NewSQL or distributed SQL?",
+      "a": "They offer relational semantics with horizontal scale, at the cost of higher write latency and operational complexity. Worth it when one relational node truly isn't enough and you need transactions across shards."
+    }
+  ],
+  "example": "A marketplace keeps orders and payments in Postgres, user sessions and carts in a key-value store, and listing search in OpenSearch fed by CDC from Postgres. Rebuilding the search index from Postgres takes two hours and is tested monthly.",
+  "related": [
+    "boundary-between-oltp-olap-data",
+    "model-data-differently-oltp-versus",
+    "pick-partition-key-multi-tenant",
+    "decide-buy-build"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 2 (data models)",
+      "url": "https://dataintensive.net/"
+    },
+    {
+      "title": "AWS DynamoDB: Best practices for partition key design",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    }
+  ]
+}

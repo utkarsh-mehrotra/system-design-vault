@@ -1,0 +1,76 @@
+{
+  "thesis": "For a multi-tenant ledger, partition by account (scoped by tenant), because every invariant, balance checks and posting order, lives at the account level. Then show where it breaks: giant tenants, hot accounts, and cross-account queries, and how you'd handle each.",
+  "pitch": "The candidates are tenant, account and time. Time is wrong for a ledger: all writes go to the newest partition. Tenant alone is attractive for isolation but one large tenant becomes a hot partition and some tenants outgrow a partition. Account, as in (tenant_id, account_id), is my choice because the ledger's invariants, balance never negative and postings ordered, are per account, so a single-partition transaction can enforce them. Then the failure modes. A hot account, like a merchant settlement account receiving thousands of credits per second, overwhelms its partition; I'd split it into sub-accounts or buffer credits and post them in batches. Transfers between accounts on different partitions need a saga or two-step posting rather than one transaction. Tenant-wide queries like monthly statements scatter across partitions, so they go to a read model or the warehouse. And the plan needs a way to move a large tenant to dedicated capacity.",
+  "points": [
+    {
+      "h": "List the candidates and their skew",
+      "d": "Tenant: isolation, but skewed by tenant size. Time: everything hits the latest partition. Account: matches invariants and spreads load if accounts are numerous."
+    },
+    {
+      "h": "Partition where invariants live",
+      "d": "Balance checks and posting order are per account, so (tenant_id, account_id) lets one local transaction enforce them without distributed coordination."
+    },
+    {
+      "h": "Failure: hot accounts",
+      "d": "A platform's settlement or fee account may receive a huge share of postings. Split it into N sub-accounts with a roll-up, or buffer and batch credits that don't need immediate visibility."
+    },
+    {
+      "h": "Failure: cross-partition transfers",
+      "d": "A transfer touches two accounts that may live on different partitions. Use a two-step posting (debit with a pending state, then credit) driven by a saga, idempotent per transfer id."
+    },
+    {
+      "h": "Failure: tenant-wide queries",
+      "d": "Statements, tenant totals and reporting scatter across partitions. Serve them from a projection or the warehouse rather than live scatter-gather on the ledger."
+    },
+    {
+      "h": "Failure: giant tenants",
+      "d": "Some tenants will dwarf others. Support moving a tenant to dedicated partitions or a dedicated cell, which needs online migration tooling."
+    },
+    {
+      "h": "Plan resharding from day one",
+      "d": "Use many logical partitions mapped to fewer physical ones, so rebalancing moves logical partitions rather than re-keying data."
+    }
+  ],
+  "decision": "Partition by account within tenant for ledgers and other per-entity invariants. Handle hot accounts by splitting or batching, cross-account operations with sagas, and reporting with projections. Reserve tenant-level partitioning for when strict tenant isolation is the primary requirement.",
+  "numbers": [
+    "Logical partitions example: 4,096 logical partitions mapped onto 16 physical nodes; growing to 32 nodes moves whole logical partitions, about half of them, without changing keys.",
+    "Hot-account splitting: a settlement account receiving 5,000 postings/s split into 10 sub-accounts brings each to 500/s."
+  ],
+  "pitfalls": [
+    "Partitioning by time and creating a permanently hot newest partition.",
+    "Partitioning by tenant and discovering the largest tenant is 40% of traffic.",
+    "Expecting single transactions across accounts on different partitions.",
+    "Running tenant-wide reports as live scatter-gather queries against the ledger."
+  ],
+  "followups": [
+    {
+      "q": "How do you keep a balance correct with sub-accounts?",
+      "a": "The total balance is the sum of sub-account balances; each sub-account enforces its own non-negative rule, and debits draw from sub-accounts with funds or from a rebalancing step."
+    },
+    {
+      "q": "How do you move a large tenant to its own partitions?",
+      "a": "Dual-write or replicate its accounts to the new location, backfill, verify balances, switch routing in the tenant directory, then stop the old writes."
+    },
+    {
+      "q": "Why not just use a distributed SQL database with cross-partition transactions?",
+      "a": "You can, at the cost of higher latency for those transactions. Keeping invariants single-partition still matters for throughput and tail latency."
+    }
+  ],
+  "example": "A payments platform keys its ledger by (tenant_id, account_id) across 4,096 logical partitions. Each merchant's fee account is split into 16 sub-accounts after it became hot during sales, and monthly statements are generated from a projection in the warehouse.",
+  "related": [
+    "hot-partition-shows-up-2",
+    "shard-data-user-tenant-region",
+    "handle-multi-tenant-data-isolation",
+    "replace-two-phase-commit-across"
+  ],
+  "sources": [
+    {
+      "title": "AWS DynamoDB: Designing partition keys to distribute your workload",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-uniform-load.html"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

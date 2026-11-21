@@ -1,0 +1,72 @@
+{
+  "thesis": "Backpressure means a slow consumer can slow down its producers instead of being buried. Bound every buffer, propagate 'I'm full' upstream (blocking, credits, 429s), and decide deliberately where excess load is dropped. Unbounded buffers only move the failure later and make it bigger.",
+  "pitch": "In a pipeline, the slowest stage sets the throughput. If upstream keeps sending faster than that, the buffer between them grows until memory runs out or latency becomes useless. Backpressure fixes this by making capacity visible upstream. Inside a process, that's bounded queues where producers block or get rejected when full. Between services, it's flow control: HTTP/2 and gRPC have window-based flow control, streaming systems use pull-based consumption or credits, and request-response APIs return 429 or 503 to signal 'slow down'. At the edge, where you can't slow the user, you shed load deliberately. With queues like Kafka, consumers pull at their own pace and lag grows instead of memory, which is fine for a while, as long as you monitor lag and scale consumers or shed upstream before retention runs out.",
+  "points": [
+    {
+      "h": "Every buffer must be bounded",
+      "d": "Queues, channels, thread pools and in-memory lists all have a maximum size. Unbounded buffers convert overload into out-of-memory crashes or minutes of latency."
+    },
+    {
+      "h": "Signal upstream",
+      "d": "Blocking producers (in-process), credits or windows (streaming protocols), and explicit rejections with Retry-After (HTTP). The producer must react by slowing down."
+    },
+    {
+      "h": "Pull beats push for consumers",
+      "d": "Pull-based consumers (Kafka, SQS) take work at their own rate; the backlog lives in durable storage instead of in consumer memory."
+    },
+    {
+      "h": "Monitor lag and age, not just depth",
+      "d": "The age of the oldest message tells you how stale processing is. Alert on lag growth rate and time until retention is exceeded."
+    },
+    {
+      "h": "Decide where to drop",
+      "d": "At some point load must be shed. Choose the place: at the edge (reject requests), by sampling (drop some telemetry), or by degrading (skip optional processing)."
+    },
+    {
+      "h": "Scale the bottleneck stage",
+      "d": "Backpressure buys time; adding consumers or capacity to the slowest stage fixes throughput. Partition counts and downstream limits cap how far that goes."
+    }
+  ],
+  "decision": "Bounded buffers everywhere, explicit backpressure signals between components, durable queues where work can wait, and deliberate shedding where it can't. Treat growing lag as an incident before it becomes data loss.",
+  "numbers": [
+    "Backlog time: a queue receiving 12,000 msgs/s with consumers handling 10,000 msgs/s grows by 2,000/s, 7.2 million per hour. With 24 hours of retention and no fix, data starts expiring after about a day.",
+    "Drain time after the spike: with a backlog of 7.2 million and 3,000 msgs/s of spare consumer capacity, draining takes about 40 minutes."
+  ],
+  "pitfalls": [
+    "Unbounded in-memory queues in services, which hide the problem until the process dies.",
+    "Producers that ignore 429s or retry immediately.",
+    "Monitoring queue depth without age, missing that the oldest message is hours old.",
+    "Scaling consumers beyond what the downstream database can handle, moving the bottleneck."
+  ],
+  "followups": [
+    {
+      "q": "How do you apply backpressure to end users?",
+      "a": "You can't slow them directly, so reject or degrade: 429 with Retry-After, waiting rooms for big events, or simpler responses."
+    },
+    {
+      "q": "What happens if Kafka retention is about to expire unprocessed messages?",
+      "a": "Scale consumers, extend retention temporarily, divert to a slower but durable overflow store, or prioritise processing and accept dropping low-value messages explicitly."
+    },
+    {
+      "q": "How does gRPC flow control help?",
+      "a": "HTTP/2 stream and connection windows stop a sender when the receiver hasn't consumed data, so a slow receiver isn't overwhelmed at the transport level."
+    }
+  ],
+  "example": "A metrics ingestion pipeline buffered in memory and crashed during spikes. The fix: bounded in-process queues, 429s to agents with Retry-After, Kafka between ingest and aggregation, and lag-age alerts. Spikes now show up as lag that drains afterwards instead of crashes.",
+  "related": [
+    "design-admission-control-service-stays",
+    "should-use-queue-versus-direct",
+    "design-dead-letter-queues-retry",
+    "list-ways-three-tier-service"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Avoiding insurmountable queue backlogs",
+      "url": "https://aws.amazon.com/builders-library/avoiding-insurmountable-queue-backlogs/"
+    },
+    {
+      "title": "Google SRE book: Handling overload",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  ]
+}

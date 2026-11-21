@@ -1,0 +1,70 @@
+{
+  "thesis": "Model OLTP for correct, fast writes and point reads: normalised tables, narrow transactions, indexes for known lookups. Model OLAP for fast scans and simple queries over history: denormalised fact and dimension tables in columnar storage, loaded from OLTP.",
+  "pitch": "In OLTP the goal is integrity under concurrent writes, so I'd normalise: each fact stored once, constraints in the database, short transactions, and indexes for the access paths the application uses. Denormalise only where a hot read path justifies it. In OLAP the goal is answering broad questions quickly, so I'd use a dimensional model: fact tables recording events like payments or loan disbursals with numeric measures and foreign keys, and dimension tables like customer, product and date, which may be wide and denormalised. Changing attributes are handled with slowly changing dimensions so history is preserved: a customer's region at the time of the payment, not today's. Data flows from OLTP by CDC or batch, is cleaned and conformed, and partitioned by date for pruning.",
+  "points": [
+    {
+      "h": "OLTP: normalise for integrity",
+      "d": "Third normal form, foreign keys and constraints prevent anomalies under concurrent updates. Each update touches few rows."
+    },
+    {
+      "h": "OLTP: index for known access paths",
+      "d": "Index the lookups the application performs; every extra index slows writes. Keep transactions short to reduce lock contention."
+    },
+    {
+      "h": "OLAP: facts and dimensions",
+      "d": "A star schema: a central fact table (one row per event, with measures) joined to dimension tables. Simple for analysts and efficient for columnar engines."
+    },
+    {
+      "h": "OLAP: preserve history",
+      "d": "Slowly changing dimensions (for example type 2, with valid-from and valid-to rows) record attribute changes so reports reflect what was true at the time."
+    },
+    {
+      "h": "OLAP: partition and cluster",
+      "d": "Partition fact tables by date and cluster by common filter columns so queries scan only relevant data."
+    },
+    {
+      "h": "The transformation layer",
+      "d": "Raw replicated tables land first, then are cleaned, conformed (consistent ids, currencies, time zones) and modelled. Version this logic like code."
+    }
+  ],
+  "decision": "Normalised OLTP plus dimensional OLAP is the standard pairing. Denormalise OLTP only for measured hot reads, and prefer wide denormalised tables in OLAP when they simplify analyst queries without breaking history.",
+  "numbers": [
+    "Date partitioning example: a fact table with 3 years of daily partitions; a query for last month scans about 30 of roughly 1,100 partitions, under 3% of the data."
+  ],
+  "pitfalls": [
+    "Copying the OLTP schema straight into the warehouse and making analysts write ten-way joins.",
+    "Overwriting dimension attributes, so historical reports change retroactively.",
+    "Denormalising OLTP early and then fighting update anomalies.",
+    "Mixing currencies or time zones in fact tables without conforming them."
+  ],
+  "followups": [
+    {
+      "q": "When would you denormalise in OLTP?",
+      "a": "For a hot read path where joins are measurably expensive, such as storing an order total on the order row, with the update kept in the same transaction."
+    },
+    {
+      "q": "Star schema or one big wide table?",
+      "a": "Wide tables are simpler for many tools and fast in columnar engines; star schemas manage changing dimensions and reuse better. Many teams model a star and publish wide tables on top."
+    },
+    {
+      "q": "How do you handle late-arriving data?",
+      "a": "Load by event time into the right partition, reprocess affected aggregates, and track which partitions changed."
+    }
+  ],
+  "example": "A lender's OLTP has loans, repayments and customers in normalised tables. The warehouse has a repayments fact table (amount, days late, keys) and dimensions for customer (type 2, tracking region and risk band over time), product and date, so 'delinquency by risk band at origination' is a simple query.",
+  "related": [
+    "boundary-between-oltp-olap-data",
+    "decide-between-sql-nosql-search",
+    "design-indexes-table-takes-90"
+  ],
+  "sources": [
+    {
+      "title": "Kimball Group: Dimensional modeling techniques",
+      "url": "https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 3",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

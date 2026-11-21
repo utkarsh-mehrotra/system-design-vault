@@ -1,0 +1,74 @@
+{
+  "thesis": "Zero-downtime schema changes come from two habits: never make a change that breaks the currently running code, and avoid operations that take long locks or rewrite large tables. Expand and contract across several deploys, using online DDL or shadow-table tools for the heavy steps.",
+  "pitch": "The application and the schema change at different times, so every schema change must work with both the old and new code. Adding is safe if it's nullable or has a default the database can apply without a rewrite. Renaming or changing a type is done as add new, write both, backfill, switch reads, then drop old, spread across releases. Then the lock problem: some DDL takes an exclusive lock or rewrites the table, and even a brief lock can queue behind a long-running transaction and block all traffic. So I'd set a short lock timeout and retry, build indexes concurrently, and for heavy changes use online tools like gh-ost for MySQL or the database's own online DDL. I'd test each migration against a production-sized copy and run it with monitoring and a way to abort.",
+  "points": [
+    {
+      "h": "Compatible with running code",
+      "d": "During deploys, old and new code run together. A migration must not remove or rename anything the old code uses, and must not require something the old code doesn't provide."
+    },
+    {
+      "h": "Expand and contract across releases",
+      "d": "Add the new column or table, deploy code that writes both, backfill, deploy code that reads new, then remove old in a later release."
+    },
+    {
+      "h": "Know which DDL locks or rewrites",
+      "d": "Behaviour differs by database and version: adding a column with a constant default is instant in recent Postgres and MySQL; changing a column type often rewrites the table."
+    },
+    {
+      "h": "Lock timeouts protect traffic",
+      "d": "A DDL waiting for a lock blocks everything queued behind it. Set a short lock timeout (a few seconds) so the migration fails fast and retries instead of stalling production."
+    },
+    {
+      "h": "Online index builds",
+      "d": "Use concurrent or online index creation. It takes longer and can fail, so check for invalid indexes afterwards."
+    },
+    {
+      "h": "Shadow-table tools for heavy changes",
+      "d": "gh-ost and pt-online-schema-change copy the table in the background, keep it in sync, and swap names at the end, avoiding long locks."
+    },
+    {
+      "h": "Rehearse on production-size data",
+      "d": "A migration that takes 2 seconds on staging can take an hour on production. Test timings and lock behaviour on a realistic copy."
+    }
+  ],
+  "decision": "Additive changes can ship any time with lock timeouts. Renames, type changes and drops always use expand and contract over multiple releases. Heavy rewrites on large tables use online tools during low-traffic windows.",
+  "numbers": [
+    "Lock timeout example: lock_timeout of 2–5 seconds on migration sessions; if it fails, retry with backoff rather than holding a queue of blocked queries."
+  ],
+  "pitfalls": [
+    "Renaming a column in one step while old code still reads it.",
+    "A migration waiting on a lock behind a long analytics query, blocking all writes.",
+    "Adding a NOT NULL column without a default on an old database version that rewrites the table.",
+    "Running migrations automatically on deploy without timing tests on production-size data."
+  ],
+  "followups": [
+    {
+      "q": "How do you make a column NOT NULL safely?",
+      "a": "Add it nullable, backfill, add a check constraint as not validated, validate it separately (which doesn't block writes in Postgres), then set NOT NULL."
+    },
+    {
+      "q": "Who runs migrations: the app on startup or a separate step?",
+      "a": "A separate, controlled step in the pipeline, with lock timeouts and monitoring, so many app instances don't race to run it and failures don't block deploys."
+    },
+    {
+      "q": "How do you handle a migration that fails halfway?",
+      "a": "Make each migration small and transactional where the database supports transactional DDL; otherwise make it idempotent so it can be rerun."
+    }
+  ],
+  "example": "Renaming 'amount' to 'amount_minor' on a 400-million-row payments table: release 1 adds amount_minor; release 2 writes both; a throttled backfill fills history; release 3 reads amount_minor; release 4, two weeks later, drops amount. No single step held a lock longer than a second.",
+  "related": [
+    "migrate-billion-row-table-new",
+    "plan-rollback-release-has-already",
+    "safely-backfill-data-production"
+  ],
+  "sources": [
+    {
+      "title": "GitHub: gh-ost, online schema migration for MySQL",
+      "url": "https://github.com/github/gh-ost"
+    },
+    {
+      "title": "PostgreSQL documentation: ALTER TABLE",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  ]
+}

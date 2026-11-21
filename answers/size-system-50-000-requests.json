@@ -1,0 +1,77 @@
+{
+  "thesis": "Work it out per request, then multiply: CPU time, memory and network per request give instance counts; the 100 ms deadline gives a latency budget split across hops; headroom of 30–40% covers spikes and failures. Then say what you drop when the deadline is about to be missed.",
+  "pitch": "I'd do back-of-envelope sizing in four steps. Per-request cost: measure or estimate CPU time, say 4 ms per request; at 50,000 requests per second that's 200 CPU-seconds per second, so 200 cores busy, and at a target of 60% utilisation about 340 cores, or roughly 22 sixteen-core instances, plus enough to survive losing a zone. Concurrency by Little's law: 50,000 per second × 0.05 s average latency is 2,500 requests in flight, which sizes thread pools and connections. Latency budget: of 100 ms, give perhaps 10 to network, 20 to the service, 40 to dependencies called in parallel with their own timeouts, and keep 30 in reserve. Dependencies: if each request makes three downstream calls, those services see 150,000 calls per second. And I'd decide in advance what we drop near the deadline: optional calls, then lower-priority requests, so the core response stays within 100 ms.",
+  "points": [
+    {
+      "h": "Per-request resource cost",
+      "d": "CPU milliseconds, memory per in-flight request, bytes in and out. Get them from profiling or a load test of one instance, not guesses."
+    },
+    {
+      "h": "Compute instance count",
+      "d": "Cores = requests/s × CPU seconds per request ÷ target utilisation. Then round up for zone failure (N+1 zones) and deploys (instances out of rotation)."
+    },
+    {
+      "h": "Concurrency with Little's law",
+      "d": "In-flight = arrival rate × latency. This sizes thread pools, connection pools and memory, and shows how quickly a latency increase exhausts them."
+    },
+    {
+      "h": "Split the latency budget",
+      "d": "Allocate the 100 ms across network, service time and dependencies, with timeouts at each step below the remaining budget. Parallelise independent calls."
+    },
+    {
+      "h": "Fan-out multiplies downstream load",
+      "d": "Each downstream call multiplies requests per second for that dependency, and the request waits for the slowest call, so the tail matters more with fan-out."
+    },
+    {
+      "h": "Headroom",
+      "d": "30–40% spare capacity covers traffic spikes, a lost zone, and performance regressions until autoscaling catches up."
+    },
+    {
+      "h": "Deadline behaviour",
+      "d": "Propagate the deadline; skip optional calls when the remaining budget is low; shed low-priority traffic before high-priority traffic misses its deadline."
+    }
+  ],
+  "decision": "Size from measured per-request costs, add zone-failure and spike headroom, and enforce the deadline with timeouts and degradation. Validate with a load test at 1.5x the target before trusting the numbers.",
+  "numbers": [
+    "CPU: 50,000 req/s × 4 ms = 200 cores busy; ÷ 0.6 utilisation ≈ 333 cores ≈ 21 sixteen-core instances; across 3 zones with one-zone loss tolerance, run about 32 instances.",
+    "Network: 50,000 req/s × 20 KB response ≈ 1 GB/s ≈ 8 Gbit/s egress, which matters for instance network limits and cost.",
+    "Concurrency: 50,000 req/s × 50 ms average = 2,500 in flight; if latency rises to 100 ms, 5,000."
+  ],
+  "pitfalls": [
+    "Sizing on average latency and ignoring the tail and fan-out.",
+    "Forgetting that dependencies see multiplied traffic.",
+    "No headroom for zone loss, so a single-zone outage becomes an overload.",
+    "Timeouts that add up to more than the overall deadline."
+  ],
+  "followups": [
+    {
+      "q": "How do you get the per-request CPU cost if the system doesn't exist yet?",
+      "a": "Prototype the hot path and benchmark it, or use costs from a similar existing service, and plan to correct after the first load test."
+    },
+    {
+      "q": "The p99 of one dependency is 80 ms. Can you meet 100 ms?",
+      "a": "Only with a tight timeout and a fallback, a hedged request, or by moving that call off the critical path (prefetch or cache), since its tail alone consumes most of the budget."
+    },
+    {
+      "q": "What's the memory footprint?",
+      "a": "In-flight requests × memory per request plus caches and runtime overhead per instance. 2,500 in flight × 200 KB = 500 MB across the fleet, small compared to caches."
+    }
+  ],
+  "example": "An ad-serving endpoint at 50,000 req/s with a 100 ms deadline: profiling showed 3 ms CPU per request. The team ran 30 instances across three zones at about 50% utilisation, gave the bidding call a 40 ms timeout with a default ad as fallback, and kept p99 at 70 ms.",
+  "related": [
+    "walk-one-request-dns-database",
+    "design-admission-control-service-stays",
+    "one-request-fans-out-five",
+    "p50-flat-but-p99-doubled"
+  ],
+  "sources": [
+    {
+      "title": "Jeff Dean and Luiz Barroso: The tail at scale",
+      "url": "https://research.google/pubs/the-tail-at-scale/"
+    },
+    {
+      "title": "Google SRE book: Handling overload",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  ]
+}

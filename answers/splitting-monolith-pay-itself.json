@@ -1,0 +1,76 @@
+{
+  "thesis": "Splitting pays when team coordination, deploy coupling or very different scaling needs cost more than the network failures, distributed data and operational load you take on. A well-structured modular monolith is often the better answer, and a prerequisite for a clean split anyway.",
+  "pitch": "I'd look for three signals. Organisational: many teams blocking each other in one codebase and deploy pipeline, so release coordination and merge conflicts dominate. Change rate: some parts change daily and others rarely, but everything ships together and carries the same risk. Scaling and runtime profile: one component needs very different resources, like GPU inference, a high-throughput ingest path, or stricter isolation for compliance. Against that I'd price the costs: every call becomes a network call that can fail and be slow, data must be split with clear ownership and eventual consistency between services, and you need service discovery, tracing, versioned contracts and more on-call. If the signals are weak, I'd invest in a modular monolith: enforce module boundaries and data ownership inside one deployable. When a module clearly needs independence, extract that one, along a boundary already proven in the code.",
+  "points": [
+    {
+      "h": "Signal: teams blocking each other",
+      "d": "When more than a handful of teams share one deploy pipeline, coordination costs grow fast. Independent deployability per team is the strongest reason to split."
+    },
+    {
+      "h": "Signal: divergent change rates and risk",
+      "d": "Fast-moving features coupled to stable, critical code means every release risks the critical path."
+    },
+    {
+      "h": "Signal: divergent runtime needs",
+      "d": "Different scaling, hardware, language, or isolation requirements for one component."
+    },
+    {
+      "h": "Cost: network and partial failure",
+      "d": "In-process calls become remote calls with latency, timeouts, retries and versioning. Debugging spans processes."
+    },
+    {
+      "h": "Cost: distributed data",
+      "d": "Each service owns its data. Cross-service queries and transactions become APIs, events, sagas and reconciliation."
+    },
+    {
+      "h": "Cost: platform and operations",
+      "d": "CI/CD per service, service discovery, observability, security between services, and on-call for more moving parts. You need a platform before many services."
+    },
+    {
+      "h": "Modular monolith first",
+      "d": "Enforce module boundaries (separate packages, no shared tables between modules, internal APIs). This captures much of the benefit and makes later extraction straightforward."
+    }
+  ],
+  "decision": "Split when independent deployment or scaling of a specific part is clearly worth the cost, one module at a time. Stay with a modular monolith when the team is small, boundaries are still moving, or platform maturity is low.",
+  "numbers": [
+    "Heuristic: if a monolith's main pain is a 2-hour build or test suite, fix the build first; that's cheaper than splitting.",
+    "Team-size heuristic: a single deployable tends to strain when more than several teams (tens of engineers) commit to it daily."
+  ],
+  "pitfalls": [
+    "Splitting by technical layer (UI service, data service) instead of by business capability.",
+    "A distributed monolith: services that must deploy together and share a database.",
+    "Splitting before boundaries are understood, then redrawing them across network calls.",
+    "No platform investment, so each new service reinvents deployment and monitoring."
+  ],
+  "followups": [
+    {
+      "q": "Which module would you extract first?",
+      "a": "One with a clear boundary, its own data, a distinct scaling or change profile, and a team ready to own it. Avoid starting with the most entangled core."
+    },
+    {
+      "q": "How do you split the database?",
+      "a": "Give each module ownership of its tables inside the monolith first, remove cross-module joins, then move the tables with the extracted service and replace joins with API calls or replicated read models."
+    },
+    {
+      "q": "How do you know the split worked?",
+      "a": "Lead time and deploy frequency for the team improved, incidents didn't increase, and the extracted service deploys independently without coordinated releases."
+    }
+  ],
+  "example": "A lending company with four teams kept a modular monolith with strict module boundaries. When the underwriting team needed ML models, GPU instances and daily releases, they extracted underwriting as a service, along a boundary that had already existed as a module for a year.",
+  "related": [
+    "draw-service-boundaries-lending-platform",
+    "trade-offs-between-vertical-horizontal",
+    "tell-design-over-engineered",
+    "choose-between-building-platform-one"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Monolith first",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    },
+    {
+      "title": "Martin Fowler: Microservice trade-offs",
+      "url": "https://martinfowler.com/articles/microservice-trade-offs.html"
+    }
+  ]
+}

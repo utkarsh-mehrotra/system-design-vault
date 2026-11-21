@@ -1,0 +1,75 @@
+{
+  "thesis": "Pick an isolation model per tier, not one for everyone: shared tables with a tenant id for most tenants, and schema- or database-per-tenant for those who need stronger isolation or have outgrown the pool. Enforce tenant scoping in the data layer, not in each query, and design noisy-neighbour controls and tenant export from the start.",
+  "pitch": "There are three models. Pooled: shared tables with tenant_id on every row; cheapest and easiest to operate, weakest isolation. Schema-per-tenant: separate schemas in a shared database; better logical isolation, but migrations run per schema and catalogues grow. Database- or cluster-per-tenant: strongest isolation and per-tenant backup, restore and residency, at much higher cost and operational load. I'd usually run pooled for most tenants and offer dedicated databases for large or regulated tenants. In the pooled model, the key is enforcement: tenant id must come from the authenticated context, never from request parameters, and be applied automatically, through row-level security in Postgres or a mandatory tenant filter in the data access layer, with tests that try cross-tenant access. Then per-tenant quotas and rate limits for noisy neighbours, per-tenant encryption keys if required, and tooling for tenant export, deletion and moving a tenant between models.",
+  "points": [
+    {
+      "h": "Pooled: shared tables, tenant_id everywhere",
+      "d": "Most efficient and simplest to migrate and monitor. Isolation depends entirely on correct scoping, so enforcement must be systematic."
+    },
+    {
+      "h": "Schema-per-tenant",
+      "d": "Clearer separation and easy per-tenant export. Migrations must run across thousands of schemas, and some databases degrade with very large catalogues."
+    },
+    {
+      "h": "Database-per-tenant",
+      "d": "Strong isolation, per-tenant performance, backups, residency and encryption. Costly at small sizes; needs automation for provisioning and migrations."
+    },
+    {
+      "h": "Enforce scoping in the data layer",
+      "d": "Derive tenant id from authentication, set it in the session, and apply it via row-level security or a mandatory repository filter. Code reviews alone aren't enforcement."
+    },
+    {
+      "h": "Test for cross-tenant leaks",
+      "d": "Automated tests that authenticate as tenant A and attempt to read tenant B's resources by id across every endpoint."
+    },
+    {
+      "h": "Noisy neighbours",
+      "d": "Per-tenant rate limits, query timeouts, concurrency caps and resource pools. Watch per-tenant resource usage to spot those who need to move."
+    },
+    {
+      "h": "Tenant lifecycle tooling",
+      "d": "Export, deletion, and migration of a tenant from pooled to dedicated without downtime."
+    }
+  ],
+  "decision": "Pooled by default with row-level security or an enforced filter. Dedicated databases for tenants who pay for it, are regulated, or are large enough to disturb others. Schema-per-tenant mainly when tenant counts are modest and per-tenant customisation is needed.",
+  "numbers": [
+    "Cost intuition: pooled can host thousands of small tenants on one cluster; database-per-tenant has a floor cost per tenant (instance, backups, monitoring) that dominates for small tenants."
+  ],
+  "pitfalls": [
+    "Taking tenant id from a request parameter or header the client controls.",
+    "One missed WHERE tenant_id = ? in a new query, leaking data.",
+    "Caches keyed without tenant id, serving one tenant's data to another.",
+    "No path to move a large tenant out of the pool."
+  ],
+  "followups": [
+    {
+      "q": "How does row-level security work in practice?",
+      "a": "The application sets a session variable with the tenant id after authentication; policies on each table restrict rows to that tenant, so a query missing a filter still can't see other tenants."
+    },
+    {
+      "q": "How do you run migrations across 5,000 tenant databases?",
+      "a": "An orchestrated rollout with batches, canaries, retries and a status table, and backward-compatible changes so tenants at different versions keep working."
+    },
+    {
+      "q": "A tenant asks for their own encryption keys. Can pooled support that?",
+      "a": "Partially, with per-tenant data keys for application-level encryption of sensitive fields; full key isolation is easier with dedicated databases."
+    }
+  ],
+  "example": "A SaaS runs 3,000 tenants pooled in Postgres with row-level security tied to a session tenant id, and 12 enterprise tenants on dedicated clusters provisioned from the same infrastructure code. A nightly test suite tries cross-tenant reads on every API endpoint.",
+  "related": [
+    "pick-partition-key-multi-tenant",
+    "shard-data-user-tenant-region",
+    "design-per-tenant-rate-limits",
+    "plan-data-residency-regional-regulations"
+  ],
+  "sources": [
+    {
+      "title": "PostgreSQL documentation: Row security policies",
+      "url": "https://www.postgresql.org/docs/current/ddl-rowsecurity.html"
+    },
+    {
+      "title": "AWS Builders' Library: Workload isolation using shuffle-sharding",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  ]
+}

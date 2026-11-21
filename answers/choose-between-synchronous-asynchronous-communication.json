@@ -1,0 +1,71 @@
+{
+  "thesis": "Use synchronous calls when the caller needs the answer to continue and the work is fast and bounded. Use asynchronous messaging to decouple availability, absorb bursts, fan out to many consumers, or run slow work. Asynchrony costs you immediate answers and simple error handling, so pay it only where you gain something.",
+  "pitch": "My rule: if the user or caller can't proceed without the result, and it can be produced within the latency budget, call synchronously, as with checking a price, authorising a payment, or reading a profile. If the work is slow, can be done later, or other systems just need to know something happened, make it asynchronous: emit an event or enqueue a job, return quickly, and process in the background. Async gives decoupling, since the producer stays up when consumers are down; buffering, which absorbs spikes; and fan-out, where many consumers react without the producer knowing them. Its costs are real: results arrive later, so the UI needs pending states; errors happen after the request returned, so you need retries, dead-letter handling and notifications; and duplicates and ordering need design. Most systems mix both: a synchronous core decision, then asynchronous side effects.",
+  "points": [
+    {
+      "h": "Synchronous when the answer is needed now",
+      "d": "Validations, authorisations, reads to render a page. Keep these calls few, fast and with timeouts."
+    },
+    {
+      "h": "Asynchronous for slow or deferrable work",
+      "d": "Sending email, generating reports, video processing, updating search indexes. The caller gets an acknowledgement and maybe a job id."
+    },
+    {
+      "h": "Availability decoupling",
+      "d": "With a queue in between, the producer keeps accepting work while a consumer is down; the backlog drains later. Synchronous chains multiply unavailability."
+    },
+    {
+      "h": "Load levelling",
+      "d": "Queues absorb bursts so consumers can run at a steady rate sized for average rather than peak load."
+    },
+    {
+      "h": "Fan-out and loose coupling",
+      "d": "Publishing an event lets new consumers subscribe without changing the producer."
+    },
+    {
+      "h": "The costs of async",
+      "d": "Eventual results and pending UI states, failure handling after the fact, at-least-once delivery requiring idempotency, ordering concerns, and harder end-to-end tracing."
+    }
+  ],
+  "decision": "Synchronous for the critical decision in a user request; asynchronous for side effects and slow work. If a synchronous chain is more than two or three calls deep, look for steps that can move to async or be served from local data.",
+  "numbers": [
+    "Availability of synchronous chains multiplies: three dependencies at 99.9% each give at most about 99.7% for the chain. With async side effects, the user path depends only on the synchronous parts."
+  ],
+  "pitfalls": [
+    "Making everything async, so simple requests become hard-to-debug event chains with no immediate answer.",
+    "Long synchronous chains where any slow service blocks the user.",
+    "Async processing without visibility: users don't know whether their job succeeded.",
+    "Forgetting idempotency for at-least-once delivery."
+  ],
+  "followups": [
+    {
+      "q": "How does the user learn the result of async work?",
+      "a": "Return a job or resource id, then poll, subscribe via WebSocket or server-sent events, or receive a notification or webhook."
+    },
+    {
+      "q": "Can you do request-reply over a queue?",
+      "a": "Yes, with correlation ids and reply queues, but it combines the latency of async with the coupling of sync. Use it when the transport itself is asynchronous (for example mainframe or partner integrations)."
+    },
+    {
+      "q": "How do you trace async flows?",
+      "a": "Propagate trace context in message headers and link consumer spans to producer spans, so a trace follows the message."
+    }
+  ],
+  "example": "Loan application submission validates input and runs the instant credit decision synchronously (under 2 seconds), returning approved or declined. Document generation, CRM updates, welcome emails and analytics happen asynchronously from an ApplicationDecided event.",
+  "related": [
+    "should-use-queue-versus-direct",
+    "event-driven-request-response-order",
+    "track-status-long-running-jobs",
+    "design-backpressure-high-traffic-system"
+  ],
+  "sources": [
+    {
+      "title": "Enterprise Integration Patterns: Messaging",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 11 (Stream processing)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

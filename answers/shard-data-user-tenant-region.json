@@ -1,0 +1,71 @@
+{
+  "thesis": "Shard on the dimension that most queries filter by and that spreads load evenly, then add a second dimension where compliance or locality demands it. Plan rebalancing and cross-shard queries before the first shard fills.",
+  "pitch": "I'd pick the shard key by asking which value nearly every request carries and whether it distributes well. For consumer apps that's usually user id: requests are per user and users are numerous. For B2B SaaS it's usually tenant id, which also gives isolation and makes tenant export and deletion easy, but tenant sizes are skewed, so large tenants need special handling. Region is rarely the primary key for load, but it's often a top-level constraint for data residency and latency: first route to a region, then shard within it. Whatever the key, I'd use a directory or consistent hashing over many logical shards so rebalancing is moving shards, not rewriting keys, and I'd keep cross-shard queries out of hot paths by maintaining projections.",
+  "points": [
+    {
+      "h": "The key most requests carry",
+      "d": "If 95% of queries include user_id, sharding by user keeps them single-shard. Queries without the key become scatter-gather and should be rare or served elsewhere."
+    },
+    {
+      "h": "Even distribution",
+      "d": "High cardinality and no dominant values. User ids usually distribute well; tenants and regions usually don't."
+    },
+    {
+      "h": "Tenant sharding for B2B",
+      "d": "Natural isolation, per-tenant backup, export and deletion, and easier noisy-neighbour control. Requires a strategy for very large tenants (dedicated shards)."
+    },
+    {
+      "h": "Region as a top-level constraint",
+      "d": "Data residency or latency can require that data lives in a region. Route by region first via a directory, then shard by user or tenant within the region."
+    },
+    {
+      "h": "Directory or consistent hashing",
+      "d": "A lookup service mapping keys to shards gives flexibility (move one tenant) at the cost of a dependency. Hashing over many logical shards needs no lookup but moves data more coarsely."
+    },
+    {
+      "h": "Cross-shard work",
+      "d": "Global aggregates, search and admin views go to projections, a warehouse or a search index. Cross-shard transactions use sagas."
+    }
+  ],
+  "decision": "Consumer: shard by user. B2B: shard by tenant with dedicated capacity for large tenants. Regulated or global: region first, then user or tenant. Always over-provision logical shards and keep a directory for exceptions.",
+  "numbers": [
+    "Over-provisioning: start with hundreds or thousands of logical shards on a few physical nodes so you can grow by moving shards for years without re-keying."
+  ],
+  "pitfalls": [
+    "Sharding by region alone and getting one enormous shard for the biggest market.",
+    "Choosing a key that many important queries don't carry, making scatter-gather the norm.",
+    "No directory, so moving one problematic tenant requires rehashing everything.",
+    "Ignoring how to handle users who move regions or tenants that merge."
+  ],
+  "followups": [
+    {
+      "q": "A user moves from the EU to the US. What happens to their data?",
+      "a": "Residency rules decide. Often data stays in the original region until a deliberate migration; the directory points to its current home, and the move is a copy, verify and switch."
+    },
+    {
+      "q": "How do you run a global report?",
+      "a": "Not against shards directly: stream changes into a warehouse and query there, or maintain pre-aggregated counters per shard and sum them."
+    },
+    {
+      "q": "When is consistent hashing better than a directory?",
+      "a": "When keys are uniform and you don't need per-key placement control. A directory wins when individual tenants need to be placed or moved deliberately."
+    }
+  ],
+  "example": "A B2B SaaS routes requests through a tenant directory to one of three regional clusters, and within each region hashes tenants across 1,024 logical shards. Two very large tenants have dedicated shards; global usage reporting runs in the warehouse.",
+  "related": [
+    "pick-partition-key-multi-tenant",
+    "hot-partition-shows-up-2",
+    "handle-multi-tenant-data-isolation",
+    "plan-data-residency-regional-regulations"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)",
+      "url": "https://dataintensive.net/"
+    },
+    {
+      "title": "AWS Builders' Library: Workload isolation using shuffle-sharding",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  ]
+}

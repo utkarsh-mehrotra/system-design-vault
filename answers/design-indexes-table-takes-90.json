@@ -1,0 +1,75 @@
+{
+  "thesis": "On a write-heavy table every index is a tax on every write, so keep only indexes that serve real, frequent queries, make those covering where it pays, and push ad hoc or analytical reads to a replica, search index or warehouse. Consider an LSM-based engine if writes dominate at scale.",
+  "pitch": "With 90% writes, each secondary index multiplies write work: every insert updates every index, causing more I/O, more WAL or redo, more lock and latch contention, and more replication volume. So I'd start from the read queries that actually matter, by frequency and latency requirement, and give each the minimum index that serves it, ideally covering so the read doesn't touch the table. I'd drop unused or duplicate indexes, which databases can report. Primary key choice matters: an append-friendly, time-ordered key keeps inserts at the end of the B-tree instead of scattering them. Reads that don't need to be on the primary, such as reporting, search and exploration, move to a replica with extra indexes or to a different store. And if write volume is huge and mostly appends, an LSM-tree engine handles it better than a B-tree.",
+  "points": [
+    {
+      "h": "Every index costs on every write",
+      "d": "Inserts and updates must maintain each index, adding I/O, log volume, contention and replication traffic. Five indexes can mean several times the write work of the bare table."
+    },
+    {
+      "h": "Index for real queries only",
+      "d": "Inventory queries by frequency and latency need. Use the database's statistics on index usage to find unused indexes and drop them."
+    },
+    {
+      "h": "Covering and composite indexes",
+      "d": "One composite index in the right column order can serve several queries; including the selected columns avoids table lookups. Fewer, better indexes beat many narrow ones."
+    },
+    {
+      "h": "Append-friendly primary keys",
+      "d": "Time-ordered keys (bigint sequences, UUIDv7) insert at the right edge of the B-tree. Random keys scatter writes and cause page splits."
+    },
+    {
+      "h": "Move secondary reads elsewhere",
+      "d": "A replica can carry extra indexes if your database allows, or stream data to a search index or warehouse for exploration and reporting."
+    },
+    {
+      "h": "Consider LSM engines",
+      "d": "LSM trees (RocksDB-based stores, Cassandra) turn random writes into sequential ones and handle very high ingest, trading some read cost and compaction overhead."
+    },
+    {
+      "h": "Partition by time",
+      "d": "For append-mostly data, time partitions keep active indexes small and make retention a cheap partition drop instead of mass deletes."
+    }
+  ],
+  "decision": "Minimal indexes on the primary: the primary key and the one to three indexes that serve hot reads. Everything else on replicas or derived stores. Re-evaluate with real usage statistics every few months.",
+  "numbers": [
+    "Rough write amplification: a table with 1 primary key and 4 secondary indexes performs about 5 index updates per insert. Removing 2 unused indexes cuts index maintenance by about 40%.",
+    "Time partitioning: dropping a monthly partition is a metadata operation; deleting the same rows one by one generates a huge amount of log and vacuum work."
+  ],
+  "pitfalls": [
+    "Adding an index for every slow query report without checking write impact.",
+    "Duplicate or overlapping indexes (an index on (a) and another on (a, b)).",
+    "Random UUID primary keys on a high-ingest table.",
+    "Deleting old rows individually instead of dropping partitions."
+  ],
+  "followups": [
+    {
+      "q": "How do you add an index to a busy table safely?",
+      "a": "Use the database's online or concurrent index build, during lower traffic, while watching replication lag, and test the plan on production-size data first."
+    },
+    {
+      "q": "A critical read is slow but you can't add another index. Options?",
+      "a": "Serve it from a cache or materialised view updated asynchronously, or from a replica with its own index, or reshape the query to use an existing composite index."
+    },
+    {
+      "q": "When does an LSM engine hurt?",
+      "a": "Read-heavy workloads with many point lookups across levels, and workloads with heavy updates or deletes that create compaction pressure."
+    }
+  ],
+  "example": "An event ingestion table took 20,000 inserts/s with seven indexes and lagging replication. Usage stats showed three indexes unused and two overlapping. Reducing to three indexes and partitioning by day cut write latency in half and replication lag disappeared; investigative queries moved to the warehouse.",
+  "related": [
+    "model-data-differently-oltp-versus",
+    "generate-unique-ids-across-regions",
+    "design-retention-soft-delete-legal"
+  ],
+  "sources": [
+    {
+      "title": "Markus Winand: Use The Index, Luke",
+      "url": "https://use-the-index-luke.com/"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 3 (B-trees and LSM-trees)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

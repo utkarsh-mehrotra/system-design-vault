@@ -1,0 +1,74 @@
+{
+  "thesis": "A safe backfill is idempotent, resumable, throttled against live load, verifiable and stoppable. Treat it as a production service with metrics and a kill switch, not a one-off script.",
+  "pitch": "I'd write the backfill so running it twice is harmless: compute values deterministically and upsert, or skip rows already processed, and never overwrite newer data written by live traffic. It processes data in key ranges with a persistent checkpoint, so it can stop and resume anywhere. Its rate adapts to the database's health: back off when replication lag, CPU or p99 latency rise, and run harder off-peak. It emits progress, error counts and throughput, and has a kill switch. Before the full run I'd test it on a production snapshot and then on a small slice of production, and afterwards verify with counts, checksums or sampled comparisons. And I'd decide in advance what happens with rows that fail: skip and log them for a retry pass, not abort the whole job.",
+  "points": [
+    {
+      "h": "Idempotent by design",
+      "d": "Deterministic transformation plus upsert, or a processed marker. Use conditional writes so a backfilled value never replaces a newer value from live traffic."
+    },
+    {
+      "h": "Resumable with checkpoints",
+      "d": "Iterate by primary key ranges and store the last completed key durably. Avoid OFFSET pagination, which gets slower and skips or repeats rows as data changes."
+    },
+    {
+      "h": "Adaptive throttling",
+      "d": "Measure replication lag, database CPU and application latency; slow down or pause when thresholds are crossed. Fixed sleeps are a weak substitute."
+    },
+    {
+      "h": "Observable and stoppable",
+      "d": "Dashboards for progress, rate, errors and estimated completion. A feature flag or config to pause instantly."
+    },
+    {
+      "h": "Test on realistic data",
+      "d": "Run against a recent production snapshot to catch edge cases (nulls, legacy formats, huge rows), then a small production slice."
+    },
+    {
+      "h": "Handle failures per row",
+      "d": "Log failing keys with reasons to a dead-letter table and continue. Re-run only those after fixing the cause."
+    },
+    {
+      "h": "Verify the result",
+      "d": "Counts per range, checksums, and sample comparisons against expected values; sign off before switching anything to depend on the data."
+    }
+  ],
+  "decision": "Run as a managed job (a worker with checkpoints) for anything beyond a few million rows or anything touching hot tables. Small, cold-table backfills can be simpler, but still idempotent.",
+  "numbers": [
+    "Throttle example: target replication lag under 1 second and database CPU under 60%; batch 2,000 rows; if lag exceeds 1 second, halve the rate; if under 0.2 seconds, increase by 10%."
+  ],
+  "pitfalls": [
+    "OFFSET/LIMIT pagination over a changing table.",
+    "Overwriting values that live traffic updated after the backfill read them.",
+    "One giant transaction that locks rows for minutes and floods the log.",
+    "Aborting the whole job on the first bad row."
+  ],
+  "followups": [
+    {
+      "q": "The backfill needs data from another service. How do you avoid overloading it?",
+      "a": "Apply the same throttling to calls to that service, coordinate a rate with its owners, cache lookups, or use its bulk export instead of per-row calls."
+    },
+    {
+      "q": "How do you estimate how long it will take?",
+      "a": "Measure throughput on a slice under the throttle, multiply by total rows, and add margin for pauses during peak hours."
+    },
+    {
+      "q": "How do you backfill derived data like a search index?",
+      "a": "Same pattern, often simpler: rebuild into a new index alias, verify counts, then swap the alias atomically."
+    }
+  ],
+  "example": "Backfilling a new 'risk_band' column on 300 million loan rows: a worker processes 5,000-row ranges, writes only where risk_band is null, checkpoints after each batch, and pauses when replica lag exceeds 1 second. It completed in 30 hours with 212 rows logged for manual review.",
+  "related": [
+    "migrate-billion-row-table-new",
+    "schema-changes-downtime",
+    "design-pagination-massive-datasets-efficiently"
+  ],
+  "sources": [
+    {
+      "title": "Markus Winand: We need tool support for keyset pagination (no OFFSET)",
+      "url": "https://use-the-index-luke.com/no-offset"
+    },
+    {
+      "title": "Martin Fowler: Parallel change (expand and contract)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  ]
+}

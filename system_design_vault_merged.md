@@ -6,54 +6,378 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### Request path & scaling basics
 1. **Walk one request from DNS to the database and back. Where does each millisecond go?** [mine + ref · Fundamental · Latency]
-   - Name every hop: DNS, TLS, CDN or edge, load balancer, service, cache, database. Give each hop a latency budget, then say which hops dominate p99 and why.
-   - DNS, edge or CDN, load balancer, gateway, service, cache, datastore, and back. State what each hop does, what can fail there, and where latency accumulates.
+   - **Thesis:** Name every hop, give each a latency budget, and say which hops dominate the tail. For most web requests the network round trips (DNS, connection setup, TLS) and the slowest dependency call dominate, not the application code.
+   - **60-second answer:** A browser request goes: DNS resolution, usually cached but potentially tens of milliseconds on a miss; TCP and TLS setup, one to two round trips to the edge, which is why terminating TLS at a nearby CDN or edge point matters; the edge either serves from cache or forwards over a warm connection to the origin's load balancer; the load balancer picks a healthy instance; the service authenticates, maybe checks a cache, then queries the database over a pooled connection; the database finds rows via an index, from memory if hot, from disk if not; and the response returns the same way, possibly compressed. I'd put rough numbers on each and point out that p50 is dominated by network distance while p99 is dominated by queueing, cache misses, garbage collection and the slowest downstream call. That tells you where to optimise: move the edge closer, reuse connections, cache, and cut the slowest dependency.
+   - **Key points:**
+     1. **DNS.** Usually answered from the browser or OS cache. On a miss, a recursive resolver lookup can take tens of milliseconds. Low TTLs help failover but increase misses.
+     2. **Connection setup.** TCP needs one round trip; TLS 1.3 adds one more (TLS 1.2 adds two). At 80 ms round trip time to a distant origin, that's 160–240 ms before the first byte. An edge 10 ms away cuts this dramatically.
+     3. **Edge or CDN.** Serves cacheable content directly. For dynamic requests it forwards over pre-established, long-lived connections to the origin, avoiding repeated setup costs.
+     4. **Load balancer.** Adds well under a millisecond typically, but its algorithm and health checks decide whether you land on a slow or overloaded instance.
+     5. **Service work.** Authentication, validation, business logic and serialisation. Often a few milliseconds, but GC pauses and thread-pool queueing appear here in the tail.
+     6. **Cache and database.** An in-memory cache hit is around a millisecond or less in the same zone. A database query using an index on hot data takes about a millisecond; a cold disk read or a bad plan can take hundreds.
+     7. **Where p99 comes from.** Queueing under load, cache misses, slow dependencies, retries, and fan-out (the request waits for the slowest of many calls).
+   - **When to choose what:** To cut median latency: move termination closer to users, reuse connections, cache aggressively. To cut tail latency: reduce fan-out, set timeouts, remove queueing, fix slow queries and GC. Measure each hop with tracing before optimising.
+   - **Numbers:**
+     - Order-of-magnitude figures: same-zone network round trip around 0.5 ms or less; cross-region tens of milliseconds; intercontinental 100 ms or more; memory reference nanoseconds; SSD random read around 0.1 ms.
+     - Budget example for a 200 ms target: DNS and connection 40 ms (with edge), edge to origin 20 ms, service 30 ms, cache or database 20 ms, response transfer 30 ms, margin 60 ms.
+   - **Pitfalls:**
+     - Optimising application code when most time is spent in round trips.
+     - Opening a new database or HTTP connection per request instead of pooling.
+     - Looking only at averages, which hide the tail where users notice slowness.
+     - Forgetting response size: large payloads over slow mobile links can dominate.
+   - **Follow-ups:**
+     - _How would you measure where the time goes?_ Real-user monitoring for client-side phases (DNS, connect, TLS, first byte), distributed tracing for server hops, and database query timing. Compare p50 and p99 per hop.
+     - _What changes for a mobile app on a poor network?_ Round trips dominate even more: batch requests, reuse connections (HTTP/2 or HTTP/3), compress, and cache on the device.
+     - _How does HTTP/3 help?_ QUIC combines transport and TLS handshakes, avoids head-of-line blocking across streams, and handles network changes better, which helps lossy mobile connections.
+   - **Example:** A checkout page at 900 ms p99 for users in Asia hitting a US origin. Tracing showed 400 ms in connection setup and TLS. Terminating TLS at a regional edge with warm connections to the origin cut p99 to 450 ms without touching application code.
+   - **Sources:** [Ilya Grigorik: High Performance Browser Networking](https://hpbn.co/); [Jeff Dean and Luiz Barroso: The tail at scale](https://research.google/pubs/the-tail-at-scale/)
    - _Also asked as:_ How does a request flow end-to-end through a production system?
 2. **Read traffic grows 10x in one quarter. What do you change first, and what do you refuse to change?** [mine + ref · Intermediate · Scaling, Caching]
-   - Measure the bottleneck before acting. Cache and add read replicas before sharding. Hold the API contract and data model steady so clients and teams do not have to move.
-   - Stateless services behind a load balancer, caching for hot reads, replicas, partitionable data, and autoscaling with tested limits. Find the first bottleneck by load testing, not guessing.
+   - **Thesis:** Measure where the first bottleneck will be, then add read capacity in order of cost: caching, read replicas, then partitioning. Hold the API contract and the data model steady so clients and other teams don't have to change with you.
+   - **60-second answer:** First I'd find out what breaks first at 10x, with load tests and the current saturation of each tier, rather than guess. For read growth the usual order is: cache hot, read-mostly data, at the edge for public content and in a shared cache for computed results, which can absorb most of the growth if the hit ratio is high; add read replicas for the database, with read-your-writes handled for users who just wrote; make the service tier stateless and autoscaled; and only then partition data if a single primary or dataset is the limit. What I'd refuse to change is the public API contract and the core data model, because changing those forces every client and team to move at once; I'd also refuse a rewrite under deadline pressure. The goal is to scale behind stable interfaces.
+   - **Key points:**
+     1. **Measure before acting.** Load test at 2x, 5x, 10x in a production-like environment, and look at saturation per tier (CPU, connections, cache memory, database I/O). The first bottleneck is often not where people expect.
+     2. **Cache first.** Edge caching for public or per-region content, an application cache for expensive computed results, and HTTP caching headers. A 90% hit ratio means the backend sees one tenth of the reads.
+     3. **Read replicas second.** Replicas scale reads horizontally. Handle replication lag: route reads needing fresh data to the primary or use session guarantees.
+     4. **Stateless services, autoscaled.** Move session state to a shared store, set autoscaling on saturation signals, and make sure connection pools don't overwhelm the database as instances multiply.
+     5. **Partition last.** Sharding is the most expensive change: data movement, cross-shard queries, operational complexity. Do it when a single dataset or primary truly can't keep up.
+     6. **What not to change.** Public API contracts, core data model and identifiers. Changing these during a growth spurt multiplies risk and coordination cost.
+     7. **Protect against the spike.** Rate limits, load shedding and graceful degradation buy time while capacity catches up.
+   - **When to choose what:** Cache, then replicas, then horizontal service scaling, then partitioning, in that order unless measurement shows a different first bottleneck. Never trade API stability for a quick scaling win.
+   - **Numbers:**
+     - Cache math: at 10x traffic and a 90% hit ratio, origin reads are 10 × 0.1 = 1x today's load. At 80% hit ratio, origin load is 2x, which shows how sensitive capacity is to hit ratio.
+     - Replica math: if the primary can serve 5,000 reads/s and you need 40,000, you need around 8 read-serving nodes plus headroom, assuming reads spread evenly.
+   - **Pitfalls:**
+     - Sharding first because it sounds like 'real' scaling.
+     - Adding replicas but sending all reads to them, breaking read-your-writes.
+     - Autoscaling app servers until database connections are exhausted.
+     - Changing API shapes 'while we're at it', forcing client releases during the crunch.
+   - **Follow-ups:**
+     - _The cache hit ratio is only 50%. What do you do?_ Analyse the key distribution: long-tail keys may not be worth caching, TTLs may be too short, or keys may include unnecessary variance (like query parameter order). Fix key design and pre-warm hot keys.
+     - _What if writes also grow 10x?_ Then batch and queue writes, reduce write amplification (indexes), and plan partitioning sooner, since replicas don't help writes.
+     - _How do you avoid database connection exhaustion?_ Connection poolers (such as PgBouncer), per-instance pool caps, and fewer, larger instances, or a data access service that multiplexes connections.
+   - **Example:** A content platform expected 10x reads from a partnership. Load tests showed the database saturating at 3x. Edge caching of article pages (hit ratio 94%) plus two read replicas carried the launch; sharding, originally planned, wasn't needed.
+   - **Sources:** [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 5 (Replication)](https://dataintensive.net/)
    - _Also asked as:_ How do I design a service that can handle 10x more traffic with minimal changes?
 3. **Choose a load balancing strategy for long-lived connections versus short RPCs.** [mine · Intermediate · Scaling, Latency]
-   - Round robin, least-request, power of two choices, consistent hashing. Connection draining, slow start for new instances, and what happens to sticky state on scale-in.
+   - **Thesis:** Short RPCs balance well per request with least-outstanding-requests or power-of-two-choices. Long-lived connections balance per connection, so the risk is imbalance over time; counter it with connection-aware placement, periodic rebalancing, slow start for new instances and graceful draining.
+   - **60-second answer:** For short RPCs, per-request balancing works: round robin is fine when instances and requests are uniform, but least outstanding requests or power of two choices, which picks two random backends and sends to the less loaded one, handles uneven request costs and slow instances much better with little coordination. For long-lived connections like WebSockets, gRPC streams or database connections, the load balancer only decides once per connection, so after a deploy or scale-out the new instances get few connections while old ones stay overloaded. There I'd use least-connections placement, slow start so new instances aren't flooded, connection lifetimes or server-initiated reconnects to rebalance gradually, and draining on scale-in, telling clients to reconnect elsewhere before the instance stops. If connections carry sticky state, consistent hashing limits how many move when the pool changes.
+   - **Key points:**
+     1. **Round robin.** Simple and fair when requests cost the same and instances are identical. Degrades with heterogeneous requests or a slow instance, which still gets its full share.
+     2. **Least outstanding requests.** Sends to the backend with the fewest in-flight requests. Naturally routes around slow instances. Requires the balancer to track in-flight counts.
+     3. **Power of two choices.** Pick two backends at random and choose the less loaded. Gets most of the benefit of least-loaded without global state and avoids herding onto one 'best' instance.
+     4. **Long-lived connections balance per connection.** gRPC over HTTP/2 multiplexes many requests on one connection, so an L4 balancer balances connections, not requests. Use L7 balancing or client-side balancing for gRPC.
+     5. **Rebalancing over time.** Cap connection lifetime (for example minutes to an hour, with jitter) or have servers send GOAWAY or reconnect hints so load spreads after scale-out.
+     6. **Slow start and draining.** New instances ramp traffic gradually to warm caches and JIT. On scale-in, stop new connections and ask clients to reconnect, waiting for in-flight work.
+     7. **Consistent hashing for sticky state.** When connections depend on per-key state (sessions, partitions), consistent hashing moves only about 1/N of keys when a node joins or leaves.
+   - **When to choose what:** Short RPCs: least outstanding requests or power of two choices at L7. Long-lived streams: least connections plus bounded lifetimes and server-driven rebalancing, with slow start and draining. Sticky state: consistent hashing with bounded load.
+   - **Numbers:**
+     - Consistent hashing: adding a 10th node moves roughly 1/10 of keys, versus nearly all keys with modulo hashing.
+     - Connection lifetime example: 30 minutes ± 20% jitter means a full fleet rebalances within about half an hour after scale-out, without a reconnect storm.
+   - **Pitfalls:**
+     - Using an L4 balancer for gRPC and finding all requests from a client go to one backend.
+     - No slow start: a fresh instance receives its full share of connections while caches are cold, and its latency spikes.
+     - Killing instances without draining, forcing thousands of clients to reconnect at once.
+     - Fixed connection lifetimes without jitter, causing synchronised reconnects.
+   - **Follow-ups:**
+     - _How does client-side load balancing compare?_ Clients get a list of backends (from service discovery) and balance themselves, avoiding an extra hop and handling per-request balancing over multiplexed connections. It needs good discovery and health information in every client.
+     - _What about WebSockets during a deploy?_ Drain gradually: stop new connections to old instances, send reconnect messages in batches with jitter, and let clients reconnect to new instances.
+     - _Why not always pick the least-loaded instance?_ With stale load information, every balancer picks the same 'best' instance and overloads it. Power of two choices avoids this herding.
+   - **Example:** A chat service on WebSockets saw new instances sit idle after scale-out while old ones ran hot. Adding a 45-minute connection lifetime with jitter, least-connections placement and slow start evened load within an hour of each scale event.
+   - **Sources:** [Google SRE book: Load balancing in the datacenter](https://sre.google/sre-book/load-balancing-datacenter/); [gRPC blog: gRPC load balancing](https://grpc.io/blog/grpc-load-balancing/)
 4. **Size a system for 50,000 requests per second with a 100 ms hard deadline.** [mine · Advanced · Scaling, Latency]
-   - Back-of-envelope CPU, memory and network per request. Fan-out cost, timeout budget split across calls, 30 to 40 percent headroom, and what you drop when the deadline is about to be missed.
+   - **Thesis:** Work it out per request, then multiply: CPU time, memory and network per request give instance counts; the 100 ms deadline gives a latency budget split across hops; headroom of 30–40% covers spikes and failures. Then say what you drop when the deadline is about to be missed.
+   - **60-second answer:** I'd do back-of-envelope sizing in four steps. Per-request cost: measure or estimate CPU time, say 4 ms per request; at 50,000 requests per second that's 200 CPU-seconds per second, so 200 cores busy, and at a target of 60% utilisation about 340 cores, or roughly 22 sixteen-core instances, plus enough to survive losing a zone. Concurrency by Little's law: 50,000 per second × 0.05 s average latency is 2,500 requests in flight, which sizes thread pools and connections. Latency budget: of 100 ms, give perhaps 10 to network, 20 to the service, 40 to dependencies called in parallel with their own timeouts, and keep 30 in reserve. Dependencies: if each request makes three downstream calls, those services see 150,000 calls per second. And I'd decide in advance what we drop near the deadline: optional calls, then lower-priority requests, so the core response stays within 100 ms.
+   - **Key points:**
+     1. **Per-request resource cost.** CPU milliseconds, memory per in-flight request, bytes in and out. Get them from profiling or a load test of one instance, not guesses.
+     2. **Compute instance count.** Cores = requests/s × CPU seconds per request ÷ target utilisation. Then round up for zone failure (N+1 zones) and deploys (instances out of rotation).
+     3. **Concurrency with Little's law.** In-flight = arrival rate × latency. This sizes thread pools, connection pools and memory, and shows how quickly a latency increase exhausts them.
+     4. **Split the latency budget.** Allocate the 100 ms across network, service time and dependencies, with timeouts at each step below the remaining budget. Parallelise independent calls.
+     5. **Fan-out multiplies downstream load.** Each downstream call multiplies requests per second for that dependency, and the request waits for the slowest call, so the tail matters more with fan-out.
+     6. **Headroom.** 30–40% spare capacity covers traffic spikes, a lost zone, and performance regressions until autoscaling catches up.
+     7. **Deadline behaviour.** Propagate the deadline; skip optional calls when the remaining budget is low; shed low-priority traffic before high-priority traffic misses its deadline.
+   - **When to choose what:** Size from measured per-request costs, add zone-failure and spike headroom, and enforce the deadline with timeouts and degradation. Validate with a load test at 1.5x the target before trusting the numbers.
+   - **Numbers:**
+     - CPU: 50,000 req/s × 4 ms = 200 cores busy; ÷ 0.6 utilisation ≈ 333 cores ≈ 21 sixteen-core instances; across 3 zones with one-zone loss tolerance, run about 32 instances.
+     - Network: 50,000 req/s × 20 KB response ≈ 1 GB/s ≈ 8 Gbit/s egress, which matters for instance network limits and cost.
+     - Concurrency: 50,000 req/s × 50 ms average = 2,500 in flight; if latency rises to 100 ms, 5,000.
+   - **Pitfalls:**
+     - Sizing on average latency and ignoring the tail and fan-out.
+     - Forgetting that dependencies see multiplied traffic.
+     - No headroom for zone loss, so a single-zone outage becomes an overload.
+     - Timeouts that add up to more than the overall deadline.
+   - **Follow-ups:**
+     - _How do you get the per-request CPU cost if the system doesn't exist yet?_ Prototype the hot path and benchmark it, or use costs from a similar existing service, and plan to correct after the first load test.
+     - _The p99 of one dependency is 80 ms. Can you meet 100 ms?_ Only with a tight timeout and a fallback, a hedged request, or by moving that call off the critical path (prefetch or cache), since its tail alone consumes most of the budget.
+     - _What's the memory footprint?_ In-flight requests × memory per request plus caches and runtime overhead per instance. 2,500 in flight × 200 KB = 500 MB across the fleet, small compared to caches.
+   - **Example:** An ad-serving endpoint at 50,000 req/s with a 100 ms deadline: profiling showed 3 ms CPU per request. The team ran 30 instances across three zones at about 50% utilisation, gave the bidding call a 40 ms timeout with a default ad as fallback, and kept p99 at 70 ms.
+   - **Sources:** [Jeff Dean and Luiz Barroso: The tail at scale](https://research.google/pubs/the-tail-at-scale/); [Google SRE book: Handling overload](https://sre.google/sre-book/handling-overload/)
 5. **What are the trade-offs between vertical and horizontal scaling?** [ref · Fundamental · Scaling]
-   - Vertical is simple and has a ceiling and a single point of failure. Horizontal needs statelessness or partitioning, adds coordination cost, and scales further. Most systems do vertical first, then horizontal where the data allows.
+   - **Thesis:** Vertical scaling is simple and keeps everything on one machine, but it has a ceiling, a cost curve that steepens, and a single point of failure. Horizontal scaling removes the ceiling and adds redundancy, but requires statelessness or partitioning and adds coordination. Most systems scale stateless tiers horizontally early and data tiers vertically for as long as practical.
+   - **60-second answer:** Vertical scaling means a bigger machine: more cores, memory, faster disks. It needs no code changes, keeps transactions and joins local and simple, and modern hardware goes very far. The costs: there's a ceiling, the largest instances cost disproportionately more, resizing often means a restart or failover, and one big machine is still one failure domain. Horizontal scaling means more machines: it scales further and gives redundancy, but the workload must be stateless or partitioned, and you inherit load balancing, data distribution, consistency and more network failure modes. In practice I'd scale application servers horizontally from the start because they're stateless and it gives redundancy, and scale the database vertically plus replicas until a single primary genuinely can't keep up, then partition.
+   - **Key points:**
+     1. **Vertical: simplicity.** No architectural change. Single-node transactions, joins and consistency stay easy. Great for databases and for early-stage systems.
+     2. **Vertical: limits.** A hard ceiling on the largest instance, cost per unit of capacity rising at the top end, and a single failure domain unless paired with replicas.
+     3. **Horizontal: scale and redundancy.** Add capacity incrementally and survive node loss. Fits stateless services naturally.
+     4. **Horizontal: complexity.** Requires externalising state or partitioning data, load balancing, service discovery, and dealing with partial failure and consistency across nodes.
+     5. **Stateless tiers go horizontal early.** Web and API servers with state moved to caches or databases scale out cheaply and gain redundancy.
+     6. **Data tiers stay vertical longer.** A large primary with read replicas often covers far more growth than expected. Partitioning is a large, hard-to-reverse step.
+     7. **Elasticity and cost.** Horizontal scaling allows scaling in during quiet hours, saving money; a big vertical instance runs at peak size all the time.
+   - **When to choose what:** Scale out stateless services; scale up stateful stores until cost, ceiling or failure-domain concerns force partitioning. Revisit when you approach roughly half of the largest available instance, to leave time to plan.
+   - **Numbers:**
+     - Headroom check: if your database runs at 60% of a 32-core instance and the largest available is 192 cores, vertical scaling buys roughly another 6x before the ceiling, often years of growth.
+     - Failure domain: one large node at 100% of traffic vs 10 nodes at 10% each; losing one node removes 100% vs 10% of capacity.
+   - **Pitfalls:**
+     - Partitioning a database prematurely and paying the complexity forever.
+     - Scaling up until hitting the ceiling with no plan, then needing an emergency re-architecture.
+     - Horizontally scaled services that still hold local state (sessions, caches) and break on rebalancing.
+     - Ignoring that a single big node is a single point of failure.
+   - **Follow-ups:**
+     - _When would you scale a database horizontally first?_ When the dataset or write rate clearly exceeds one node from the start (large-scale event ingestion, IoT telemetry) or when the data is naturally partitioned by tenant with isolation requirements.
+     - _How do you make a stateful service horizontally scalable?_ Move state out (database, cache, object store), or partition it so each node owns a key range, with rebalancing and replication.
+     - _Isn't vertical scaling downtime-prone?_ Resizing often requires a restart; with a replica you fail over to a resized standby, so downtime is a brief failover.
+   - **Example:** A fintech's Postgres primary grew from 8 to 64 cores over three years with two read replicas, handling 15x growth. Application servers scaled from 4 to 60 instances. Partitioning was planned only when write volume approached half of the largest instance's capacity.
+   - **Sources:** [Martin Kleppmann: Designing Data-Intensive Applications, chapter 1 (Scalability)](https://dataintensive.net/)
 
 ### Monolith vs services
 6. **When does splitting a monolith pay for itself?** [mine + ref · Intermediate · Scaling, Architecture]
-   - Team ownership lines, different deploy cadence, different scaling profiles. Price in the costs: network failure modes, distributed data, on-call load. A modular monolith is a valid answer.
-   - Split along team and data ownership lines when deploy independence or scaling needs diverge. Cost: network failures, distributed data, operational load. A modular monolith may be enough.
+   - **Thesis:** Splitting pays when team coordination, deploy coupling or very different scaling needs cost more than the network failures, distributed data and operational load you take on. A well-structured modular monolith is often the better answer, and a prerequisite for a clean split anyway.
+   - **60-second answer:** I'd look for three signals. Organisational: many teams blocking each other in one codebase and deploy pipeline, so release coordination and merge conflicts dominate. Change rate: some parts change daily and others rarely, but everything ships together and carries the same risk. Scaling and runtime profile: one component needs very different resources, like GPU inference, a high-throughput ingest path, or stricter isolation for compliance. Against that I'd price the costs: every call becomes a network call that can fail and be slow, data must be split with clear ownership and eventual consistency between services, and you need service discovery, tracing, versioned contracts and more on-call. If the signals are weak, I'd invest in a modular monolith: enforce module boundaries and data ownership inside one deployable. When a module clearly needs independence, extract that one, along a boundary already proven in the code.
+   - **Key points:**
+     1. **Signal: teams blocking each other.** When more than a handful of teams share one deploy pipeline, coordination costs grow fast. Independent deployability per team is the strongest reason to split.
+     2. **Signal: divergent change rates and risk.** Fast-moving features coupled to stable, critical code means every release risks the critical path.
+     3. **Signal: divergent runtime needs.** Different scaling, hardware, language, or isolation requirements for one component.
+     4. **Cost: network and partial failure.** In-process calls become remote calls with latency, timeouts, retries and versioning. Debugging spans processes.
+     5. **Cost: distributed data.** Each service owns its data. Cross-service queries and transactions become APIs, events, sagas and reconciliation.
+     6. **Cost: platform and operations.** CI/CD per service, service discovery, observability, security between services, and on-call for more moving parts. You need a platform before many services.
+     7. **Modular monolith first.** Enforce module boundaries (separate packages, no shared tables between modules, internal APIs). This captures much of the benefit and makes later extraction straightforward.
+   - **When to choose what:** Split when independent deployment or scaling of a specific part is clearly worth the cost, one module at a time. Stay with a modular monolith when the team is small, boundaries are still moving, or platform maturity is low.
+   - **Numbers:**
+     - Heuristic: if a monolith's main pain is a 2-hour build or test suite, fix the build first; that's cheaper than splitting.
+     - Team-size heuristic: a single deployable tends to strain when more than several teams (tens of engineers) commit to it daily.
+   - **Pitfalls:**
+     - Splitting by technical layer (UI service, data service) instead of by business capability.
+     - A distributed monolith: services that must deploy together and share a database.
+     - Splitting before boundaries are understood, then redrawing them across network calls.
+     - No platform investment, so each new service reinvents deployment and monitoring.
+   - **Follow-ups:**
+     - _Which module would you extract first?_ One with a clear boundary, its own data, a distinct scaling or change profile, and a team ready to own it. Avoid starting with the most entangled core.
+     - _How do you split the database?_ Give each module ownership of its tables inside the monolith first, remove cross-module joins, then move the tables with the extracted service and replace joins with API calls or replicated read models.
+     - _How do you know the split worked?_ Lead time and deploy frequency for the team improved, incidents didn't increase, and the extracted service deploys independently without coordinated releases.
+   - **Example:** A lending company with four teams kept a modular monolith with strict module boundaries. When the underwriting team needed ML models, GPU instances and daily releases, they extracted underwriting as a service, along a boundary that had already existed as a module for a year.
+   - **Sources:** [Martin Fowler: Monolith first](https://martinfowler.com/bliki/MonolithFirst.html); [Martin Fowler: Microservice trade-offs](https://martinfowler.com/articles/microservice-trade-offs.html)
    - _Also asked as:_ How do I decide when to split a monolith into services?
 
 ### Overload, backpressure & spikes
 7. **Design admission control so a service stays up through a 20x spike.** [mine + ref · Advanced · Scaling, Reliability]
-   - Shed by priority, bound every queue, use adaptive concurrency limits, apply per-tenant quotas, and fail fast with Retry-After. Protect the critical path first, batch work last.
-   - Rate limits and concurrency caps at the caller, queues that smooth bursts, circuit breakers, load shedding by priority, and caching in front of the dependency.
+   - **Thesis:** Under a 20x spike you cannot serve everyone, so decide who gets served. Admission control rejects excess work early and cheaply, by priority and by tenant, keeps every queue bounded, and adapts concurrency limits to measured latency so the work you accept still completes on time.
+   - **60-second answer:** The goal is to keep goodput up: serve as many requests successfully as capacity allows rather than accepting everything and timing out everyone. I'd put admission control at the edge of the service. First, per-tenant and per-client quotas, so one client's spike doesn't consume everyone's capacity. Second, priority classes: interactive and revenue-critical requests over background and batch work, with lower classes shed first. Third, an adaptive concurrency limit that measures latency and lowers the number of in-flight requests when latency rises, like TCP congestion control. Fourth, bounded queues with short timeouts, rejecting rather than queueing when full, and preferring to drop requests that have waited long, since their clients have probably given up. Rejections are fast and explicit, 429 or 503 with Retry-After, so well-behaved clients back off. Autoscaling helps over minutes, but admission control protects you in the seconds before it does.
+   - **Key points:**
+     1. **Protect goodput, not throughput.** Accepting more than you can process makes every request slow and many fail. Rejecting the excess keeps latency and success high for the work accepted.
+     2. **Per-tenant quotas.** Token buckets per client or tenant isolate noisy neighbours, so a spike from one source mostly affects that source.
+     3. **Priority-based shedding.** Classify requests (critical, normal, best-effort). Under pressure, shed best-effort first, then normal, keeping critical paths alive.
+     4. **Adaptive concurrency limits.** Algorithms such as gradient or AIMD-style limits adjust allowed concurrency based on observed latency, finding capacity without manual tuning.
+     5. **Bounded queues and deadlines.** Queues have a maximum length and a maximum wait. Drop requests whose deadline has passed; LIFO under overload can serve fresh requests that still have waiting clients.
+     6. **Cheap, explicit rejection.** Reject before doing expensive work, with 429 or 503 and Retry-After, so clients back off rather than retry immediately.
+     7. **Autoscaling is the second line.** Scaling takes minutes; admission control acts in milliseconds. Use both, and ensure scaling isn't blocked by the overload itself.
+   - **When to choose what:** Every externally facing service gets per-client quotas, bounded queues and a concurrency limit. Priority shedding where traffic classes differ in value. Tune with load tests at several times peak.
+   - **Numbers:**
+     - At 20x a normal 5,000 req/s, you receive 100,000 req/s. If capacity is 15,000 req/s, admission control must reject about 85% quickly, at a cost of perhaps microseconds each, rather than letting all 100,000 queue.
+     - Rejection cost matters: if rejecting takes 0.1 ms of CPU and serving takes 5 ms, you can reject about 50 requests for the cost of serving one.
+   - **Pitfalls:**
+     - Unbounded queues that turn a spike into minutes of latency for everyone.
+     - Rejecting after doing most of the work (authentication, database lookups).
+     - Global limits only, so one tenant's spike starves everyone.
+     - Clients that retry 429s immediately, amplifying the spike.
+   - **Follow-ups:**
+     - _How do you classify priority?_ By endpoint and caller: checkout and login are critical; search suggestions and analytics beacons are best-effort. Carry the class in a header set at the edge.
+     - _Why LIFO under overload?_ With FIFO, every request waits behind old ones whose clients may have given up. LIFO serves the newest requests, which still have someone waiting, improving useful work done.
+     - _How does this interact with autoscaling?_ Shed load immediately, while autoscaling adds capacity over minutes. Make sure shedding metrics don't hide demand from the autoscaler; scale on offered load, not just served load.
+   - **Example:** A ticketing API hit 25x traffic when sales opened. Per-account token buckets, best-effort shedding of seat-map refreshes, and an adaptive concurrency limit kept purchase requests at 99% success with p99 under 600 ms while 70% of traffic was rejected with Retry-After.
+   - **Sources:** [AWS Builders' Library: Using load shedding to avoid overload](https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/); [Google SRE book: Handling overload](https://sre.google/sre-book/handling-overload/); [Netflix: concurrency-limits library](https://github.com/Netflix/concurrency-limits)
    - _Also asked as:_ How do I protect downstream services from traffic spikes?
 8. **How do I design for backpressure in a high-traffic system?** [ref · Advanced · Reliability, Scaling]
-   - Bounded queues, propagate pressure upstream (blocking, credits, 429s), shed load deliberately, and size consumers to drain bursts. Unbounded buffers only move the failure later.
+   - **Thesis:** Backpressure means a slow consumer can slow down its producers instead of being buried. Bound every buffer, propagate 'I'm full' upstream (blocking, credits, 429s), and decide deliberately where excess load is dropped. Unbounded buffers only move the failure later and make it bigger.
+   - **60-second answer:** In a pipeline, the slowest stage sets the throughput. If upstream keeps sending faster than that, the buffer between them grows until memory runs out or latency becomes useless. Backpressure fixes this by making capacity visible upstream. Inside a process, that's bounded queues where producers block or get rejected when full. Between services, it's flow control: HTTP/2 and gRPC have window-based flow control, streaming systems use pull-based consumption or credits, and request-response APIs return 429 or 503 to signal 'slow down'. At the edge, where you can't slow the user, you shed load deliberately. With queues like Kafka, consumers pull at their own pace and lag grows instead of memory, which is fine for a while, as long as you monitor lag and scale consumers or shed upstream before retention runs out.
+   - **Key points:**
+     1. **Every buffer must be bounded.** Queues, channels, thread pools and in-memory lists all have a maximum size. Unbounded buffers convert overload into out-of-memory crashes or minutes of latency.
+     2. **Signal upstream.** Blocking producers (in-process), credits or windows (streaming protocols), and explicit rejections with Retry-After (HTTP). The producer must react by slowing down.
+     3. **Pull beats push for consumers.** Pull-based consumers (Kafka, SQS) take work at their own rate; the backlog lives in durable storage instead of in consumer memory.
+     4. **Monitor lag and age, not just depth.** The age of the oldest message tells you how stale processing is. Alert on lag growth rate and time until retention is exceeded.
+     5. **Decide where to drop.** At some point load must be shed. Choose the place: at the edge (reject requests), by sampling (drop some telemetry), or by degrading (skip optional processing).
+     6. **Scale the bottleneck stage.** Backpressure buys time; adding consumers or capacity to the slowest stage fixes throughput. Partition counts and downstream limits cap how far that goes.
+   - **When to choose what:** Bounded buffers everywhere, explicit backpressure signals between components, durable queues where work can wait, and deliberate shedding where it can't. Treat growing lag as an incident before it becomes data loss.
+   - **Numbers:**
+     - Backlog time: a queue receiving 12,000 msgs/s with consumers handling 10,000 msgs/s grows by 2,000/s, 7.2 million per hour. With 24 hours of retention and no fix, data starts expiring after about a day.
+     - Drain time after the spike: with a backlog of 7.2 million and 3,000 msgs/s of spare consumer capacity, draining takes about 40 minutes.
+   - **Pitfalls:**
+     - Unbounded in-memory queues in services, which hide the problem until the process dies.
+     - Producers that ignore 429s or retry immediately.
+     - Monitoring queue depth without age, missing that the oldest message is hours old.
+     - Scaling consumers beyond what the downstream database can handle, moving the bottleneck.
+   - **Follow-ups:**
+     - _How do you apply backpressure to end users?_ You can't slow them directly, so reject or degrade: 429 with Retry-After, waiting rooms for big events, or simpler responses.
+     - _What happens if Kafka retention is about to expire unprocessed messages?_ Scale consumers, extend retention temporarily, divert to a slower but durable overflow store, or prioritise processing and accept dropping low-value messages explicitly.
+     - _How does gRPC flow control help?_ HTTP/2 stream and connection windows stop a sender when the receiver hasn't consumed data, so a slow receiver isn't overwhelmed at the transport level.
+   - **Example:** A metrics ingestion pipeline buffered in memory and crashed during spikes. The fix: bounded in-process queues, 429s to agents with Retry-After, Kafka between ingest and aggregation, and lag-age alerts. Spikes now show up as lag that drains afterwards instead of crashes.
+   - **Sources:** [AWS Builders' Library: Avoiding insurmountable queue backlogs](https://aws.amazon.com/builders-library/avoiding-insurmountable-queue-backlogs/); [Google SRE book: Handling overload](https://sre.google/sre-book/handling-overload/)
 
 ### Sync, async & queues
 9. **How do I choose between synchronous and asynchronous communication?** [ref · Intermediate · Messaging]
-   - Synchronous when the caller needs the answer to proceed and latency is bounded. Asynchronous to decouple availability, absorb bursts and run slow work. Cost of async: eventual results, retries, duplicate handling.
+   - **Thesis:** Use synchronous calls when the caller needs the answer to continue and the work is fast and bounded. Use asynchronous messaging to decouple availability, absorb bursts, fan out to many consumers, or run slow work. Asynchrony costs you immediate answers and simple error handling, so pay it only where you gain something.
+   - **60-second answer:** My rule: if the user or caller can't proceed without the result, and it can be produced within the latency budget, call synchronously, as with checking a price, authorising a payment, or reading a profile. If the work is slow, can be done later, or other systems just need to know something happened, make it asynchronous: emit an event or enqueue a job, return quickly, and process in the background. Async gives decoupling, since the producer stays up when consumers are down; buffering, which absorbs spikes; and fan-out, where many consumers react without the producer knowing them. Its costs are real: results arrive later, so the UI needs pending states; errors happen after the request returned, so you need retries, dead-letter handling and notifications; and duplicates and ordering need design. Most systems mix both: a synchronous core decision, then asynchronous side effects.
+   - **Key points:**
+     1. **Synchronous when the answer is needed now.** Validations, authorisations, reads to render a page. Keep these calls few, fast and with timeouts.
+     2. **Asynchronous for slow or deferrable work.** Sending email, generating reports, video processing, updating search indexes. The caller gets an acknowledgement and maybe a job id.
+     3. **Availability decoupling.** With a queue in between, the producer keeps accepting work while a consumer is down; the backlog drains later. Synchronous chains multiply unavailability.
+     4. **Load levelling.** Queues absorb bursts so consumers can run at a steady rate sized for average rather than peak load.
+     5. **Fan-out and loose coupling.** Publishing an event lets new consumers subscribe without changing the producer.
+     6. **The costs of async.** Eventual results and pending UI states, failure handling after the fact, at-least-once delivery requiring idempotency, ordering concerns, and harder end-to-end tracing.
+   - **When to choose what:** Synchronous for the critical decision in a user request; asynchronous for side effects and slow work. If a synchronous chain is more than two or three calls deep, look for steps that can move to async or be served from local data.
+   - **Numbers:**
+     - Availability of synchronous chains multiplies: three dependencies at 99.9% each give at most about 99.7% for the chain. With async side effects, the user path depends only on the synchronous parts.
+   - **Pitfalls:**
+     - Making everything async, so simple requests become hard-to-debug event chains with no immediate answer.
+     - Long synchronous chains where any slow service blocks the user.
+     - Async processing without visibility: users don't know whether their job succeeded.
+     - Forgetting idempotency for at-least-once delivery.
+   - **Follow-ups:**
+     - _How does the user learn the result of async work?_ Return a job or resource id, then poll, subscribe via WebSocket or server-sent events, or receive a notification or webhook.
+     - _Can you do request-reply over a queue?_ Yes, with correlation ids and reply queues, but it combines the latency of async with the coupling of sync. Use it when the transport itself is asynchronous (for example mainframe or partner integrations).
+     - _How do you trace async flows?_ Propagate trace context in message headers and link consumer spans to producer spans, so a trace follows the message.
+   - **Example:** Loan application submission validates input and runs the instant credit decision synchronously (under 2 seconds), returning approved or declined. Document generation, CRM updates, welcome emails and analytics happen asynchronously from an ApplicationDecided event.
+   - **Sources:** [Enterprise Integration Patterns: Messaging](https://www.enterpriseintegrationpatterns.com/patterns/messaging/); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 11 (Stream processing)](https://dataintensive.net/)
 10. **When should I use a queue versus direct RPC?** [ref · Intermediate · Messaging]
-   - Queue for buffering, fan-out, retries and independent consumer speed. RPC for request-scoped answers with a tight deadline. Never put a queue in a path that needs a synchronous response without a reply mechanism.
+   - **Thesis:** Use a queue when work can wait and you want buffering, retries, independent consumer speed or fan-out. Use direct RPC when the caller needs a response within a tight deadline. A queue in a path that needs a synchronous answer adds latency and failure modes without the benefits.
+   - **60-second answer:** I'd ask: does the caller need the result to respond? If yes, and the work is fast, RPC is simpler: one hop, immediate errors, easy tracing. If the work can complete later, a queue gives me durable buffering through spikes and consumer outages, built-in retries with dead-lettering, consumers scaled independently of producers, and the ability to add consumers without touching the producer. Queues also smooth load onto a fragile downstream such as a legacy system or rate-limited partner API. The costs: an extra component to run, at-least-once delivery so consumers must be idempotent, ordering only within a partition or group, and results that come back later. Request-reply over a queue exists, but if you need the answer in 100 ms, a direct call with a timeout and fallback is almost always better.
+   - **Key points:**
+     1. **RPC for request-scoped answers.** Fast, bounded work whose result the caller needs. Simple semantics, immediate error feedback, and straightforward tracing.
+     2. **Queues for deferrable work.** The producer records intent durably and returns; consumers process at their own pace.
+     3. **Buffering and load levelling.** Queues absorb spikes and protect slow or fragile downstreams. Consumers can be sized for average load.
+     4. **Retries and dead-lettering.** Failed messages are retried with backoff and eventually moved to a dead-letter queue for inspection, without the producer waiting.
+     5. **Fan-out.** Topics with multiple subscriptions let several consumers process the same event independently.
+     6. **Costs of queues.** Operating the broker, at-least-once delivery and idempotency, ordering constraints, monitoring of lag, and harder debugging across asynchronous hops.
+   - **When to choose what:** RPC when the caller waits for the result and the deadline is tight. Queue when the work is slow, deferrable, needs retries independent of the caller, must survive consumer outages, or feeds multiple consumers. A task queue (one consumer per job) differs from a log or topic (many consumers, replay); choose by whether you need replay and fan-out.
+   - **Numbers:**
+     - Latency: a direct in-region RPC adds about a millisecond of network time; a queue hop adds publish, broker persistence and consumer polling, typically milliseconds to tens of milliseconds, or more with batching.
+   - **Pitfalls:**
+     - A queue in a synchronous user path, then polling for the result inside the request.
+     - Assuming exactly-once delivery and skipping idempotency.
+     - Using a queue to hide a consumer that can never keep up; the backlog only grows.
+     - No dead-letter handling, so poison messages block or vanish.
+   - **Follow-ups:**
+     - _Queue or topic?_ A queue distributes each message to one consumer in a group (work distribution). A topic delivers each message to every subscribing group (fan-out). Many systems use topics with consumer groups to get both.
+     - _How would you rate-limit calls to a partner API that allows 50 requests per second?_ Put requests on a queue and run consumers that together don't exceed 50/s, with backoff on 429s. The queue absorbs bursts from your side.
+     - _When is RPC with retries enough?_ When failures are brief and the caller can wait for a few retries within its deadline. If outages are longer or work must survive restarts, use a durable queue.
+   - **Example:** Invoice PDF generation moved from an RPC inside the 'complete order' request (adding 1.5 s and failing when the PDF service was down) to a queue. Orders now complete in 200 ms; PDFs are generated within a minute and retried on failure.
+   - **Sources:** [Enterprise Integration Patterns: Point-to-point channel](https://www.enterpriseintegrationpatterns.com/patterns/messaging/PointToPointChannel.html); [Enterprise Integration Patterns: Publish-subscribe channel](https://www.enterpriseintegrationpatterns.com/patterns/messaging/PublishSubscribeChannel.html)
 
 ## Data & Storage (12)
 
 ### SQL, NoSQL & OLTP vs OLAP
 11. **Where is the boundary between OLTP and OLAP, and how does data cross it?** [mine · Fundamental · Databases]
-   - Row store for transactions, columnar store for analytics. Move data by change data capture, not dual writes. Cover lag, backfill, and schema drift between the two sides.
+   - **Thesis:** OLTP serves many small, latency-sensitive transactions on current state; OLAP serves few large scans over history. Keep them in separate stores and move data across with change data capture, never with application dual writes, and treat lag, backfills and schema drift as first-class concerns.
+   - **60-second answer:** The boundary is about access pattern. The transactional database handles point reads and short writes with strict latency and correctness; analytics wants to scan billions of rows, aggregate across history and join widely, which would wreck OLTP latency if run there. So analytics lives in a columnar warehouse or lakehouse. Data crosses via change data capture from the database's log into a stream, then into the warehouse, which is reliable because it reads committed changes in order, unlike the application writing to both places. I'd also plan for an initial snapshot plus streaming, monitoring of lag, handling of schema changes through a registry or contract, and deletes, including legal erasure, flowing through to the analytical side.
+   - **Key points:**
+     1. **Different access patterns, different engines.** OLTP: row-oriented, indexed point lookups, short transactions, high concurrency. OLAP: columnar storage, compression, vectorised scans over a few columns of many rows.
+     2. **Don't run analytics on the primary.** Large scans evict hot pages from cache and hold resources, raising tail latency for customers. A read replica helps a little but still uses row storage that's slow for scans.
+     3. **CDC over dual writes.** Reading the database log (binlog, WAL) captures every committed change in order, including those from scripts and migrations. Application dual writes miss failures and diverge.
+     4. **Snapshot plus stream.** Start with a consistent snapshot, then apply changes from the log position at which it was taken. Tools like Debezium coordinate this.
+     5. **Lag as an SLO.** Publish freshness, for example 'warehouse within 15 minutes of production', and alert on it. Consumers can then decide whether data is fresh enough for their use.
+     6. **Schema drift and contracts.** A column rename in OLTP can break dashboards silently. Use a schema registry or data contracts, and test pipelines against schema changes before deployment.
+     7. **Deletes and erasure flow through.** Propagate deletes as tombstones, and make sure erasure requests reach the warehouse, derived tables and backups according to policy.
+   - **When to choose what:** Separate stores once analytics queries become heavy or broad. Use CDC for continuous movement; batch extracts are acceptable for daily reporting. Hybrid HTAP databases can serve light operational analytics but don't remove the need for a warehouse for broad historical analysis.
+   - **Numbers:**
+     - Columnar compression on analytical data is often several times to ten times or more, and queries read only the columns they need, which is why scans that take minutes on a row store can take seconds in a warehouse.
+     - CDC latency is typically seconds to a minute end to end; warehouse loading in micro-batches every few minutes is common.
+   - **Pitfalls:**
+     - Application dual writes to the database and the warehouse that silently diverge.
+     - Analysts querying the production primary 'just this once'.
+     - No plan for schema changes, so pipelines break after a routine migration.
+     - Deleted or erased data persisting forever in the warehouse.
+   - **Follow-ups:**
+     - _What if the business needs real-time analytics?_ Stream changes into a real-time analytical store or materialised views over the stream, with seconds of lag, and keep the warehouse for historical depth.
+     - _How do you handle a backfill of a year of data?_ Bulk export from a snapshot or replica into the warehouse, then resume CDC from the snapshot's log position so there's no gap or duplicate.
+     - _Who owns the data contract?_ The producing team owns the schema and its compatibility; the platform provides the registry and checks.
+   - **Example:** A lending company streams its Postgres WAL through Debezium into Kafka and loads the warehouse every five minutes. Risk dashboards run there instead of on replicas, and production p99 latency drops during month-end reporting.
+   - **Sources:** [Debezium: change data capture](https://debezium.io/); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 3 (OLTP and OLAP storage)](https://dataintensive.net/)
 12. **How do I decide between SQL, NoSQL, and search engines?** [ref · Fundamental · Databases]
-   - Start from access patterns and consistency needs. Relational for transactions and ad hoc queries, key-value or wide-column for known-key scale, search engines for text and faceting as a derived index, never the source of truth.
+   - **Thesis:** Choose from access patterns and consistency needs, not fashion. A relational database is the default for transactional data and flexible queries; key-value or wide-column stores fit very high-scale access by known keys; search engines are derived indexes for text and faceting, never the source of truth.
+   - **60-second answer:** I'd list the queries and invariants first. If the data has relationships, needs transactions, and the queries aren't all known up front, a relational database is the right default, and modern Postgres or MySQL scale further than people assume with indexing, replicas and partitioning. If access is overwhelmingly by known key at very high throughput with simple consistency needs, like sessions, user feeds or IoT time series, a key-value or wide-column store like DynamoDB or Cassandra gives predictable latency and horizontal scale, at the cost of designing your tables around your queries and losing ad hoc joins. Full-text search, relevance ranking, fuzzy matching and faceted filters belong in a search engine like Elasticsearch or OpenSearch, fed from the source of truth via CDC, because search indexes aren't designed to be your system of record. Often the answer is all three, each doing what it's good at.
+   - **Key points:**
+     1. **Start from queries and invariants.** Write down the top queries, write patterns, consistency requirements and growth. The store choice should fall out of that list.
+     2. **Relational as the default.** Transactions, constraints, joins, ad hoc queries and mature tooling. Scales a long way vertically, with read replicas and partitioning, before you need anything else.
+     3. **Key-value and wide-column for known-key scale.** Predictable single-digit-millisecond access at huge scale when you know the access patterns. You model tables per query and give up joins and flexible querying.
+     4. **Document stores for aggregate-shaped data.** Useful when data is read and written as a self-contained document with varying shape. Watch for needing cross-document transactions or joins later.
+     5. **Search engines are derived indexes.** Great at text relevance, fuzzy matching, aggregations for facets. Eventually consistent, with weaker durability guarantees; rebuildable from the source of truth.
+     6. **Operational cost counts.** Every new store adds backups, upgrades, monitoring, on-call knowledge and security review. Prefer fewer stores your team can run well.
+   - **When to choose what:** Relational unless a specific access pattern or scale requirement rules it out. Add a key-value store for a well-understood, high-volume known-key workload. Add search as a derived index when users need text search or faceting. Avoid a store per service just because you can.
+   - **Numbers:**
+     - A single well-tuned relational primary on modern hardware can handle thousands to tens of thousands of simple transactions per second; read replicas multiply read capacity.
+     - Managed key-value stores advertise consistent single-digit-millisecond latency at practically unbounded scale when keys are well distributed.
+   - **Pitfalls:**
+     - Choosing NoSQL for scale you don't have, then rebuilding joins and transactions in application code.
+     - Using a search engine as the primary store and losing data on cluster problems.
+     - Modelling a key-value store like a relational one and needing scans for common queries.
+     - Adding a new store per team without the operational capacity to run it.
+   - **Follow-ups:**
+     - _When would you move off relational?_ When a specific workload exceeds what partitioning and replicas can handle, or needs a data model (graph traversal, time series at very high ingest) that relational handles poorly. Move that workload, not everything.
+     - _How do you keep search in sync?_ CDC or an outbox stream from the source of truth into the indexer, idempotent upserts by id, and a full reindex job for recovery.
+     - _What about NewSQL or distributed SQL?_ They offer relational semantics with horizontal scale, at the cost of higher write latency and operational complexity. Worth it when one relational node truly isn't enough and you need transactions across shards.
+   - **Example:** A marketplace keeps orders and payments in Postgres, user sessions and carts in a key-value store, and listing search in OpenSearch fed by CDC from Postgres. Rebuilding the search index from Postgres takes two hours and is tested monthly.
+   - **Sources:** [Martin Kleppmann: Designing Data-Intensive Applications, chapter 2 (data models)](https://dataintensive.net/); [AWS DynamoDB: Best practices for partition key design](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html)
 13. **How do I model data differently for OLTP versus OLAP workloads?** [ref · Fundamental · Databases]
-   - OLTP: normalized rows, narrow transactions, point lookups. OLAP: denormalized wide tables or star schemas in columnar storage, loaded from OLTP by change data capture or batch.
+   - **Thesis:** Model OLTP for correct, fast writes and point reads: normalised tables, narrow transactions, indexes for known lookups. Model OLAP for fast scans and simple queries over history: denormalised fact and dimension tables in columnar storage, loaded from OLTP.
+   - **60-second answer:** In OLTP the goal is integrity under concurrent writes, so I'd normalise: each fact stored once, constraints in the database, short transactions, and indexes for the access paths the application uses. Denormalise only where a hot read path justifies it. In OLAP the goal is answering broad questions quickly, so I'd use a dimensional model: fact tables recording events like payments or loan disbursals with numeric measures and foreign keys, and dimension tables like customer, product and date, which may be wide and denormalised. Changing attributes are handled with slowly changing dimensions so history is preserved: a customer's region at the time of the payment, not today's. Data flows from OLTP by CDC or batch, is cleaned and conformed, and partitioned by date for pruning.
+   - **Key points:**
+     1. **OLTP: normalise for integrity.** Third normal form, foreign keys and constraints prevent anomalies under concurrent updates. Each update touches few rows.
+     2. **OLTP: index for known access paths.** Index the lookups the application performs; every extra index slows writes. Keep transactions short to reduce lock contention.
+     3. **OLAP: facts and dimensions.** A star schema: a central fact table (one row per event, with measures) joined to dimension tables. Simple for analysts and efficient for columnar engines.
+     4. **OLAP: preserve history.** Slowly changing dimensions (for example type 2, with valid-from and valid-to rows) record attribute changes so reports reflect what was true at the time.
+     5. **OLAP: partition and cluster.** Partition fact tables by date and cluster by common filter columns so queries scan only relevant data.
+     6. **The transformation layer.** Raw replicated tables land first, then are cleaned, conformed (consistent ids, currencies, time zones) and modelled. Version this logic like code.
+   - **When to choose what:** Normalised OLTP plus dimensional OLAP is the standard pairing. Denormalise OLTP only for measured hot reads, and prefer wide denormalised tables in OLAP when they simplify analyst queries without breaking history.
+   - **Numbers:**
+     - Date partitioning example: a fact table with 3 years of daily partitions; a query for last month scans about 30 of roughly 1,100 partitions, under 3% of the data.
+   - **Pitfalls:**
+     - Copying the OLTP schema straight into the warehouse and making analysts write ten-way joins.
+     - Overwriting dimension attributes, so historical reports change retroactively.
+     - Denormalising OLTP early and then fighting update anomalies.
+     - Mixing currencies or time zones in fact tables without conforming them.
+   - **Follow-ups:**
+     - _When would you denormalise in OLTP?_ For a hot read path where joins are measurably expensive, such as storing an order total on the order row, with the update kept in the same transaction.
+     - _Star schema or one big wide table?_ Wide tables are simpler for many tools and fast in columnar engines; star schemas manage changing dimensions and reuse better. Many teams model a star and publish wide tables on top.
+     - _How do you handle late-arriving data?_ Load by event time into the right partition, reprocess affected aggregates, and track which partitions changed.
+   - **Example:** A lender's OLTP has loans, repayments and customers in normalised tables. The warehouse has a repayments fact table (amount, days late, keys) and dimensions for customer (type 2, tracking region and risk band over time), product and date, so 'delinquency by risk band at origination' is a simple query.
+   - **Sources:** [Kimball Group: Dimensional modeling techniques](https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 3](https://dataintensive.net/)
 
 ### Partitioning & hot keys
 14. **Pick a partition key for a multi-tenant ledger, then show how it fails.** [mine + ref · Intermediate · Sharding, Databases]
-   - Tenant, account or time as candidates. Failure cases: one giant tenant, time-based hot tail, cross-partition queries. Mitigate with composite keys, salting for heavy keys, and a resharding plan.
-   - High cardinality, even access, aligned with the dominant query, and stable over time. Avoid monotonically increasing keys that create a hot tail.
+   - **Thesis:** For a multi-tenant ledger, partition by account (scoped by tenant), because every invariant, balance checks and posting order, lives at the account level. Then show where it breaks: giant tenants, hot accounts, and cross-account queries, and how you'd handle each.
+   - **60-second answer:** The candidates are tenant, account and time. Time is wrong for a ledger: all writes go to the newest partition. Tenant alone is attractive for isolation but one large tenant becomes a hot partition and some tenants outgrow a partition. Account, as in (tenant_id, account_id), is my choice because the ledger's invariants, balance never negative and postings ordered, are per account, so a single-partition transaction can enforce them. Then the failure modes. A hot account, like a merchant settlement account receiving thousands of credits per second, overwhelms its partition; I'd split it into sub-accounts or buffer credits and post them in batches. Transfers between accounts on different partitions need a saga or two-step posting rather than one transaction. Tenant-wide queries like monthly statements scatter across partitions, so they go to a read model or the warehouse. And the plan needs a way to move a large tenant to dedicated capacity.
+   - **Key points:**
+     1. **List the candidates and their skew.** Tenant: isolation, but skewed by tenant size. Time: everything hits the latest partition. Account: matches invariants and spreads load if accounts are numerous.
+     2. **Partition where invariants live.** Balance checks and posting order are per account, so (tenant_id, account_id) lets one local transaction enforce them without distributed coordination.
+     3. **Failure: hot accounts.** A platform's settlement or fee account may receive a huge share of postings. Split it into N sub-accounts with a roll-up, or buffer and batch credits that don't need immediate visibility.
+     4. **Failure: cross-partition transfers.** A transfer touches two accounts that may live on different partitions. Use a two-step posting (debit with a pending state, then credit) driven by a saga, idempotent per transfer id.
+     5. **Failure: tenant-wide queries.** Statements, tenant totals and reporting scatter across partitions. Serve them from a projection or the warehouse rather than live scatter-gather on the ledger.
+     6. **Failure: giant tenants.** Some tenants will dwarf others. Support moving a tenant to dedicated partitions or a dedicated cell, which needs online migration tooling.
+     7. **Plan resharding from day one.** Use many logical partitions mapped to fewer physical ones, so rebalancing moves logical partitions rather than re-keying data.
+   - **When to choose what:** Partition by account within tenant for ledgers and other per-entity invariants. Handle hot accounts by splitting or batching, cross-account operations with sagas, and reporting with projections. Reserve tenant-level partitioning for when strict tenant isolation is the primary requirement.
+   - **Numbers:**
+     - Logical partitions example: 4,096 logical partitions mapped onto 16 physical nodes; growing to 32 nodes moves whole logical partitions, about half of them, without changing keys.
+     - Hot-account splitting: a settlement account receiving 5,000 postings/s split into 10 sub-accounts brings each to 500/s.
+   - **Pitfalls:**
+     - Partitioning by time and creating a permanently hot newest partition.
+     - Partitioning by tenant and discovering the largest tenant is 40% of traffic.
+     - Expecting single transactions across accounts on different partitions.
+     - Running tenant-wide reports as live scatter-gather queries against the ledger.
+   - **Follow-ups:**
+     - _How do you keep a balance correct with sub-accounts?_ The total balance is the sum of sub-account balances; each sub-account enforces its own non-negative rule, and debits draw from sub-accounts with funds or from a rebalancing step.
+     - _How do you move a large tenant to its own partitions?_ Dual-write or replicate its accounts to the new location, backfill, verify balances, switch routing in the tenant directory, then stop the old writes.
+     - _Why not just use a distributed SQL database with cross-partition transactions?_ You can, at the cost of higher latency for those transactions. Keeping invariants single-partition still matters for throughput and tail latency.
+   - **Example:** A payments platform keys its ledger by (tenant_id, account_id) across 4,096 logical partitions. Each merchant's fee account is split into 16 sub-accounts after it became hot during sales, and monthly statements are generated from a projection in the warehouse.
+   - **Sources:** [AWS DynamoDB: Designing partition keys to distribute your workload](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-uniform-load.html); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)](https://dataintensive.net/)
    - _Also asked as:_ What does a good partition key look like in a distributed store?
 15. **A hot partition shows up at 2 a.m. Diagnose it and fix it without downtime.** [mine + ref · Advanced · Sharding, Operations, Databases]
    - **Thesis:** Prove it's skew and find the key, buy time with the cheapest mitigation aimed at that key, then fix the key design online. Don't start by adding capacity: a hot key stays on one partition however many nodes you add.
@@ -86,33 +410,192 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Sources:** [AWS DynamoDB: Designing partition keys to distribute your workload](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-uniform-load.html); [AWS DynamoDB: Best practices for partition key design](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)](https://dataintensive.net/)
    - _Also asked as:_ How do I avoid hot partitions and skew?
 16. **How do I shard data by user, tenant, region, or something else?** [ref · Intermediate · Sharding, Databases]
-   - Shard on the dimension most queries filter by and that spreads load evenly. Cover cross-shard queries, rebalancing, and tenant or region affinity for locality and compliance.
+   - **Thesis:** Shard on the dimension that most queries filter by and that spreads load evenly, then add a second dimension where compliance or locality demands it. Plan rebalancing and cross-shard queries before the first shard fills.
+   - **60-second answer:** I'd pick the shard key by asking which value nearly every request carries and whether it distributes well. For consumer apps that's usually user id: requests are per user and users are numerous. For B2B SaaS it's usually tenant id, which also gives isolation and makes tenant export and deletion easy, but tenant sizes are skewed, so large tenants need special handling. Region is rarely the primary key for load, but it's often a top-level constraint for data residency and latency: first route to a region, then shard within it. Whatever the key, I'd use a directory or consistent hashing over many logical shards so rebalancing is moving shards, not rewriting keys, and I'd keep cross-shard queries out of hot paths by maintaining projections.
+   - **Key points:**
+     1. **The key most requests carry.** If 95% of queries include user_id, sharding by user keeps them single-shard. Queries without the key become scatter-gather and should be rare or served elsewhere.
+     2. **Even distribution.** High cardinality and no dominant values. User ids usually distribute well; tenants and regions usually don't.
+     3. **Tenant sharding for B2B.** Natural isolation, per-tenant backup, export and deletion, and easier noisy-neighbour control. Requires a strategy for very large tenants (dedicated shards).
+     4. **Region as a top-level constraint.** Data residency or latency can require that data lives in a region. Route by region first via a directory, then shard by user or tenant within the region.
+     5. **Directory or consistent hashing.** A lookup service mapping keys to shards gives flexibility (move one tenant) at the cost of a dependency. Hashing over many logical shards needs no lookup but moves data more coarsely.
+     6. **Cross-shard work.** Global aggregates, search and admin views go to projections, a warehouse or a search index. Cross-shard transactions use sagas.
+   - **When to choose what:** Consumer: shard by user. B2B: shard by tenant with dedicated capacity for large tenants. Regulated or global: region first, then user or tenant. Always over-provision logical shards and keep a directory for exceptions.
+   - **Numbers:**
+     - Over-provisioning: start with hundreds or thousands of logical shards on a few physical nodes so you can grow by moving shards for years without re-keying.
+   - **Pitfalls:**
+     - Sharding by region alone and getting one enormous shard for the biggest market.
+     - Choosing a key that many important queries don't carry, making scatter-gather the norm.
+     - No directory, so moving one problematic tenant requires rehashing everything.
+     - Ignoring how to handle users who move regions or tenants that merge.
+   - **Follow-ups:**
+     - _A user moves from the EU to the US. What happens to their data?_ Residency rules decide. Often data stays in the original region until a deliberate migration; the directory points to its current home, and the move is a copy, verify and switch.
+     - _How do you run a global report?_ Not against shards directly: stream changes into a warehouse and query there, or maintain pre-aggregated counters per shard and sum them.
+     - _When is consistent hashing better than a directory?_ When keys are uniform and you don't need per-key placement control. A directory wins when individual tenants need to be placed or moved deliberately.
+   - **Example:** A B2B SaaS routes requests through a tenant directory to one of three regional clusters, and within each region hashes tenants across 1,024 logical shards. Two very large tenants have dedicated shards; global usage reporting runs in the warehouse.
+   - **Sources:** [Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)](https://dataintensive.net/); [AWS Builders' Library: Workload isolation using shuffle-sharding](https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/)
 
 ### Indexing
 17. **Design indexes for a table that takes 90 percent writes.** [mine + ref · Intermediate · Databases]
-   - Every index taxes writes. Keep the few that serve real queries, prefer covering indexes, consider LSM engines, and push ad hoc reads to a replica or search store.
-   - Read-heavy: more indexes, covering indexes, materialized views. Write-heavy: few indexes, append-friendly storage, deferred or asynchronous secondary structures.
+   - **Thesis:** On a write-heavy table every index is a tax on every write, so keep only indexes that serve real, frequent queries, make those covering where it pays, and push ad hoc or analytical reads to a replica, search index or warehouse. Consider an LSM-based engine if writes dominate at scale.
+   - **60-second answer:** With 90% writes, each secondary index multiplies write work: every insert updates every index, causing more I/O, more WAL or redo, more lock and latch contention, and more replication volume. So I'd start from the read queries that actually matter, by frequency and latency requirement, and give each the minimum index that serves it, ideally covering so the read doesn't touch the table. I'd drop unused or duplicate indexes, which databases can report. Primary key choice matters: an append-friendly, time-ordered key keeps inserts at the end of the B-tree instead of scattering them. Reads that don't need to be on the primary, such as reporting, search and exploration, move to a replica with extra indexes or to a different store. And if write volume is huge and mostly appends, an LSM-tree engine handles it better than a B-tree.
+   - **Key points:**
+     1. **Every index costs on every write.** Inserts and updates must maintain each index, adding I/O, log volume, contention and replication traffic. Five indexes can mean several times the write work of the bare table.
+     2. **Index for real queries only.** Inventory queries by frequency and latency need. Use the database's statistics on index usage to find unused indexes and drop them.
+     3. **Covering and composite indexes.** One composite index in the right column order can serve several queries; including the selected columns avoids table lookups. Fewer, better indexes beat many narrow ones.
+     4. **Append-friendly primary keys.** Time-ordered keys (bigint sequences, UUIDv7) insert at the right edge of the B-tree. Random keys scatter writes and cause page splits.
+     5. **Move secondary reads elsewhere.** A replica can carry extra indexes if your database allows, or stream data to a search index or warehouse for exploration and reporting.
+     6. **Consider LSM engines.** LSM trees (RocksDB-based stores, Cassandra) turn random writes into sequential ones and handle very high ingest, trading some read cost and compaction overhead.
+     7. **Partition by time.** For append-mostly data, time partitions keep active indexes small and make retention a cheap partition drop instead of mass deletes.
+   - **When to choose what:** Minimal indexes on the primary: the primary key and the one to three indexes that serve hot reads. Everything else on replicas or derived stores. Re-evaluate with real usage statistics every few months.
+   - **Numbers:**
+     - Rough write amplification: a table with 1 primary key and 4 secondary indexes performs about 5 index updates per insert. Removing 2 unused indexes cuts index maintenance by about 40%.
+     - Time partitioning: dropping a monthly partition is a metadata operation; deleting the same rows one by one generates a huge amount of log and vacuum work.
+   - **Pitfalls:**
+     - Adding an index for every slow query report without checking write impact.
+     - Duplicate or overlapping indexes (an index on (a) and another on (a, b)).
+     - Random UUID primary keys on a high-ingest table.
+     - Deleting old rows individually instead of dropping partitions.
+   - **Follow-ups:**
+     - _How do you add an index to a busy table safely?_ Use the database's online or concurrent index build, during lower traffic, while watching replication lag, and test the plan on production-size data first.
+     - _A critical read is slow but you can't add another index. Options?_ Serve it from a cache or materialised view updated asynchronously, or from a replica with its own index, or reshape the query to use an existing composite index.
+     - _When does an LSM engine hurt?_ Read-heavy workloads with many point lookups across levels, and workloads with heavy updates or deletes that create compaction pressure.
+   - **Example:** An event ingestion table took 20,000 inserts/s with seven indexes and lagging replication. Usage stats showed three indexes unused and two overlapping. Reducing to three indexes and partitioning by day cut write latency in half and replication lag disappeared; investigative queries moved to the warehouse.
+   - **Sources:** [Markus Winand: Use The Index, Luke](https://use-the-index-luke.com/); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 3 (B-trees and LSM-trees)](https://dataintensive.net/)
    - _Also asked as:_ How should I index for read-heavy versus write-heavy workloads?
 
 ### Migrations & backfills
 18. **Migrate a billion-row table to a new schema with zero downtime.** [mine + ref · Advanced · Migration, Reliability, Databases]
-   - Expand, dual write, throttled backfill, verify with checksums, shadow reads, cut over, then contract. Keep a rollback path until the old column has been unused for a full cycle.
-   - Expand and contract with dual writes, a throttled resumable backfill, verification before cutover, a rollback window, and cleanup only after the old path is provably idle.
+   - **Thesis:** Migrate in phases that are each reversible: expand the schema, dual-write, backfill in throttled and resumable chunks, verify, shadow-read, cut over reads, then contract. At a billion rows the dangers are locks, replication lag and correctness drift, so every phase is observable and stoppable.
+   - **60-second answer:** I'd never do this as one big ALTER or copy. Phase one, expand: create the new table or columns without touching existing reads. Phase two, dual-write: the application writes both old and new shapes, ideally in one transaction, or via CDC from the old table, so new data lands in both. Phase three, backfill: copy existing rows in primary-key ranges with a throttle tied to replication lag and database load, idempotent and resumable from a checkpoint. Phase four, verify: row counts and checksums per key range, plus sampled deep comparisons. Phase five, shadow reads: read from both, serve the old, log mismatches. Phase six, cut over reads behind a flag, ramping gradually. Phase seven, stop writing the old shape and drop it only after a full cycle without rollback. At a billion rows the backfill might take days, which is fine as long as it's safe.
+   - **Key points:**
+     1. **Expand without blocking.** Create new tables or nullable columns using online DDL where needed. Avoid operations that rewrite the table or take long exclusive locks.
+     2. **Dual-write new data.** Application writes both shapes in one transaction, or a CDC pipeline mirrors changes from old to new. Choose one and make it idempotent.
+     3. **Throttled, resumable backfill.** Process key ranges in batches (thousands of rows), checkpoint progress, and pause automatically when replication lag or latency rises. Upsert so reruns are safe and don't overwrite newer dual-written data.
+     4. **Verify before trusting.** Compare counts and checksums per range, then sample rows for field-level comparison. Fix and re-run ranges that differ.
+     5. **Shadow reads.** Read from both representations for a portion of traffic, serve the old result, and log mismatches. This catches transformation bugs with production queries.
+     6. **Cut over gradually.** Switch reads behind a flag by percentage or by tenant. Keep dual writes running so rollback is a flag flip.
+     7. **Contract last.** Stop old writes, wait a full business cycle, then drop old columns or tables. Archive if regulations require.
+   - **When to choose what:** Use expand-and-contract with dual writes for any large table that must stay online. Use CDC-based copying when application changes are hard, and specialised online schema change tools (gh-ost, pt-online-schema-change) for in-place schema changes on MySQL.
+   - **Numbers:**
+     - Backfill time: 1 billion rows at a throttled 20,000 rows/s is about 14 hours of pure copy time; with pauses for load, plan for one to three days.
+     - Batch sizing: batches of 1,000–10,000 rows keep each transaction short, limiting lock time and replication bursts.
+   - **Pitfalls:**
+     - Backfill overwriting rows that dual writes already updated with newer data; use version or timestamp checks.
+     - Ignoring replication lag, so replicas fall minutes behind and read-your-writes breaks.
+     - No checkpointing, so a failure at row 800 million restarts from zero.
+     - Dropping the old column in the same release as the cutover.
+   - **Follow-ups:**
+     - _How do you handle rows updated during the backfill?_ Dual writes keep the new table current; the backfill uses insert-if-absent or compares versions so it never overwrites a newer value.
+     - _How would you verify a billion rows efficiently?_ Checksums aggregated per key range in both stores; only ranges with mismatched checksums get row-level comparison.
+     - _What if you can't change the application to dual-write?_ Use CDC from the old table into the new one, or an online schema change tool that uses triggers or the binlog to keep a shadow table in sync.
+   - **Example:** Moving a 1.2-billion-row transactions table to a partitioned layout: dual writes via the application, a backfill throttled to keep replica lag under 2 seconds that ran for 40 hours, checksum verification per million-id range, a week of shadow reads with zero mismatches, then a tenant-by-tenant read cutover.
+   - **Sources:** [Martin Fowler: Parallel change (expand and contract)](https://martinfowler.com/bliki/ParallelChange.html); [GitHub: gh-ost, online schema migration for MySQL](https://github.com/github/gh-ost)
    - _Also asked as:_ How do I design a migration strategy for a huge table?
 19. **How do I safely backfill data in production?** [ref · Advanced · Migration, Databases]
-   - Throttle against production load, make the job idempotent and resumable, process in key ranges, verify with counts and checksums, and keep it observable and stoppable.
+   - **Thesis:** A safe backfill is idempotent, resumable, throttled against live load, verifiable and stoppable. Treat it as a production service with metrics and a kill switch, not a one-off script.
+   - **60-second answer:** I'd write the backfill so running it twice is harmless: compute values deterministically and upsert, or skip rows already processed, and never overwrite newer data written by live traffic. It processes data in key ranges with a persistent checkpoint, so it can stop and resume anywhere. Its rate adapts to the database's health: back off when replication lag, CPU or p99 latency rise, and run harder off-peak. It emits progress, error counts and throughput, and has a kill switch. Before the full run I'd test it on a production snapshot and then on a small slice of production, and afterwards verify with counts, checksums or sampled comparisons. And I'd decide in advance what happens with rows that fail: skip and log them for a retry pass, not abort the whole job.
+   - **Key points:**
+     1. **Idempotent by design.** Deterministic transformation plus upsert, or a processed marker. Use conditional writes so a backfilled value never replaces a newer value from live traffic.
+     2. **Resumable with checkpoints.** Iterate by primary key ranges and store the last completed key durably. Avoid OFFSET pagination, which gets slower and skips or repeats rows as data changes.
+     3. **Adaptive throttling.** Measure replication lag, database CPU and application latency; slow down or pause when thresholds are crossed. Fixed sleeps are a weak substitute.
+     4. **Observable and stoppable.** Dashboards for progress, rate, errors and estimated completion. A feature flag or config to pause instantly.
+     5. **Test on realistic data.** Run against a recent production snapshot to catch edge cases (nulls, legacy formats, huge rows), then a small production slice.
+     6. **Handle failures per row.** Log failing keys with reasons to a dead-letter table and continue. Re-run only those after fixing the cause.
+     7. **Verify the result.** Counts per range, checksums, and sample comparisons against expected values; sign off before switching anything to depend on the data.
+   - **When to choose what:** Run as a managed job (a worker with checkpoints) for anything beyond a few million rows or anything touching hot tables. Small, cold-table backfills can be simpler, but still idempotent.
+   - **Numbers:**
+     - Throttle example: target replication lag under 1 second and database CPU under 60%; batch 2,000 rows; if lag exceeds 1 second, halve the rate; if under 0.2 seconds, increase by 10%.
+   - **Pitfalls:**
+     - OFFSET/LIMIT pagination over a changing table.
+     - Overwriting values that live traffic updated after the backfill read them.
+     - One giant transaction that locks rows for minutes and floods the log.
+     - Aborting the whole job on the first bad row.
+   - **Follow-ups:**
+     - _The backfill needs data from another service. How do you avoid overloading it?_ Apply the same throttling to calls to that service, coordinate a rate with its owners, cache lookups, or use its bulk export instead of per-row calls.
+     - _How do you estimate how long it will take?_ Measure throughput on a slice under the throttle, multiply by total rows, and add margin for pauses during peak hours.
+     - _How do you backfill derived data like a search index?_ Same pattern, often simpler: rebuild into a new index alias, verify counts, then swap the alias atomically.
+   - **Example:** Backfilling a new 'risk_band' column on 300 million loan rows: a worker processes 5,000-row ranges, writes only where risk_band is null, checkpoints after each batch, and pauses when replica lag exceeds 1 second. It completed in 30 hours with 212 rows logged for manual review.
+   - **Sources:** [Markus Winand: We need tool support for keyset pagination (no OFFSET)](https://use-the-index-luke.com/no-offset); [Martin Fowler: Parallel change (expand and contract)](https://martinfowler.com/bliki/ParallelChange.html)
 20. **How do I do schema changes without downtime?** [ref · Advanced · Migration, Databases]
-   - Expand and contract: add nullable, deploy code that writes both, backfill, switch reads, remove the old. Avoid long locks and test the online DDL path against production-size data.
+   - **Thesis:** Zero-downtime schema changes come from two habits: never make a change that breaks the currently running code, and avoid operations that take long locks or rewrite large tables. Expand and contract across several deploys, using online DDL or shadow-table tools for the heavy steps.
+   - **60-second answer:** The application and the schema change at different times, so every schema change must work with both the old and new code. Adding is safe if it's nullable or has a default the database can apply without a rewrite. Renaming or changing a type is done as add new, write both, backfill, switch reads, then drop old, spread across releases. Then the lock problem: some DDL takes an exclusive lock or rewrites the table, and even a brief lock can queue behind a long-running transaction and block all traffic. So I'd set a short lock timeout and retry, build indexes concurrently, and for heavy changes use online tools like gh-ost for MySQL or the database's own online DDL. I'd test each migration against a production-sized copy and run it with monitoring and a way to abort.
+   - **Key points:**
+     1. **Compatible with running code.** During deploys, old and new code run together. A migration must not remove or rename anything the old code uses, and must not require something the old code doesn't provide.
+     2. **Expand and contract across releases.** Add the new column or table, deploy code that writes both, backfill, deploy code that reads new, then remove old in a later release.
+     3. **Know which DDL locks or rewrites.** Behaviour differs by database and version: adding a column with a constant default is instant in recent Postgres and MySQL; changing a column type often rewrites the table.
+     4. **Lock timeouts protect traffic.** A DDL waiting for a lock blocks everything queued behind it. Set a short lock timeout (a few seconds) so the migration fails fast and retries instead of stalling production.
+     5. **Online index builds.** Use concurrent or online index creation. It takes longer and can fail, so check for invalid indexes afterwards.
+     6. **Shadow-table tools for heavy changes.** gh-ost and pt-online-schema-change copy the table in the background, keep it in sync, and swap names at the end, avoiding long locks.
+     7. **Rehearse on production-size data.** A migration that takes 2 seconds on staging can take an hour on production. Test timings and lock behaviour on a realistic copy.
+   - **When to choose what:** Additive changes can ship any time with lock timeouts. Renames, type changes and drops always use expand and contract over multiple releases. Heavy rewrites on large tables use online tools during low-traffic windows.
+   - **Numbers:**
+     - Lock timeout example: lock_timeout of 2–5 seconds on migration sessions; if it fails, retry with backoff rather than holding a queue of blocked queries.
+   - **Pitfalls:**
+     - Renaming a column in one step while old code still reads it.
+     - A migration waiting on a lock behind a long analytics query, blocking all writes.
+     - Adding a NOT NULL column without a default on an old database version that rewrites the table.
+     - Running migrations automatically on deploy without timing tests on production-size data.
+   - **Follow-ups:**
+     - _How do you make a column NOT NULL safely?_ Add it nullable, backfill, add a check constraint as not validated, validate it separately (which doesn't block writes in Postgres), then set NOT NULL.
+     - _Who runs migrations: the app on startup or a separate step?_ A separate, controlled step in the pipeline, with lock timeouts and monitoring, so many app instances don't race to run it and failures don't block deploys.
+     - _How do you handle a migration that fails halfway?_ Make each migration small and transactional where the database supports transactional DDL; otherwise make it idempotent so it can be rerun.
+   - **Example:** Renaming 'amount' to 'amount_minor' on a 400-million-row payments table: release 1 adds amount_minor; release 2 writes both; a throttled backfill fills history; release 3 reads amount_minor; release 4, two weeks later, drops amount. No single step held a lock longer than a second.
+   - **Sources:** [GitHub: gh-ost, online schema migration for MySQL](https://github.com/github/gh-ost); [PostgreSQL documentation: ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)
 
 ### Retention & deletion
 21. **Design retention, soft delete and legal erasure so they do not contradict each other.** [mine + ref · Intermediate · Cost & compliance, Databases]
-   - Different clocks for each: soft delete for undo, retention for policy, erasure for law. Cover backups, derived stores, logs, and how you prove deletion happened.
-   - Deleted flag or tombstone for undo, tiered storage for old data, retention policies with automated purge, and explicit handling for legal deletion and backups.
+   - **Thesis:** Soft delete, retention and legal erasure run on different clocks for different reasons: undo, policy and law. Model them separately, decide which wins when they conflict (usually a legal hold or regulatory retention beats an erasure request, and erasure beats ordinary retention), and make sure each one reaches backups, logs and derived stores.
+   - **60-second answer:** I'd separate the three. Soft delete is a product feature: a deleted_at marker so users can undo, with queries filtering it out, and a purge after, say, 30 days. Retention is policy: how long each data class is kept, like logs for 90 days or transaction records for years if regulation requires it, enforced by automated purges, ideally partition drops. Erasure is a legal right in many jurisdictions: delete or anonymise a person's personal data on request, within a deadline. They conflict, for example when someone asks for erasure but financial regulation requires keeping their loan records, so I'd write the precedence down: legal holds and regulatory retention win, but only for the data they cover, and the rest is erased. Then the hard part is coverage: replicas, caches, search indexes, the warehouse, logs, and backups. For backups, crypto-shredding helps: encrypt each person's data with their own key and delete the key.
+   - **Key points:**
+     1. **Soft delete for undo.** deleted_at column, default query filters, unique constraints that account for deleted rows, and a scheduled hard purge after the undo window.
+     2. **Retention per data class.** Classify data (transactions, logs, analytics events, support tickets) with a retention period and a legal basis. Automate purges; time partitioning makes them cheap.
+     3. **Erasure as a workflow.** Receive and verify the request, find the person's data across systems by stable ids, delete or anonymise, record completion, and meet the statutory deadline.
+     4. **Precedence rules.** Legal hold > regulatory retention > erasure request > ordinary retention > soft delete. Apply per data class, so retained financial records don't keep unrelated marketing data alive.
+     5. **Coverage beyond the primary.** Caches, search indexes, the warehouse, event streams, logs and third-party processors all hold copies. Deletes must propagate (tombstones, CDC) or be scheduled per system.
+     6. **Backups and crypto-shredding.** Rewriting backups is impractical. Either let them expire within a known window and re-apply erasures on restore, or encrypt personal data per subject and destroy the key.
+     7. **Prove it.** Keep an audit log of what was deleted, when and where, without storing the deleted personal data itself.
+   - **When to choose what:** Model the three explicitly with a data inventory. Use anonymisation where records must be kept for aggregate or regulatory reasons but identity needn't be. Use crypto-shredding for data that ends up in immutable stores.
+   - **Numbers:**
+     - Example policy: soft-delete undo window 30 days; application logs 90 days; loan and payment records retained for the regulatory period (often several years); erasure requests completed within the statutory deadline, for example one month under GDPR.
+   - **Pitfalls:**
+     - Soft-deleted rows still visible through a search index or analytics table.
+     - Erasure that removes the main record but leaves personal data in logs, events or backups.
+     - Retention purges that delete data under a legal hold.
+     - No data inventory, so nobody knows every place a customer's data lives.
+   - **Follow-ups:**
+     - _A customer with an active loan requests erasure. What happens?_ Data needed to service the loan and meet regulatory retention is kept with that legal basis documented; everything else (marketing preferences, analytics identity) is erased now, and the retained data is erased when the obligation ends.
+     - _How does erasure work with an event log you can't rewrite?_ Keep personal data out of events where possible (reference ids instead), or encrypt personal fields per subject and delete the key.
+     - _How do you find all the data for one person?_ A data inventory mapping systems to data classes, a stable subject id carried everywhere, and per-system erasure handlers invoked by one orchestrated workflow.
+   - **Example:** A lender soft-deletes draft applications for 30 days, retains loan records for the regulatory period, and handles erasure via a workflow that anonymises marketing and analytics data immediately, flags retained loan data with its legal basis, and destroys the subject's encryption key once retention ends.
+   - **Sources:** [GDPR Article 17: Right to erasure](https://gdpr-info.eu/art-17-gdpr/); [GDPR Article 12: Time limits for responding to requests](https://gdpr-info.eu/art-12-gdpr/)
    - _Also asked as:_ How do I design soft delete, archival, and retention?
 
 ### Multi-tenancy
 22. **How do I handle multi-tenant data isolation?** [ref · Intermediate · Sharding, Reliability]
-   - Row-level with tenant id on every query and enforced in the data layer, schema per tenant, or database per tenant. Trade isolation strength against cost and operational load. Plan noisy-neighbor controls and tenant export.
+   - **Thesis:** Pick an isolation model per tier, not one for everyone: shared tables with a tenant id for most tenants, and schema- or database-per-tenant for those who need stronger isolation or have outgrown the pool. Enforce tenant scoping in the data layer, not in each query, and design noisy-neighbour controls and tenant export from the start.
+   - **60-second answer:** There are three models. Pooled: shared tables with tenant_id on every row; cheapest and easiest to operate, weakest isolation. Schema-per-tenant: separate schemas in a shared database; better logical isolation, but migrations run per schema and catalogues grow. Database- or cluster-per-tenant: strongest isolation and per-tenant backup, restore and residency, at much higher cost and operational load. I'd usually run pooled for most tenants and offer dedicated databases for large or regulated tenants. In the pooled model, the key is enforcement: tenant id must come from the authenticated context, never from request parameters, and be applied automatically, through row-level security in Postgres or a mandatory tenant filter in the data access layer, with tests that try cross-tenant access. Then per-tenant quotas and rate limits for noisy neighbours, per-tenant encryption keys if required, and tooling for tenant export, deletion and moving a tenant between models.
+   - **Key points:**
+     1. **Pooled: shared tables, tenant_id everywhere.** Most efficient and simplest to migrate and monitor. Isolation depends entirely on correct scoping, so enforcement must be systematic.
+     2. **Schema-per-tenant.** Clearer separation and easy per-tenant export. Migrations must run across thousands of schemas, and some databases degrade with very large catalogues.
+     3. **Database-per-tenant.** Strong isolation, per-tenant performance, backups, residency and encryption. Costly at small sizes; needs automation for provisioning and migrations.
+     4. **Enforce scoping in the data layer.** Derive tenant id from authentication, set it in the session, and apply it via row-level security or a mandatory repository filter. Code reviews alone aren't enforcement.
+     5. **Test for cross-tenant leaks.** Automated tests that authenticate as tenant A and attempt to read tenant B's resources by id across every endpoint.
+     6. **Noisy neighbours.** Per-tenant rate limits, query timeouts, concurrency caps and resource pools. Watch per-tenant resource usage to spot those who need to move.
+     7. **Tenant lifecycle tooling.** Export, deletion, and migration of a tenant from pooled to dedicated without downtime.
+   - **When to choose what:** Pooled by default with row-level security or an enforced filter. Dedicated databases for tenants who pay for it, are regulated, or are large enough to disturb others. Schema-per-tenant mainly when tenant counts are modest and per-tenant customisation is needed.
+   - **Numbers:**
+     - Cost intuition: pooled can host thousands of small tenants on one cluster; database-per-tenant has a floor cost per tenant (instance, backups, monitoring) that dominates for small tenants.
+   - **Pitfalls:**
+     - Taking tenant id from a request parameter or header the client controls.
+     - One missed WHERE tenant_id = ? in a new query, leaking data.
+     - Caches keyed without tenant id, serving one tenant's data to another.
+     - No path to move a large tenant out of the pool.
+   - **Follow-ups:**
+     - _How does row-level security work in practice?_ The application sets a session variable with the tenant id after authentication; policies on each table restrict rows to that tenant, so a query missing a filter still can't see other tenants.
+     - _How do you run migrations across 5,000 tenant databases?_ An orchestrated rollout with batches, canaries, retries and a status table, and backward-compatible changes so tenants at different versions keep working.
+     - _A tenant asks for their own encryption keys. Can pooled support that?_ Partially, with per-tenant data keys for application-level encryption of sensitive fields; full key isolation is easier with dedicated databases.
+   - **Example:** A SaaS runs 3,000 tenants pooled in Postgres with row-level security tied to a session tenant id, and 12 enterprise tenants on dedicated clusters provisioned from the same infrastructure code. A nightly test suite tries cross-tenant reads on every API endpoint.
+   - **Sources:** [PostgreSQL documentation: Row security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html); [AWS Builders' Library: Workload isolation using shuffle-sharding](https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/)
 
 ## Caching & Performance (7)
 

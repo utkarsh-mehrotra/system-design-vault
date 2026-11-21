@@ -1,0 +1,71 @@
+{
+  "thesis": "Vertical scaling is simple and keeps everything on one machine, but it has a ceiling, a cost curve that steepens, and a single point of failure. Horizontal scaling removes the ceiling and adds redundancy, but requires statelessness or partitioning and adds coordination. Most systems scale stateless tiers horizontally early and data tiers vertically for as long as practical.",
+  "pitch": "Vertical scaling means a bigger machine: more cores, memory, faster disks. It needs no code changes, keeps transactions and joins local and simple, and modern hardware goes very far. The costs: there's a ceiling, the largest instances cost disproportionately more, resizing often means a restart or failover, and one big machine is still one failure domain. Horizontal scaling means more machines: it scales further and gives redundancy, but the workload must be stateless or partitioned, and you inherit load balancing, data distribution, consistency and more network failure modes. In practice I'd scale application servers horizontally from the start because they're stateless and it gives redundancy, and scale the database vertically plus replicas until a single primary genuinely can't keep up, then partition.",
+  "points": [
+    {
+      "h": "Vertical: simplicity",
+      "d": "No architectural change. Single-node transactions, joins and consistency stay easy. Great for databases and for early-stage systems."
+    },
+    {
+      "h": "Vertical: limits",
+      "d": "A hard ceiling on the largest instance, cost per unit of capacity rising at the top end, and a single failure domain unless paired with replicas."
+    },
+    {
+      "h": "Horizontal: scale and redundancy",
+      "d": "Add capacity incrementally and survive node loss. Fits stateless services naturally."
+    },
+    {
+      "h": "Horizontal: complexity",
+      "d": "Requires externalising state or partitioning data, load balancing, service discovery, and dealing with partial failure and consistency across nodes."
+    },
+    {
+      "h": "Stateless tiers go horizontal early",
+      "d": "Web and API servers with state moved to caches or databases scale out cheaply and gain redundancy."
+    },
+    {
+      "h": "Data tiers stay vertical longer",
+      "d": "A large primary with read replicas often covers far more growth than expected. Partitioning is a large, hard-to-reverse step."
+    },
+    {
+      "h": "Elasticity and cost",
+      "d": "Horizontal scaling allows scaling in during quiet hours, saving money; a big vertical instance runs at peak size all the time."
+    }
+  ],
+  "decision": "Scale out stateless services; scale up stateful stores until cost, ceiling or failure-domain concerns force partitioning. Revisit when you approach roughly half of the largest available instance, to leave time to plan.",
+  "numbers": [
+    "Headroom check: if your database runs at 60% of a 32-core instance and the largest available is 192 cores, vertical scaling buys roughly another 6x before the ceiling, often years of growth.",
+    "Failure domain: one large node at 100% of traffic vs 10 nodes at 10% each; losing one node removes 100% vs 10% of capacity."
+  ],
+  "pitfalls": [
+    "Partitioning a database prematurely and paying the complexity forever.",
+    "Scaling up until hitting the ceiling with no plan, then needing an emergency re-architecture.",
+    "Horizontally scaled services that still hold local state (sessions, caches) and break on rebalancing.",
+    "Ignoring that a single big node is a single point of failure."
+  ],
+  "followups": [
+    {
+      "q": "When would you scale a database horizontally first?",
+      "a": "When the dataset or write rate clearly exceeds one node from the start (large-scale event ingestion, IoT telemetry) or when the data is naturally partitioned by tenant with isolation requirements."
+    },
+    {
+      "q": "How do you make a stateful service horizontally scalable?",
+      "a": "Move state out (database, cache, object store), or partition it so each node owns a key range, with rebalancing and replication."
+    },
+    {
+      "q": "Isn't vertical scaling downtime-prone?",
+      "a": "Resizing often requires a restart; with a replica you fail over to a resized standby, so downtime is a brief failover."
+    }
+  ],
+  "example": "A fintech's Postgres primary grew from 8 to 64 cores over three years with two read replicas, handling 15x growth. Application servers scaled from 4 to 60 instances. Partitioning was planned only when write volume approached half of the largest instance's capacity.",
+  "related": [
+    "read-traffic-grows-10x-one",
+    "splitting-monolith-pay-itself",
+    "shard-data-user-tenant-region"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 1 (Scalability)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

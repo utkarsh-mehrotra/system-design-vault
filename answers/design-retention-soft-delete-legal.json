@@ -1,0 +1,74 @@
+{
+  "thesis": "Soft delete, retention and legal erasure run on different clocks for different reasons: undo, policy and law. Model them separately, decide which wins when they conflict (usually a legal hold or regulatory retention beats an erasure request, and erasure beats ordinary retention), and make sure each one reaches backups, logs and derived stores.",
+  "pitch": "I'd separate the three. Soft delete is a product feature: a deleted_at marker so users can undo, with queries filtering it out, and a purge after, say, 30 days. Retention is policy: how long each data class is kept, like logs for 90 days or transaction records for years if regulation requires it, enforced by automated purges, ideally partition drops. Erasure is a legal right in many jurisdictions: delete or anonymise a person's personal data on request, within a deadline. They conflict, for example when someone asks for erasure but financial regulation requires keeping their loan records, so I'd write the precedence down: legal holds and regulatory retention win, but only for the data they cover, and the rest is erased. Then the hard part is coverage: replicas, caches, search indexes, the warehouse, logs, and backups. For backups, crypto-shredding helps: encrypt each person's data with their own key and delete the key.",
+  "points": [
+    {
+      "h": "Soft delete for undo",
+      "d": "deleted_at column, default query filters, unique constraints that account for deleted rows, and a scheduled hard purge after the undo window."
+    },
+    {
+      "h": "Retention per data class",
+      "d": "Classify data (transactions, logs, analytics events, support tickets) with a retention period and a legal basis. Automate purges; time partitioning makes them cheap."
+    },
+    {
+      "h": "Erasure as a workflow",
+      "d": "Receive and verify the request, find the person's data across systems by stable ids, delete or anonymise, record completion, and meet the statutory deadline."
+    },
+    {
+      "h": "Precedence rules",
+      "d": "Legal hold > regulatory retention > erasure request > ordinary retention > soft delete. Apply per data class, so retained financial records don't keep unrelated marketing data alive."
+    },
+    {
+      "h": "Coverage beyond the primary",
+      "d": "Caches, search indexes, the warehouse, event streams, logs and third-party processors all hold copies. Deletes must propagate (tombstones, CDC) or be scheduled per system."
+    },
+    {
+      "h": "Backups and crypto-shredding",
+      "d": "Rewriting backups is impractical. Either let them expire within a known window and re-apply erasures on restore, or encrypt personal data per subject and destroy the key."
+    },
+    {
+      "h": "Prove it",
+      "d": "Keep an audit log of what was deleted, when and where, without storing the deleted personal data itself."
+    }
+  ],
+  "decision": "Model the three explicitly with a data inventory. Use anonymisation where records must be kept for aggregate or regulatory reasons but identity needn't be. Use crypto-shredding for data that ends up in immutable stores.",
+  "numbers": [
+    "Example policy: soft-delete undo window 30 days; application logs 90 days; loan and payment records retained for the regulatory period (often several years); erasure requests completed within the statutory deadline, for example one month under GDPR."
+  ],
+  "pitfalls": [
+    "Soft-deleted rows still visible through a search index or analytics table.",
+    "Erasure that removes the main record but leaves personal data in logs, events or backups.",
+    "Retention purges that delete data under a legal hold.",
+    "No data inventory, so nobody knows every place a customer's data lives."
+  ],
+  "followups": [
+    {
+      "q": "A customer with an active loan requests erasure. What happens?",
+      "a": "Data needed to service the loan and meet regulatory retention is kept with that legal basis documented; everything else (marketing preferences, analytics identity) is erased now, and the retained data is erased when the obligation ends."
+    },
+    {
+      "q": "How does erasure work with an event log you can't rewrite?",
+      "a": "Keep personal data out of events where possible (reference ids instead), or encrypt personal fields per subject and delete the key."
+    },
+    {
+      "q": "How do you find all the data for one person?",
+      "a": "A data inventory mapping systems to data classes, a stable subject id carried everywhere, and per-system erasure handlers invoked by one orchestrated workflow."
+    }
+  ],
+  "example": "A lender soft-deletes draft applications for 30 days, retains loan records for the regulatory period, and handles erasure via a workflow that anonymises marketing and analytics data immediately, flags retained loan data with its legal basis, and destroys the subject's encryption key once retention ends.",
+  "related": [
+    "boundary-between-oltp-olap-data",
+    "plan-data-residency-regional-regulations",
+    "should-each-layer-log-must"
+  ],
+  "sources": [
+    {
+      "title": "GDPR Article 17: Right to erasure",
+      "url": "https://gdpr-info.eu/art-17-gdpr/"
+    },
+    {
+      "title": "GDPR Article 12: Time limits for responding to requests",
+      "url": "https://gdpr-info.eu/art-12-gdpr/"
+    }
+  ]
+}

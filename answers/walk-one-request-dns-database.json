@@ -1,0 +1,76 @@
+{
+  "thesis": "Name every hop, give each a latency budget, and say which hops dominate the tail. For most web requests the network round trips (DNS, connection setup, TLS) and the slowest dependency call dominate, not the application code.",
+  "pitch": "A browser request goes: DNS resolution, usually cached but potentially tens of milliseconds on a miss; TCP and TLS setup, one to two round trips to the edge, which is why terminating TLS at a nearby CDN or edge point matters; the edge either serves from cache or forwards over a warm connection to the origin's load balancer; the load balancer picks a healthy instance; the service authenticates, maybe checks a cache, then queries the database over a pooled connection; the database finds rows via an index, from memory if hot, from disk if not; and the response returns the same way, possibly compressed. I'd put rough numbers on each and point out that p50 is dominated by network distance while p99 is dominated by queueing, cache misses, garbage collection and the slowest downstream call. That tells you where to optimise: move the edge closer, reuse connections, cache, and cut the slowest dependency.",
+  "points": [
+    {
+      "h": "DNS",
+      "d": "Usually answered from the browser or OS cache. On a miss, a recursive resolver lookup can take tens of milliseconds. Low TTLs help failover but increase misses."
+    },
+    {
+      "h": "Connection setup",
+      "d": "TCP needs one round trip; TLS 1.3 adds one more (TLS 1.2 adds two). At 80 ms round trip time to a distant origin, that's 160–240 ms before the first byte. An edge 10 ms away cuts this dramatically."
+    },
+    {
+      "h": "Edge or CDN",
+      "d": "Serves cacheable content directly. For dynamic requests it forwards over pre-established, long-lived connections to the origin, avoiding repeated setup costs."
+    },
+    {
+      "h": "Load balancer",
+      "d": "Adds well under a millisecond typically, but its algorithm and health checks decide whether you land on a slow or overloaded instance."
+    },
+    {
+      "h": "Service work",
+      "d": "Authentication, validation, business logic and serialisation. Often a few milliseconds, but GC pauses and thread-pool queueing appear here in the tail."
+    },
+    {
+      "h": "Cache and database",
+      "d": "An in-memory cache hit is around a millisecond or less in the same zone. A database query using an index on hot data takes about a millisecond; a cold disk read or a bad plan can take hundreds."
+    },
+    {
+      "h": "Where p99 comes from",
+      "d": "Queueing under load, cache misses, slow dependencies, retries, and fan-out (the request waits for the slowest of many calls)."
+    }
+  ],
+  "decision": "To cut median latency: move termination closer to users, reuse connections, cache aggressively. To cut tail latency: reduce fan-out, set timeouts, remove queueing, fix slow queries and GC. Measure each hop with tracing before optimising.",
+  "numbers": [
+    "Order-of-magnitude figures: same-zone network round trip around 0.5 ms or less; cross-region tens of milliseconds; intercontinental 100 ms or more; memory reference nanoseconds; SSD random read around 0.1 ms.",
+    "Budget example for a 200 ms target: DNS and connection 40 ms (with edge), edge to origin 20 ms, service 30 ms, cache or database 20 ms, response transfer 30 ms, margin 60 ms."
+  ],
+  "pitfalls": [
+    "Optimising application code when most time is spent in round trips.",
+    "Opening a new database or HTTP connection per request instead of pooling.",
+    "Looking only at averages, which hide the tail where users notice slowness.",
+    "Forgetting response size: large payloads over slow mobile links can dominate."
+  ],
+  "followups": [
+    {
+      "q": "How would you measure where the time goes?",
+      "a": "Real-user monitoring for client-side phases (DNS, connect, TLS, first byte), distributed tracing for server hops, and database query timing. Compare p50 and p99 per hop."
+    },
+    {
+      "q": "What changes for a mobile app on a poor network?",
+      "a": "Round trips dominate even more: batch requests, reuse connections (HTTP/2 or HTTP/3), compress, and cache on the device."
+    },
+    {
+      "q": "How does HTTP/3 help?",
+      "a": "QUIC combines transport and TLS handshakes, avoids head-of-line blocking across streams, and handles network changes better, which helps lossy mobile connections."
+    }
+  ],
+  "example": "A checkout page at 900 ms p99 for users in Asia hitting a US origin. Tracing showed 400 ms in connection setup and TLS. Terminating TLS at a regional edge with warm connections to the origin cut p99 to 450 ms without touching application code.",
+  "related": [
+    "read-traffic-grows-10x-one",
+    "size-system-50-000-requests",
+    "p50-flat-but-p99-doubled",
+    "should-cache-client-edge-service"
+  ],
+  "sources": [
+    {
+      "title": "Ilya Grigorik: High Performance Browser Networking",
+      "url": "https://hpbn.co/"
+    },
+    {
+      "title": "Jeff Dean and Luiz Barroso: The tail at scale",
+      "url": "https://research.google/pubs/the-tail-at-scale/"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "thesis": "Measure where the first bottleneck will be, then add read capacity in order of cost: caching, read replicas, then partitioning. Hold the API contract and the data model steady so clients and other teams don't have to change with you.",
+  "pitch": "First I'd find out what breaks first at 10x, with load tests and the current saturation of each tier, rather than guess. For read growth the usual order is: cache hot, read-mostly data, at the edge for public content and in a shared cache for computed results, which can absorb most of the growth if the hit ratio is high; add read replicas for the database, with read-your-writes handled for users who just wrote; make the service tier stateless and autoscaled; and only then partition data if a single primary or dataset is the limit. What I'd refuse to change is the public API contract and the core data model, because changing those forces every client and team to move at once; I'd also refuse a rewrite under deadline pressure. The goal is to scale behind stable interfaces.",
+  "points": [
+    {
+      "h": "Measure before acting",
+      "d": "Load test at 2x, 5x, 10x in a production-like environment, and look at saturation per tier (CPU, connections, cache memory, database I/O). The first bottleneck is often not where people expect."
+    },
+    {
+      "h": "Cache first",
+      "d": "Edge caching for public or per-region content, an application cache for expensive computed results, and HTTP caching headers. A 90% hit ratio means the backend sees one tenth of the reads."
+    },
+    {
+      "h": "Read replicas second",
+      "d": "Replicas scale reads horizontally. Handle replication lag: route reads needing fresh data to the primary or use session guarantees."
+    },
+    {
+      "h": "Stateless services, autoscaled",
+      "d": "Move session state to a shared store, set autoscaling on saturation signals, and make sure connection pools don't overwhelm the database as instances multiply."
+    },
+    {
+      "h": "Partition last",
+      "d": "Sharding is the most expensive change: data movement, cross-shard queries, operational complexity. Do it when a single dataset or primary truly can't keep up."
+    },
+    {
+      "h": "What not to change",
+      "d": "Public API contracts, core data model and identifiers. Changing these during a growth spurt multiplies risk and coordination cost."
+    },
+    {
+      "h": "Protect against the spike",
+      "d": "Rate limits, load shedding and graceful degradation buy time while capacity catches up."
+    }
+  ],
+  "decision": "Cache, then replicas, then horizontal service scaling, then partitioning, in that order unless measurement shows a different first bottleneck. Never trade API stability for a quick scaling win.",
+  "numbers": [
+    "Cache math: at 10x traffic and a 90% hit ratio, origin reads are 10 × 0.1 = 1x today's load. At 80% hit ratio, origin load is 2x, which shows how sensitive capacity is to hit ratio.",
+    "Replica math: if the primary can serve 5,000 reads/s and you need 40,000, you need around 8 read-serving nodes plus headroom, assuming reads spread evenly."
+  ],
+  "pitfalls": [
+    "Sharding first because it sounds like 'real' scaling.",
+    "Adding replicas but sending all reads to them, breaking read-your-writes.",
+    "Autoscaling app servers until database connections are exhausted.",
+    "Changing API shapes 'while we're at it', forcing client releases during the crunch."
+  ],
+  "followups": [
+    {
+      "q": "The cache hit ratio is only 50%. What do you do?",
+      "a": "Analyse the key distribution: long-tail keys may not be worth caching, TTLs may be too short, or keys may include unnecessary variance (like query parameter order). Fix key design and pre-warm hot keys."
+    },
+    {
+      "q": "What if writes also grow 10x?",
+      "a": "Then batch and queue writes, reduce write amplification (indexes), and plan partitioning sooner, since replicas don't help writes."
+    },
+    {
+      "q": "How do you avoid database connection exhaustion?",
+      "a": "Connection poolers (such as PgBouncer), per-instance pool caps, and fewer, larger instances, or a data access service that multiplexes connections."
+    }
+  ],
+  "example": "A content platform expected 10x reads from a partnership. Load tests showed the database saturating at 3x. Edge caching of article pages (hit ratio 94%) plus two read replicas carried the launch; sharding, originally planned, wasn't needed.",
+  "related": [
+    "walk-one-request-dns-database",
+    "should-cache-client-edge-service",
+    "give-users-read-writes-reads",
+    "trade-offs-between-vertical-horizontal"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 5 (Replication)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}
