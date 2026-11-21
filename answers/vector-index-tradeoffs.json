@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Use a vector database; it handles nearest-neighbour search.\"",
+    "why": "Approximate nearest-neighbour indexes trade recall against latency and memory, filtering by metadata can wreck recall, and 100M high-dimensional vectors need a lot of RAM unless you compress or use disk-based indexes.",
+    "probe": "ANN algorithms, recall measurement, memory sizing, filtering, and updates.",
+    "say": "\"I'd size memory from vectors × dimensions × bytes, pick HNSW for low latency if it fits in RAM or IVF/PQ or disk-based indexes to cut memory, measure recall against exact search, and handle metadata filters carefully.\""
+  },
+  "thesis": "Vector search at scale uses approximate nearest-neighbour (ANN) indexes that trade recall, latency, memory and update cost. Size memory explicitly, choose the index type to fit, measure recall against exact search, and design metadata filtering so it doesn't silently destroy result quality.",
+  "pitch": "First the raw size: 100 million vectors × 1,024 dimensions × 4 bytes is about 400 GB before index overhead. HNSW graphs give excellent recall and millisecond latency but keep vectors and graph links in memory, so that's a cluster of large-memory nodes. IVF-based indexes partition vectors into clusters and search only a few, and product quantisation compresses vectors many times over, cutting memory at some recall cost. Disk-based indexes like DiskANN keep most data on SSD. Other levers: smaller embedding dimensions, or int8 and binary quantisation with reranking on full vectors. Recall must be measured: run exact search on a sample and compare. Filtering is a classic trap: post-filtering after ANN search can return few or no results when the filter is selective, while pre-filtering can bypass the index; good engines support filtered search natively, or you partition by tenant. Updates and deletes also cost, as HNSW handles inserts but deletes leave tombstones needing rebuilds.",
+  "points": [
+    {
+      "h": "Size it",
+      "d": "vectors × dimensions × bytes per value, plus index overhead (often significant for graph indexes)."
+    },
+    {
+      "h": "HNSW",
+      "d": "Graph-based, high recall, low latency, memory-hungry; tunable with parameters like M and efSearch."
+    },
+    {
+      "h": "IVF and product quantisation",
+      "d": "Cluster-based search plus vector compression reduces memory and cost, trading some recall."
+    },
+    {
+      "h": "Disk-based indexes",
+      "d": "DiskANN-style indexes keep vectors on SSD with a small in-memory structure, enabling large indexes on fewer machines."
+    },
+    {
+      "h": "Quantisation and rerank",
+      "d": "Search on compressed vectors, then rerank top candidates using full-precision vectors to recover accuracy."
+    },
+    {
+      "h": "Measure recall",
+      "d": "Compare ANN results with exact search on a sample; tune parameters to hit a recall target at acceptable latency."
+    },
+    {
+      "h": "Filtering and multi-tenancy",
+      "d": "Selective filters break naive post-filtering; use engines with filtered ANN, or partition indexes per tenant or category."
+    }
+  ],
+  "decision": "Under tens of millions of vectors, a vector extension in your existing database (pgvector) or a managed service is often enough. At hundreds of millions, choose HNSW with quantisation or disk-based indexes based on latency and budget, and always measure recall.",
+  "numbers": [
+    "100M × 1,024 dims × 4 bytes ≈ 410 GB raw; int8 quantisation ≈ 100 GB; product quantisation to 64 bytes per vector ≈ 6.4 GB plus overhead.",
+    "Reducing dimensions from 1,536 to 512 cuts raw memory by two thirds."
+  ],
+  "pitfalls": [
+    "Never measuring recall, so quality degrades silently after tuning for speed.",
+    "Post-filtering with selective filters, returning too few results.",
+    "Ignoring deletes and tombstones until the index is mostly garbage.",
+    "Mixing embeddings from different models in one index."
+  ],
+  "followups": [
+    {
+      "q": "When is pgvector enough?",
+      "a": "For moderate scale (millions to tens of millions) when you want transactions and joins with your relational data, and latency targets aren't extreme."
+    },
+    {
+      "q": "How do you handle per-tenant data?",
+      "a": "Filtered search on a tenant field if the engine supports it efficiently, or separate indexes or namespaces per tenant for isolation."
+    },
+    {
+      "q": "How do you roll out a new embedding model?",
+      "a": "Build a new index in parallel, evaluate retrieval quality, then switch traffic and retire the old index."
+    }
+  ],
+  "example": "A search team indexing 120M product embeddings at 768 dimensions (about 370 GB raw) moved from in-memory HNSW to IVF with product quantisation plus reranking of the top 200 on full vectors, cutting memory to about 30 GB while keeping recall@10 at 95% against exact search.",
+  "related": [
+    "rag-design-traps",
+    "decide-between-sql-nosql-search",
+    "estimation-dau-qps-storage"
+  ],
+  "sources": [
+    {
+      "title": "Malkov and Yashunin: Hierarchical navigable small world graphs (HNSW)",
+      "url": "https://arxiv.org/abs/1603.09320"
+    },
+    {
+      "title": "Faiss documentation",
+      "url": "https://github.com/facebookresearch/faiss/wiki"
+    }
+  ]
+}

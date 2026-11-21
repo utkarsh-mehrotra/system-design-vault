@@ -1,0 +1,72 @@
+{
+  "trap": {
+    "wrong": "\"Cache responses by embedding similarity, so similar questions get the cached answer.\"",
+    "why": "Semantically similar questions can need different answers (different user, date, account, or a negation), so similarity caching can return confidently wrong or even another user's data.",
+    "probe": "Exact vs semantic caching, cache keys including context, personalisation, and staleness.",
+    "say": "\"I'd cache exact matches on the full normalised input including model, prompt version and relevant context, use provider prompt caching for shared prefixes, and use semantic caching only for non-personal, low-risk queries with a high similarity threshold and evaluation.\""
+  },
+  "thesis": "LLM outputs can be cached, but the cache key must capture everything that affects the answer: model, prompt version, parameters, retrieved context and user-specific data. Exact-match and prefix caching are safe; semantic caching saves more but risks wrong or leaked answers and needs strict scoping.",
+  "pitch": "There are three kinds of caching. Prompt or prefix caching at the provider reuses computation for repeated prompt prefixes; it's transparent and safe, and cuts cost and latency for long system prompts or shared documents. Exact response caching stores the output keyed by a hash of everything that determines it: model and version, system prompt version, temperature, retrieved documents or their versions, and the user's relevant data. It's safe if the key is complete, but hit rates are modest because natural language varies. Semantic caching matches new queries to previous ones by embedding similarity and returns the stored answer. It raises hit rates for FAQ-style traffic but is risky: 'How do I cancel my order?' and 'How do I not cancel my order?' can be close in embedding space, and personal queries like 'what's my balance?' must never be shared. So I'd restrict semantic caching to public, non-personalised content, use high thresholds, invalidate on content or prompt changes, and evaluate it like any other model change. And with temperature above zero, remember caching changes behaviour, since users always get the same answer.",
+  "points": [
+    {
+      "h": "Provider prefix caching",
+      "d": "Reuses work for repeated prefixes; safe and effective for long shared prompts and documents."
+    },
+    {
+      "h": "Exact response caching",
+      "d": "Key = hash(model, prompt version, parameters, context versions, normalised input, user scope). Safe when the key is complete."
+    },
+    {
+      "h": "Semantic caching",
+      "d": "Higher hit rate for repeated intents, but similarity doesn't guarantee the same correct answer."
+    },
+    {
+      "h": "Never share personal answers",
+      "d": "Scope caches per user or tenant for anything involving private data, or don't cache it."
+    },
+    {
+      "h": "Invalidate on changes",
+      "d": "Prompt, model or source document changes must invalidate affected entries (version them in the key)."
+    },
+    {
+      "h": "Evaluate cache behaviour",
+      "d": "Measure the rate of wrong cached answers on a test set, just as you would for a model change."
+    }
+  ],
+  "decision": "Always use prefix caching where available; exact caching with complete keys for deterministic or FAQ-like tasks; semantic caching only for public, low-risk content after evaluation.",
+  "numbers": [
+    "Example: a help-centre bot with 40% of questions near-duplicates of common FAQs might serve a large share from a semantic cache, while account-specific questions (say 50% of traffic) bypass it entirely."
+  ],
+  "pitfalls": [
+    "Semantic caching personal or account-specific answers.",
+    "Cache keys missing prompt or model version, serving answers from old prompts.",
+    "Low similarity thresholds that conflate opposite questions.",
+    "Caching answers built from documents that later change, with no invalidation."
+  ],
+  "followups": [
+    {
+      "q": "How do you set the similarity threshold?",
+      "a": "Empirically: label pairs of queries as same-answer or different-answer and pick a threshold that keeps wrong hits below an acceptable rate."
+    },
+    {
+      "q": "How does RAG affect caching?",
+      "a": "Include versions or hashes of retrieved documents in the key, so updated documents produce fresh answers."
+    },
+    {
+      "q": "Is caching worth it for chat?",
+      "a": "Response caching rarely is for open-ended multi-turn chat; prefix caching of the conversation and system prompt usually is."
+    }
+  ],
+  "example": "A retailer added semantic caching to its support bot and briefly served one customer's order status answer to another with a similar phrasing. Semantic caching was restricted to public policy questions with a 0.95 threshold, and account questions were excluded; exact caching with user scope covered repeated account queries safely.",
+  "related": [
+    "llm-serving-latency-cost",
+    "design-cache-invalidation-rules-not",
+    "rag-design-traps"
+  ],
+  "sources": [
+    {
+      "title": "Anthropic documentation: Prompt caching",
+      "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"
+    }
+  ]
+}

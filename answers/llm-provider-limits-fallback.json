@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Retry on errors\" or \"just fail over to another provider's model.\"",
+    "why": "Retrying into rate limits makes throttling worse, and another provider's model behaves differently with the same prompt, so blind failover can silently degrade quality or break output formats.",
+    "probe": "Quota management, queueing, timeouts, tested fallbacks with their own prompts and evals, and graceful degradation.",
+    "say": "\"I'd manage quota centrally with token-aware rate limiting and priority queues, set timeouts and limited retries honouring Retry-After, keep a pre-evaluated fallback model with its own prompt, and degrade gracefully when both are unavailable.\""
+  },
+  "thesis": "External LLM APIs have rate limits on requests and tokens, variable latency and occasional outages. Treat them like any critical third-party dependency: centralised quota management, prioritisation, timeouts, careful retries, pre-tested fallbacks with their own prompts, and degraded experiences when nothing is available.",
+  "pitch": "Rate limits are usually per minute on requests and tokens, shared across your whole organisation or project, so one batch job can starve the user-facing feature. I'd put a gateway in front of the provider that tracks token usage, enforces per-feature budgets, and prioritises interactive requests over batch work, queueing or deferring the latter. Calls get timeouts suited to the task, streaming where possible, and limited retries with backoff that honour Retry-After, never immediate retry loops. For outages, I'd keep a fallback: another model from the same provider, a different provider, or a self-hosted model, each with its own tuned prompt and evaluated on the same test set, because prompts don't transfer perfectly. Output validation, like schema checks for JSON, protects downstream code when a fallback model formats differently. And for the worst case, a degraded mode: a non-AI path, a cached answer, or a clear message, with the core product still usable.",
+  "points": [
+    {
+      "h": "Know the limits",
+      "d": "Requests per minute and tokens per minute, often shared across an organisation, with different tiers per model."
+    },
+    {
+      "h": "Central gateway",
+      "d": "Tracks usage, enforces per-feature and per-tenant budgets, adds observability and handles retries consistently."
+    },
+    {
+      "h": "Prioritise",
+      "d": "Interactive traffic first; batch and background jobs queued, throttled or moved to batch APIs."
+    },
+    {
+      "h": "Timeouts and careful retries",
+      "d": "Bounded retries with jittered backoff, honouring Retry-After; no retry storms against 429s."
+    },
+    {
+      "h": "Pre-evaluated fallbacks",
+      "d": "Alternate models with their own prompts, tested on your evaluation set, ready to switch to automatically."
+    },
+    {
+      "h": "Validate outputs",
+      "d": "Schema and sanity checks so differences between models don't break downstream logic."
+    },
+    {
+      "h": "Degrade gracefully",
+      "d": "A non-AI path or clear messaging when no model is available; keep core flows working."
+    }
+  ],
+  "decision": "Gateway with token-aware quota and priority for all LLM calls; at least one evaluated fallback for critical features; batch APIs for offline work; non-AI degradation for user-facing paths.",
+  "numbers": [
+    "Example: a 2M tokens/minute limit shared by a chat feature (needs ~800k at peak) and a nightly summarisation job; without prioritisation, the job can consume the whole quota and throttle chat."
+  ],
+  "pitfalls": [
+    "Batch jobs and user traffic sharing quota without priority.",
+    "Immediate retries on 429 responses.",
+    "Failover to a different model with the same prompt and no evaluation.",
+    "No degraded mode, so an API outage takes down the whole product."
+  ],
+  "followups": [
+    {
+      "q": "How do you estimate tokens before sending a request for rate limiting?",
+      "a": "Count input tokens with the provider's tokenizer or a close approximation, and reserve the max output tokens, then reconcile with actual usage."
+    },
+    {
+      "q": "When is multi-provider worth the complexity?",
+      "a": "When the feature is critical to revenue or users and the provider's availability or capacity doesn't meet your SLO."
+    },
+    {
+      "q": "How do you handle long, slow generations timing out?",
+      "a": "Stream, set generous but bounded timeouts for long tasks, and move very long tasks to async jobs with status updates."
+    }
+  ],
+  "example": "An AI writing feature failed whenever a nightly embedding job ran and exhausted the shared token quota. A gateway with per-feature budgets and priority queues fixed it, and a second, pre-evaluated model with its own prompt took over automatically during a provider outage, with a banner noting slightly simpler suggestions.",
+  "related": [
+    "third-party-worse-sla",
+    "llm-serving-latency-cost",
+    "design-per-tenant-rate-limits",
+    "retries-amplifying-outage-design-retries"
+  ],
+  "sources": [
+    {
+      "title": "Anthropic documentation: Rate limits",
+      "url": "https://docs.anthropic.com/en/api/rate-limits"
+    },
+    {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  ]
+}

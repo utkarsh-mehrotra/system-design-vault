@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Try the new prompt on a few examples, it looks better, ship it.\"",
+    "why": "LLM changes have wide, non-obvious effects; a handful of examples can't detect regressions on edge cases, formats or safety. Without evaluation sets and staged rollout you find out from users.",
+    "probe": "Offline evaluation sets, automated graders, online metrics, staged rollout and versioning.",
+    "say": "\"Prompts and models are versioned like code; every change runs against an evaluation set with automated and human grading, then ships behind a flag to a small share of traffic with online quality and cost metrics before full rollout.\""
+  },
+  "thesis": "Treat prompts and model versions like code: version them, test them against representative evaluation sets with clear graders, roll them out gradually behind flags, and monitor quality, safety, cost and latency online with the ability to roll back.",
+  "pitch": "I'd build an evaluation set from real usage: a few hundred representative inputs, including hard cases and known past failures, with expected outputs or grading criteria. Graders vary by task: exact match or schema validation for structured outputs, reference comparisons, LLM-as-judge with a rubric for open-ended answers, calibrated against human ratings, plus safety checks. Every prompt or model change runs the full set and is compared with the current version; regressions in any slice block or require sign-off. Prompts, model versions and parameters are stored as versioned configuration, not strings scattered in code. Then online: ship behind a flag to a few percent of traffic, track user signals like thumbs up and down, edits, retries and escalations to humans, plus cost and latency, and expand if they hold. Model provider upgrades are treated as changes too: pin model versions rather than floating aliases, and re-run evals before switching.",
+  "points": [
+    {
+      "h": "Representative evaluation sets",
+      "d": "Real inputs covering common, hard and previously failing cases, refreshed as usage evolves."
+    },
+    {
+      "h": "Clear graders",
+      "d": "Deterministic checks where possible; rubric-based LLM judges calibrated against human ratings for open-ended output."
+    },
+    {
+      "h": "Compare against the current version",
+      "d": "Report wins, losses and ties per slice, not just an average, to catch regressions in important segments."
+    },
+    {
+      "h": "Version everything",
+      "d": "Prompts, model versions, parameters and retrieval settings as versioned config with history and owners."
+    },
+    {
+      "h": "Staged online rollout",
+      "d": "Flags and percentage rollouts with online quality, cost and latency metrics and quick rollback."
+    },
+    {
+      "h": "Pin model versions",
+      "d": "Avoid floating model aliases in production; upgrade deliberately after evaluation."
+    },
+    {
+      "h": "Close the loop",
+      "d": "Add production failures to the evaluation set so they never regress again."
+    }
+  ],
+  "decision": "No prompt or model change ships without passing the evaluation suite and a staged rollout. Invest in the evaluation set early; it's the main asset for improving the feature safely.",
+  "numbers": [
+    "Evaluation sizing: a few hundred cases often detect meaningful regressions for a single feature; slices with fewer than ~30 cases give noisy results, so grow them where it matters."
+  ],
+  "pitfalls": [
+    "Shipping prompt edits after eyeballing a few outputs.",
+    "LLM-as-judge without calibration against humans.",
+    "Floating model aliases that change behaviour without warning.",
+    "Only tracking averages and missing regressions in critical slices."
+  ],
+  "followups": [
+    {
+      "q": "How do you trust an LLM judge?",
+      "a": "Validate it against a sample of human ratings, use clear rubrics, check agreement rates, and periodically re-calibrate."
+    },
+    {
+      "q": "What online signals indicate quality?",
+      "a": "Explicit feedback, user edits to outputs, retries or regenerations, escalation to humans, and task completion rates."
+    },
+    {
+      "q": "How do you handle non-determinism in evals?",
+      "a": "Use low temperature for evaluation where possible, run multiple samples for key cases, and look at distributions rather than single runs."
+    }
+  ],
+  "example": "A team's 'small' prompt tweak to make answers friendlier caused the model to drop required JSON fields 4% of the time. Their 400-case evaluation suite with schema checks caught it before rollout; the fixed prompt then went to 5% of traffic for two days with no change in edit or escalation rates before full rollout.",
+  "related": [
+    "rag-design-traps",
+    "llm-guardrails-abuse",
+    "deploy-strategies-compared",
+    "design-support-experiments-such-as"
+  ],
+  "sources": [
+    {
+      "title": "OpenAI: Evaluation best practices",
+      "url": "https://platform.openai.com/docs/guides/evaluation-best-practices"
+    },
+    {
+      "title": "Anthropic documentation: Define success criteria and build evaluations",
+      "url": "https://docs.anthropic.com/en/docs/test-and-evaluate/develop-tests"
+    }
+  ]
+}

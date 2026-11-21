@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Chunk the documents, embed them into a vector database, retrieve the top 5 and pass them to the LLM.\"",
+    "why": "That baseline often retrieves the wrong passages (poor chunking, no keyword matching, no reranking), ignores permissions and freshness, and has no way to measure answer quality, so failures are invisible.",
+    "probe": "Retrieval quality, access control, freshness, evaluation and grounding.",
+    "say": "\"Retrieval quality drives answer quality: structure-aware chunking, hybrid keyword plus vector search with reranking, permission filtering at query time, incremental re-indexing, and an evaluation set measuring retrieval recall and answer faithfulness.\""
+  },
+  "thesis": "RAG quality is mostly retrieval quality. Chunk by document structure, combine keyword and semantic search, rerank, filter by the user's permissions, keep the index fresh, ground answers with citations, and measure retrieval and answer quality with an evaluation set.",
+  "pitch": "The naive pipeline embeds fixed-size chunks and retrieves top-k by vector similarity. It breaks in predictable ways. Chunks split tables and headings, so retrieved text lacks context; I'd chunk by structure, such as sections and headings, with overlap and metadata like title and date. Vector search misses exact terms like product codes and error messages, so I'd use hybrid search, BM25 plus vectors, then a cross-encoder reranker to pick the best few passages. Permissions matter: retrieval must filter by what this user may see, at query time, or the LLM will happily summarise documents they shouldn't access. Freshness: incremental re-indexing on document change, and deletion propagating to the index. Grounding: instruct the model to answer only from the provided context, cite sources, and say when it doesn't know. And evaluation: a set of real questions with known relevant documents, measuring retrieval recall and answer faithfulness, run on every change to chunking, models or prompts.",
+  "points": [
+    {
+      "h": "Structure-aware chunking",
+      "d": "Split by sections and headings, keep tables intact, add titles and metadata to chunks; fixed-size splits lose context."
+    },
+    {
+      "h": "Hybrid retrieval",
+      "d": "Keyword search (BM25) catches exact terms; vector search catches paraphrases. Combine and merge results."
+    },
+    {
+      "h": "Reranking",
+      "d": "A cross-encoder or LLM reranker scores the top candidates against the query, improving precision of the final context."
+    },
+    {
+      "h": "Permission-aware retrieval",
+      "d": "Filter by the user's access rights in the retrieval query; never rely on the LLM to withhold information."
+    },
+    {
+      "h": "Freshness and deletion",
+      "d": "Incremental indexing on change, propagate deletions, and show document dates to the model and user."
+    },
+    {
+      "h": "Grounding and citations",
+      "d": "Answer only from retrieved context, cite sources, and allow 'I don't know' to reduce hallucination."
+    },
+    {
+      "h": "Evaluate continuously",
+      "d": "A labelled question set measuring retrieval recall@k and answer faithfulness and relevance, run on every pipeline change."
+    }
+  ],
+  "decision": "Hybrid retrieval plus reranking and permission filtering as the baseline; invest in evaluation before tuning prompts. Fine-tuning is rarely the first fix for RAG quality problems.",
+  "numbers": [
+    "Context budget example: retrieving 50 candidates, reranking to the top 5 chunks of ~400 tokens each keeps context around 2,000 tokens, controlling cost and latency."
+  ],
+  "pitfalls": [
+    "Retrieval that ignores document permissions.",
+    "Fixed-size chunking that splits tables and headings.",
+    "No evaluation set, so changes are judged by vibes.",
+    "Stale indexes that still return deleted or outdated documents."
+  ],
+  "followups": [
+    {
+      "q": "Users say answers are confidently wrong. Where do you look first?",
+      "a": "Check whether the right passage was retrieved. If not, it's a retrieval problem (chunking, search, reranking); if it was, it's a generation or prompt problem."
+    },
+    {
+      "q": "How do you handle questions needing information spread across many documents?",
+      "a": "Query decomposition into sub-questions, multi-step retrieval, or summarised document-level indexes, at higher latency and cost."
+    },
+    {
+      "q": "How do you keep embeddings consistent when you change the embedding model?",
+      "a": "Re-embed the whole corpus into a new index and switch over; vectors from different models aren't comparable."
+    }
+  ],
+  "example": "An internal support assistant answered from outdated policies and leaked HR documents to all employees. The fix added permission filters from the document system, hybrid search with reranking, re-indexing on document updates, and a 300-question evaluation set; answer accuracy on the set rose from 58% to 84%.",
+  "related": [
+    "vector-index-tradeoffs",
+    "llm-rollouts-evals",
+    "llm-guardrails-abuse",
+    "authorization-models-idor"
+  ],
+  "sources": [
+    {
+      "title": "Lewis et al.: Retrieval-augmented generation for knowledge-intensive NLP tasks",
+      "url": "https://arxiv.org/abs/2005.11401"
+    },
+    {
+      "title": "Anthropic: Introducing contextual retrieval",
+      "url": "https://www.anthropic.com/news/contextual-retrieval"
+    }
+  ]
+}

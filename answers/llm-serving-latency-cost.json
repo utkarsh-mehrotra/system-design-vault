@@ -1,0 +1,82 @@
+{
+  "trap": {
+    "wrong": "\"Use a bigger GPU\" or \"switch to the cheapest model.\"",
+    "why": "LLM latency and cost are dominated by tokens (input context and output length) and how requests are batched; a cheaper model may fail quality targets. You have to manage tokens, model choice per task and serving efficiency together.",
+    "probe": "Token budgets, model routing, streaming, caching, batching and measuring quality alongside cost.",
+    "say": "\"I'd cut tokens first (trim context, constrain output), route easy requests to smaller models, stream responses, use prompt caching and batching, and track cost and latency per request alongside a quality metric.\""
+  },
+  "thesis": "LLM cost and latency scale with tokens processed and generated, and with serving efficiency. Reduce input and output tokens, route requests to the smallest model that meets quality, stream to cut perceived latency, reuse work with caching, and batch where latency allows, all measured against a quality bar.",
+  "pitch": "I'd break latency into time to first token, driven by input length and queueing, and generation time, driven by output tokens, since output tokens are generated one after another. Cost is roughly input tokens times input price plus output tokens times output price. So the first lever is tokens: retrieve fewer, better chunks; trim conversation history with summaries; ask for concise, structured output with max token limits. Second, model routing: a small, fast model for classification, extraction or simple answers, and a large model only for hard requests, possibly with a cascade that escalates when confidence is low. Third, streaming so users see output immediately. Fourth, caching: provider prompt caching for long shared prefixes like system prompts and documents, and response caching for repeated identical queries. Fifth, batch APIs for offline work at lower prices. If self-hosting, continuous batching and quantisation improve throughput. Throughout, I'd measure cost and latency per feature alongside a quality evaluation, because cheaper models that fail users aren't savings.",
+  "points": [
+    {
+      "h": "Latency components",
+      "d": "Time to first token (input processing and queueing) and generation time (proportional to output tokens)."
+    },
+    {
+      "h": "Cost is tokens",
+      "d": "Input and output tokens times their prices; output tokens are usually more expensive."
+    },
+    {
+      "h": "Trim context",
+      "d": "Fewer, better retrieved chunks, summarised history, and removing redundant instructions."
+    },
+    {
+      "h": "Constrain output",
+      "d": "Structured formats, concise instructions and max token limits."
+    },
+    {
+      "h": "Model routing and cascades",
+      "d": "Small models for easy tasks, large models for hard ones, escalating on low confidence."
+    },
+    {
+      "h": "Streaming",
+      "d": "Show tokens as they're generated to improve perceived latency, especially for long answers."
+    },
+    {
+      "h": "Caching and batching",
+      "d": "Prompt caching for shared prefixes, response caching for repeats, batch APIs for offline jobs."
+    }
+  ],
+  "decision": "Measure cost, latency and quality per feature; optimise tokens first, then route to smaller models where evaluations allow, then use caching and batching. Self-host only when volume, latency control or data requirements justify the operational cost.",
+  "numbers": [
+    "Example: 10,000 requests/day × (3,000 input + 500 output tokens). Trimming input to 1,500 tokens halves input cost; routing 60% of requests to a model ten times cheaper cuts the bill much further.",
+    "If generation runs at about 50 tokens/s, a 1,000-token answer takes about 20 seconds without streaming before the user sees anything complete."
+  ],
+  "pitfalls": [
+    "Stuffing entire documents into context 'to be safe'.",
+    "Switching models to save cost without an evaluation set.",
+    "No per-feature cost tracking, so spend surprises arrive with the invoice.",
+    "Synchronous, non-streamed long generations in user-facing flows."
+  ],
+  "followups": [
+    {
+      "q": "How does prompt caching help?",
+      "a": "Providers can reuse computation for a repeated prompt prefix (system prompt, shared documents), reducing cost and time to first token for subsequent requests."
+    },
+    {
+      "q": "When would you self-host models?",
+      "a": "Very high steady volume, strict data residency or privacy needs, or latency requirements that managed APIs can't meet, accepting GPU operations and model maintenance."
+    },
+    {
+      "q": "How do you set a cost budget per feature?",
+      "a": "Tag requests by feature and tenant, track tokens and cost, and alert or degrade (smaller model, shorter output) when budgets are exceeded."
+    }
+  ],
+  "example": "A support summarisation feature cost too much because it sent full ticket histories to a large model. Summarising older messages, capping output at 200 tokens, routing short tickets to a small model, and caching the shared system prompt cut cost per summary by about 75% with no drop on the evaluation set.",
+  "related": [
+    "caching-llm-outputs",
+    "llm-provider-limits-fallback",
+    "llm-rollouts-evals",
+    "design-cost-visibility-optimization-day"
+  ],
+  "sources": [
+    {
+      "title": "Anthropic documentation: Prompt caching",
+      "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"
+    },
+    {
+      "title": "Kwon et al.: Efficient memory management for LLM serving with PagedAttention (vLLM)",
+      "url": "https://arxiv.org/abs/2309.06180"
+    }
+  ]
+}

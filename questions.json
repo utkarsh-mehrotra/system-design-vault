@@ -2426,6 +2426,125 @@
       "legacy": []
     },
     {
+      "id": "rag-design-traps",
+      "cat": "ai",
+      "topic": "Retrieval & vectors",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design retrieval-augmented generation (RAG) over company documents. Where does it usually go wrong?",
+      "also": [],
+      "a": [
+        "RAG quality is mostly retrieval quality. Chunk by document structure, combine keyword and semantic search, rerank, filter by the user's permissions, keep the index fresh, ground answers with citations, and measure retrieval and answer quality with an evaluation set."
+      ],
+      "tags": [
+        "AI",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "vector-index-tradeoffs",
+      "cat": "ai",
+      "topic": "Retrieval & vectors",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Choose and size a vector index for 100 million embeddings. What trade-offs matter?",
+      "also": [],
+      "a": [
+        "Vector search at scale uses approximate nearest-neighbour (ANN) indexes that trade recall, latency, memory and update cost. Size memory explicitly, choose the index type to fit, measure recall against exact search, and design metadata filtering so it doesn't silently destroy result quality."
+      ],
+      "tags": [
+        "AI",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "llm-serving-latency-cost",
+      "cat": "ai",
+      "topic": "Serving & cost",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Your LLM feature is slow and expensive. How do you reduce latency and cost?",
+      "also": [],
+      "a": [
+        "LLM cost and latency scale with tokens processed and generated, and with serving efficiency. Reduce input and output tokens, route requests to the smallest model that meets quality, stream to cut perceived latency, reuse work with caching, and batch where latency allows, all measured against a quality bar."
+      ],
+      "tags": [
+        "AI",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "caching-llm-outputs",
+      "cat": "ai",
+      "topic": "Serving & cost",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Can you cache LLM responses? What about semantic caching?",
+      "also": [],
+      "a": [
+        "LLM outputs can be cached, but the cache key must capture everything that affects the answer: model, prompt version, parameters, retrieved context and user-specific data. Exact-match and prefix caching are safe; semantic caching saves more but risks wrong or leaked answers and needs strict scoping."
+      ],
+      "tags": [
+        "AI",
+        "Caching"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "llm-provider-limits-fallback",
+      "cat": "ai",
+      "topic": "Serving & cost",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Your product depends on an external LLM API. How do you handle rate limits, outages and slow responses?",
+      "also": [],
+      "a": [
+        "External LLM APIs have rate limits on requests and tokens, variable latency and occasional outages. Treat them like any critical third-party dependency: centralised quota management, prioritisation, timeouts, careful retries, pre-tested fallbacks with their own prompts, and degraded experiences when nothing is available."
+      ],
+      "tags": [
+        "AI",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "llm-rollouts-evals",
+      "cat": "ai",
+      "topic": "Quality & safety",
+      "level": "advanced",
+      "source": "mine",
+      "q": "How do you safely change a prompt or upgrade the model behind an LLM feature?",
+      "also": [],
+      "a": [
+        "Treat prompts and model versions like code: version them, test them against representative evaluation sets with clear graders, roll them out gradually behind flags, and monitor quality, safety, cost and latency online with the ability to roll back."
+      ],
+      "tags": [
+        "AI",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "llm-guardrails-abuse",
+      "cat": "ai",
+      "topic": "Quality & safety",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Your LLM feature can call tools and read user content. How do you defend against prompt injection and abuse?",
+      "also": [],
+      "a": [
+        "LLMs can't reliably distinguish instructions from data, so any untrusted content they read can manipulate them. Defend by design: least-privilege tools, enforce authorisation outside the model, require confirmation for consequential actions, treat model output as untrusted input, filter and monitor, and rate-limit abuse."
+      ],
+      "tags": [
+        "AI",
+        "Security"
+      ],
+      "legacy": []
+    },
+    {
       "id": "design-something-mvp-first-still",
       "cat": "evolution",
       "topic": "MVP, platforms & cost",
