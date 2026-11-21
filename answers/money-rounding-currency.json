@@ -1,0 +1,80 @@
+{
+  "trap": {
+    "wrong": "\"Store amounts as floats or decimals in dollars and round at the end.\"",
+    "why": "Floats can't represent many decimal values exactly, rounding at different points produces cent discrepancies, currencies have different minor units, and splitting an amount can lose or invent a cent.",
+    "probe": "Integer minor units, currency-aware precision, explicit rounding rules, allocation, and FX handling.",
+    "say": "\"Integer minor units with an explicit currency on every amount, currency-specific exponents, a defined rounding mode at defined points, allocation algorithms that distribute remainders so totals always match, and FX recorded with the rate used.\""
+  },
+  "thesis": "Money is an amount plus a currency, stored as an integer in the currency's minor unit, with rounding applied deliberately at specified steps using a specified mode. Splits must allocate remainders so totals reconcile, and currency conversion records rate, source and timestamp.",
+  "pitch": "I'd never use floats: 0.1 plus 0.2 isn't 0.3 in binary floating point. Amounts are integers in minor units, such as cents or pence, paired with an ISO 4217 currency code, and the number of decimals depends on the currency: zero for JPY, two for USD, three for some like BHD or KWD. Calculations like interest or fees may need more precision internally, using decimal arithmetic, then rounding to minor units at a defined point with a defined mode, often half-even (banker's rounding) to avoid bias, or whatever regulation or the contract specifies. Splitting 100.00 three ways gives 33.33, 33.33 and 33.34; an allocation function distributes the remainder so the parts always sum to the total. Currency conversion stores the rate, its source and timestamp, and posts FX gains or losses to dedicated ledger accounts. I'd centralise all of this in a money library so every service rounds the same way.",
+  "points": [
+    {
+      "h": "Integer minor units",
+      "d": "Store cents as integers (int64); never binary floats for money."
+    },
+    {
+      "h": "Currency on every amount",
+      "d": "Amount and ISO currency code travel together; adding different currencies without conversion is a type error."
+    },
+    {
+      "h": "Currency-specific exponents",
+      "d": "JPY has no minor unit, USD two decimals, some currencies three; don't hard-code two decimals."
+    },
+    {
+      "h": "Defined rounding points and modes",
+      "d": "Specify where rounding happens (per line, per invoice) and how (half-even, half-up), matching regulation and contracts."
+    },
+    {
+      "h": "Allocation without losing cents",
+      "d": "Split amounts so parts sum exactly to the total, assigning remainders deterministically."
+    },
+    {
+      "h": "FX with provenance",
+      "d": "Record rate, source, timestamp and both amounts; book FX differences to dedicated accounts."
+    },
+    {
+      "h": "One shared money library",
+      "d": "Centralise arithmetic, rounding and formatting so services agree."
+    }
+  ],
+  "decision": "Integer minor units plus currency everywhere, decimal arithmetic for intermediate calculations, explicit rounding policy, allocation functions for splits, and a single shared library.",
+  "numbers": [
+    "Interest example: 1,000.00 at 7.5% annual for 31 days = 1,000 × 0.075 × 31/365 = 6.369863…; rounded half-even to 6.37. Rounding daily and summing can differ from rounding once at the end, so the contract must specify which."
+  ],
+  "pitfalls": [
+    "Floats in amounts or calculations.",
+    "Assuming every currency has two decimals.",
+    "Rounding inconsistently across services, causing reconciliation differences.",
+    "Splits that lose or create a cent."
+  ],
+  "followups": [
+    {
+      "q": "Where should rounding happen for a multi-line invoice?",
+      "a": "Wherever the business or tax rules say (often per line for tax), consistently, and documented, since per-line and per-total rounding can differ by cents."
+    },
+    {
+      "q": "How do you display amounts?",
+      "a": "Format from minor units using the currency exponent and the user's locale; never parse formatted strings back into amounts."
+    },
+    {
+      "q": "How do you handle prices with more precision than the minor unit, like fuel or FX rates?",
+      "a": "Store them as decimals with the needed precision and round to minor units only when creating a chargeable amount."
+    }
+  ],
+  "example": "A lending platform's interest calculated with floats drifted by a few cents per loan over its life, causing reconciliation breaks with the bank. Moving to integer minor units, decimal intermediate calculations, daily half-even rounding per the loan contract, and a shared money library eliminated the differences.",
+  "related": [
+    "double-entry-ledger-design",
+    "interest-accrual-eod-batch",
+    "payment-state-machine-provider"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Money pattern",
+      "url": "https://martinfowler.com/eaaCatalog/money.html"
+    },
+    {
+      "title": "ISO 4217 currency codes (SIX)",
+      "url": "https://www.six-group.com/en/products-services/financial-information/data-standards.html"
+    }
+  ]
+}

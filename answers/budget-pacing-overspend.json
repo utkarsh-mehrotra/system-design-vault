@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Each bid checks and decrements a central budget counter.\"",
+    "why": "A central counter per bid is a bottleneck at high QPS and adds latency; and because wins and costs are known only later, even a perfect counter overspends unless you account for in-flight bids.",
+    "probe": "Distributed allowances, delayed win notifications, pacing curves and accepted overspend tolerance.",
+    "say": "\"A central budget service hands each bidder small spend allowances (leases), bidders spend locally and report back, unclaimed allowance returns, and pacing spreads spend across the day; we budget for in-flight exposure and accept a small, bounded overspend.\""
+  },
+  "thesis": "Budget control in adtech is a distributed rate-limiting problem with delayed feedback. Split budgets into allowances leased to bidders, account for in-flight bids whose cost isn't known yet, pace spend over time rather than spending as fast as possible, and bound overspend explicitly.",
+  "pitch": "A campaign has 10,000 dollars for the day across thousands of bidder instances worldwide. Checking a central counter on every bid is too slow and too contended, so a budget service grants each bidder a small allowance, say a few dollars, refreshed as it's used. Bidders spend from local allowances without network calls. The complication is delay: when you bid you don't know if you'll win, and win notifications and actual prices arrive later, so bidders must count potential spend of outstanding bids against the allowance, releasing it if the bid loses. Pacing decides how fast to spend: rather than exhausting the budget by 9 a.m., the pacer targets a spend curve across the day, often following traffic patterns, and adjusts bid participation or bid prices to stay on track. Near budget exhaustion, allowances shrink so overspend stays small. Finally, contracts usually tolerate a small overspend, and billing caps at the budget, so the residual is a known cost.",
+  "points": [
+    {
+      "h": "Allowances, not per-bid checks",
+      "d": "A central service leases spend slices to bidders, who spend locally and report back."
+    },
+    {
+      "h": "Account for in-flight bids",
+      "d": "Outstanding bids reserve potential spend until win or loss is known."
+    },
+    {
+      "h": "Delayed feedback",
+      "d": "Win notices and impression costs arrive later; reconcile actual spend against allowances continuously."
+    },
+    {
+      "h": "Pacing curves",
+      "d": "Spread spend across the day according to expected traffic, adjusting participation rate or bid price to stay on schedule."
+    },
+    {
+      "h": "Shrink allowances near the end",
+      "d": "Smaller slices as the budget nears exhaustion keep overspend bounded."
+    },
+    {
+      "h": "Bounded overspend and billing caps",
+      "d": "Accept a small known overspend; bill advertisers no more than their budget."
+    },
+    {
+      "h": "Return unused allowance",
+      "d": "Expiring leases return unspent budget so idle or failed bidders don't strand money."
+    }
+  ],
+  "decision": "Leased allowances with in-flight accounting and a pacing controller; tune slice sizes to trade overspend against coordination overhead; cap billing at budget.",
+  "numbers": [
+    "Overspend bound sketch: 2,000 bidders each holding a $0.50 allowance means up to $1,000 could be committed simultaneously; near exhaustion, shrinking slices to $0.02 caps that at $40."
+  ],
+  "pitfalls": [
+    "Central counter per bid.",
+    "Ignoring outstanding bids, so many bidders win simultaneously past the budget.",
+    "Spending the whole daily budget in the first hour.",
+    "Allowances that never expire when a bidder dies."
+  ],
+  "followups": [
+    {
+      "q": "How does pacing decide how fast to spend?",
+      "a": "A controller compares actual cumulative spend with the target curve and adjusts the fraction of auctions entered or bid levels, like a feedback loop."
+    },
+    {
+      "q": "What if a region loses connectivity to the budget service?",
+      "a": "Bidders keep spending only their current allowance, then stop bidding for that campaign until connectivity returns."
+    },
+    {
+      "q": "How do you handle very small budgets?",
+      "a": "Use smaller allowances and fewer bidders for that campaign, or centralise its bidding to avoid overspend relative to its size."
+    }
+  ],
+  "example": "Campaigns were overspending by up to 15% because bidders counted only confirmed wins. Reserving spend for outstanding bids, leasing $1 allowances shrinking to $0.05 near exhaustion, and pacing to an hourly curve cut overspend below 1% and stopped budgets running out by mid-morning.",
+  "related": [
+    "rtb-bidding-100ms",
+    "design-per-tenant-rate-limits",
+    "frequency-capping-scale",
+    "ad-event-counting-attribution"
+  ],
+  "sources": [
+    {
+      "title": "Agarwal et al.: Budget pacing for targeted online advertisements at LinkedIn (KDD 2014)",
+      "url": "https://dl.acm.org/doi/10.1145/2623330.2623366"
+    }
+  ]
+}

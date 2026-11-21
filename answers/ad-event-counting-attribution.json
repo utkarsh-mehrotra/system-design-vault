@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Stream events into counters and bill advertisers from the real-time dashboard.\"",
+    "why": "Real-time counts include duplicates, bots and late events, and attribution windows mean conversions arrive days later. Billing from them overcharges and can't be audited.",
+    "probe": "Deduplication, fraud filtering, late data, attribution windows, and separating real-time estimates from billable counts.",
+    "say": "\"Real-time counts are estimates for dashboards and pacing; billable numbers come from a batch pipeline that dedupes by event id, filters invalid traffic, applies attribution windows and rules, and reconciles with partners before invoicing.\""
+  },
+  "thesis": "Ad metrics serve two masters: fast approximate numbers for pacing and dashboards, and exact, audited numbers for billing. Deduplicate by event id, filter invalid traffic, handle late events and attribution windows, and produce billable figures from a reproducible batch pipeline reconciled with partners.",
+  "pitch": "Events arrive from browsers, apps and partners, with retries, duplicates, bots and delays. I'd give every event a unique id at source and dedupe on it. The streaming path aggregates by event time into near-real-time counters for dashboards and budget pacing, accepting small errors. The billing path is batch: daily jobs over the raw event log that dedupe, apply invalid-traffic filtering such as known bots, data centre IPs, abnormal click rates and click spamming, and compute billable impressions and clicks per campaign. Attribution links conversions, like purchases or installs, to earlier ad interactions within a window, perhaps 7 days after click or 1 day after view, according to agreed rules such as last-click. Because conversions arrive late, attribution results for a day aren't final for a week or more, so reports show provisional numbers and are restated. Billing is generated from the reproducible batch output, versioned with the rules used, and reconciled against the exchange's or partner's counts, with discrepancy thresholds.",
+  "points": [
+    {
+      "h": "Event ids at source",
+      "d": "Unique ids generated where events are created, used to deduplicate retries and replays."
+    },
+    {
+      "h": "Two pipelines",
+      "d": "Streaming for fast estimates (pacing, dashboards); batch for exact, auditable billing numbers."
+    },
+    {
+      "h": "Invalid traffic filtering",
+      "d": "Bot lists, data centre IPs, behavioural anomalies and click-spam detection before billing."
+    },
+    {
+      "h": "Event-time processing",
+      "d": "Aggregate by when events occurred and handle late arrivals with restatements."
+    },
+    {
+      "h": "Attribution windows and rules",
+      "d": "Configurable click-through and view-through windows and models (last-click, multi-touch), versioned."
+    },
+    {
+      "h": "Provisional vs final numbers",
+      "d": "Reports mark data as provisional until windows close; billing runs on final numbers."
+    },
+    {
+      "h": "Reconcile with partners",
+      "d": "Compare with exchange and advertiser counts; investigate discrepancies above agreed thresholds."
+    }
+  ],
+  "decision": "Never bill from streaming estimates; bill from a reproducible batch pipeline with dedupe, fraud filtering and versioned attribution rules, reconciled with partners.",
+  "numbers": [
+    "Discrepancy tolerance: industry practice often treats differences of a few percent between parties' impression counts as acceptable, investigating beyond that."
+  ],
+  "pitfalls": [
+    "Billing from real-time counters.",
+    "No event ids, so retries double-count.",
+    "Attribution computed once and never restated as late conversions arrive.",
+    "Fraud filtering applied inconsistently between reporting and billing."
+  ],
+  "followups": [
+    {
+      "q": "How do you dedupe billions of events efficiently?",
+      "a": "Partition by event id hash and time, dedupe within windows in batch, and use Bloom filters as a pre-check in streaming."
+    },
+    {
+      "q": "How do you explain a discrepancy to an advertiser?",
+      "a": "Break it down: dedupe, invalid traffic filtered, timezone differences, attribution rules and late events, with reproducible numbers."
+    },
+    {
+      "q": "What changes with privacy restrictions?",
+      "a": "Less deterministic attribution: aggregated, delayed and noised reporting from platform APIs, modelled conversions, and more reliance on first-party data."
+    }
+  ],
+  "example": "An ad network billed from streaming counters and refunded advertisers after audits found 6% duplicate and bot clicks. A batch billing pipeline with event-id dedupe, invalid traffic rules and versioned 7-day click attribution now produces invoices, while streaming counts remain for pacing only.",
+  "related": [
+    "approximate-counting-sketches",
+    "stream-windows-late-data",
+    "budget-pacing-overspend",
+    "reconcile-divergent-data-across-systems"
+  ],
+  "sources": [
+    {
+      "title": "Media Rating Council: Invalid traffic detection and filtration guidelines",
+      "url": "https://mediaratingcouncil.org/standards-and-guidelines"
+    },
+    {
+      "title": "IAB Tech Lab: Open Measurement SDK",
+      "url": "https://iabtechlab.com/standards/open-measurement-sdk/"
+    }
+  ]
+}

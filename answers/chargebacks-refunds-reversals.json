@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"A refund is just a negative payment, so reverse the original transaction.\"",
+    "why": "Refunds can be partial or multiple, chargebacks arrive weeks later initiated by the customer's bank with fees and deadlines, funds may already have been paid out to a seller, and the original record must never be edited.",
+    "probe": "Separate records, ledger entries, timing, dispute workflow, and recovering funds already paid out.",
+    "say": "\"Refunds, reversals and chargebacks are separate records linked to the original payment, each with its own state machine and ledger entries; chargebacks follow a dispute workflow with evidence deadlines, and if funds were already paid out, we create a receivable from the seller or absorb the loss by policy.\""
+  },
+  "thesis": "Money flowing back is a separate lifecycle, not an undo. Refunds (merchant-initiated), reversals (voiding before settlement) and chargebacks (customer bank-initiated disputes) each need their own records, states, ledger entries and handling of funds that may already have moved onward.",
+  "pitch": "A reversal or void cancels an authorisation before capture or settlement, so no money actually moved; it's cheap and fast. A refund returns captured money; it can be partial, there can be several against one payment up to the captured amount, and it takes days to reach the customer. A chargeback is initiated by the customer's bank, can arrive weeks or months later, immediately debits you plus a fee, and starts a dispute with deadlines for submitting evidence. Each of these is its own record linked to the original payment, with its own state machine, idempotency key and ledger entries, and the original payment is never edited. The hard part in marketplaces and lending: the money may already have been paid out to a seller or disbursed. Then you need a policy: claw back from the seller's future payouts by creating a receivable, hold reserves for risky sellers, or absorb the loss. I'd also feed chargeback data into fraud detection, since high dispute rates can get you penalised by card networks.",
+  "points": [
+    {
+      "h": "Three different flows",
+      "d": "Void or reversal (before settlement), refund (merchant-initiated return), chargeback (bank-initiated dispute)."
+    },
+    {
+      "h": "Separate records, linked",
+      "d": "Each operation references the original payment; the original is never modified."
+    },
+    {
+      "h": "Partial and multiple refunds",
+      "d": "Track cumulative refunded amount against captured amount; each refund is idempotent."
+    },
+    {
+      "h": "Chargeback workflow",
+      "d": "Immediate debit plus fee, evidence submission deadlines, outcomes won or lost, possible second-round disputes."
+    },
+    {
+      "h": "Funds already moved",
+      "d": "Policy for clawing back from sellers (receivables, future payout offsets), reserves, or absorbing losses."
+    },
+    {
+      "h": "Ledger for every step",
+      "d": "Refunds, chargeback debits, fees, reversals of chargebacks when won, all as balanced entries."
+    },
+    {
+      "h": "Feed fraud and risk",
+      "d": "Dispute rates per merchant, product or customer inform fraud rules; card networks monitor excessive chargeback ratios."
+    }
+  ],
+  "decision": "Model each return flow explicitly, link everything to the original payment, keep a clawback and reserve policy for marketplaces, and monitor dispute rates as a risk metric.",
+  "numbers": [
+    "Card network dispute windows often extend to around 120 days after the transaction (rules vary by network and reason code), so liability lingers long after settlement."
+  ],
+  "pitfalls": [
+    "Editing or deleting the original payment on refund.",
+    "Allowing refunds totalling more than the captured amount.",
+    "No plan for chargebacks after seller payouts.",
+    "Missing evidence deadlines because disputes aren't tracked as workflows."
+  ],
+  "followups": [
+    {
+      "q": "A customer requests a refund while a chargeback is open. What happens?",
+      "a": "Don't refund; the chargeback already returned funds. Refunding would pay the customer twice; handle it through the dispute."
+    },
+    {
+      "q": "How do you handle refunds in a different currency than the original?",
+      "a": "Refund in the original currency; the FX difference is a gain or loss posted to FX accounts in the ledger."
+    },
+    {
+      "q": "How do reserves work?",
+      "a": "Hold back a percentage of a risky seller's payouts for a period to cover future refunds and chargebacks."
+    }
+  ],
+  "example": "A marketplace paid sellers daily, so chargebacks weeks later left negative balances it couldn't recover. It introduced seller receivables offset against future payouts, rolling reserves for new sellers, and a dispute dashboard with evidence deadlines; unrecovered chargeback losses fell by two thirds.",
+  "related": [
+    "payment-state-machine-provider",
+    "double-entry-ledger-design",
+    "marketplace-split-payouts",
+    "listing-review-fraud"
+  ],
+  "sources": [
+    {
+      "title": "Stripe documentation: Disputes and fraud",
+      "url": "https://docs.stripe.com/disputes"
+    },
+    {
+      "title": "Visa: Dispute management guidelines for merchants",
+      "url": "https://usa.visa.com/dam/VCOM/global/support-legal/documents/merchants-dispute-management-guidelines.pdf"
+    }
+  ]
+}

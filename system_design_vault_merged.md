@@ -4019,11 +4019,246 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Example:** After splitting the payments monolith, a staff engineer compared DORA metrics for the payments teams against two unmigrated teams over the same quarter: lead time dropped from 6 days to 2, deploy frequency tripled, and incidents were flat. The write-up also reported a 22% infrastructure cost increase, which led to rightsizing work.
    - **Sources:** [DORA: Software delivery performance metrics](https://dora.dev/guides/dora-metrics-four-keys/)
 
-## Domain Traps (0)
+## Domain Traps (9)
 
 ### Fintech & lending
+147. **Integrate a card payment provider: authorise, capture, refund, with webhooks. What does your payment state machine look like?** [mine · Advanced · Transactions, Reliability]
+   - **Trap:** "Call the provider's charge API; if it returns success, mark the order paid, otherwise mark it failed." — _Why it fails:_ A timeout doesn't mean failure (the charge may have succeeded), webhooks arrive late, duplicated or out of order, and authorise and capture are separate steps with their own failures. Treating it as one call loses or double-charges money. — _Probing:_ Explicit states, unknown outcomes, idempotency keys, webhook handling and reconciliation. — _Say:_ "I model payments as a state machine (created, authorising, authorised, capturing, captured, failed, refunded) with an 'unknown' path for timeouts resolved by querying the provider, idempotency keys on every call, idempotent ordered webhook processing, and daily reconciliation."
+   - **Thesis:** Payments are long-running, asynchronous processes with uncertain outcomes. Model them as an explicit state machine, use idempotency keys on every provider call, treat timeouts as 'unknown' to be resolved, process webhooks idempotently and in a way that tolerates reordering, and reconcile against provider reports.
+   - **60-second answer:** I'd store a payment record with a state and history. Creating the payment records intent with an idempotency key. Authorising calls the provider with that key; success moves to authorised, a decline to failed, and a timeout or 5xx moves to 'authorisation unknown', resolved by retrying with the same key or querying the provider, never by assuming failure. Capture happens on fulfilment, possibly partial, again idempotent. Refunds are their own records against the capture, partial or full. Webhooks from the provider are verified by signature, deduplicated by event id, and applied only if they move the state forward according to allowed transitions, so a late 'authorised' after 'captured' is ignored. Some events like disputes arrive weeks later. Every state change posts ledger entries. A daily reconciliation compares our payments with the provider's settlement report to catch anything missed.
+   - **Key points:**
+     1. **Explicit states and transitions.** Created, authorising, authorised, capturing, captured, partially refunded, refunded, failed, disputed, with allowed transitions enforced.
+     2. **Unknown is a real state.** Timeouts and 5xx don't mean declined; resolve by retrying with the same idempotency key or querying the provider.
+     3. **Idempotency keys on every call.** Derived from your payment id and operation, so retries never double-authorise, capture or refund.
+     4. **Authorise and capture separately.** Authorisations hold funds and expire; capture on fulfilment, possibly partially; void unused authorisations.
+     5. **Webhooks as hints, applied idempotently.** Verify signatures, dedupe by event id, apply only forward transitions, and fetch current state from the API when in doubt.
+     6. **Ledger entries per transition.** Every state change posts balanced entries so money movements are auditable.
+     7. **Reconcile daily.** Compare with provider settlement files; handle fees, currency and missing events.
+   - **When to choose what:** State machine plus idempotency plus webhook dedupe plus reconciliation for any payment integration; never infer final outcomes from timeouts.
+   - **Numbers:**
+     - Card authorisations typically expire after a number of days (often around 7, varying by network and merchant type), so capture or re-authorise before then.
+   - **Pitfalls:**
+     - Marking payments failed on timeout, then double-charging on retry.
+     - Processing webhooks in arrival order without checking transitions.
+     - No reconciliation, so missing webhooks go unnoticed.
+     - Forgetting to void unused authorisations, holding customers' funds.
+   - **Follow-ups:**
+     - _The provider says captured, but you never got the webhook. How do you find out?_ Reconciliation against the settlement report, and a sweeper that queries the provider for payments stuck in intermediate states beyond a threshold.
+     - _How do you handle partial captures and refunds?_ Track captured and refunded amounts against the authorised amount, each operation with its own idempotency key and ledger entries.
+     - _How do you support multiple providers?_ A provider-agnostic state machine with adapters per provider, and routing rules for cost, approval rates and failover.
+   - **Example:** A marketplace treated provider timeouts as declines, and customers who retried were charged twice. Introducing an 'unknown' state with automatic status queries, idempotency keys per attempt, and a sweeper for stuck payments ended duplicate charges, and reconciliation now catches the occasional missed webhook within a day.
+   - **Sources:** [Stripe documentation: Place a hold on a payment method (authorise and capture)](https://docs.stripe.com/payments/place-a-hold-on-a-payment-method); [Stripe API reference: Idempotent requests](https://docs.stripe.com/api/idempotent_requests)
+148. **Design refunds, reversals and chargebacks. What makes them harder than the original payment?** [mine · Advanced · Transactions, Reliability]
+   - **Trap:** "A refund is just a negative payment, so reverse the original transaction." — _Why it fails:_ Refunds can be partial or multiple, chargebacks arrive weeks later initiated by the customer's bank with fees and deadlines, funds may already have been paid out to a seller, and the original record must never be edited. — _Probing:_ Separate records, ledger entries, timing, dispute workflow, and recovering funds already paid out. — _Say:_ "Refunds, reversals and chargebacks are separate records linked to the original payment, each with its own state machine and ledger entries; chargebacks follow a dispute workflow with evidence deadlines, and if funds were already paid out, we create a receivable from the seller or absorb the loss by policy."
+   - **Thesis:** Money flowing back is a separate lifecycle, not an undo. Refunds (merchant-initiated), reversals (voiding before settlement) and chargebacks (customer bank-initiated disputes) each need their own records, states, ledger entries and handling of funds that may already have moved onward.
+   - **60-second answer:** A reversal or void cancels an authorisation before capture or settlement, so no money actually moved; it's cheap and fast. A refund returns captured money; it can be partial, there can be several against one payment up to the captured amount, and it takes days to reach the customer. A chargeback is initiated by the customer's bank, can arrive weeks or months later, immediately debits you plus a fee, and starts a dispute with deadlines for submitting evidence. Each of these is its own record linked to the original payment, with its own state machine, idempotency key and ledger entries, and the original payment is never edited. The hard part in marketplaces and lending: the money may already have been paid out to a seller or disbursed. Then you need a policy: claw back from the seller's future payouts by creating a receivable, hold reserves for risky sellers, or absorb the loss. I'd also feed chargeback data into fraud detection, since high dispute rates can get you penalised by card networks.
+   - **Key points:**
+     1. **Three different flows.** Void or reversal (before settlement), refund (merchant-initiated return), chargeback (bank-initiated dispute).
+     2. **Separate records, linked.** Each operation references the original payment; the original is never modified.
+     3. **Partial and multiple refunds.** Track cumulative refunded amount against captured amount; each refund is idempotent.
+     4. **Chargeback workflow.** Immediate debit plus fee, evidence submission deadlines, outcomes won or lost, possible second-round disputes.
+     5. **Funds already moved.** Policy for clawing back from sellers (receivables, future payout offsets), reserves, or absorbing losses.
+     6. **Ledger for every step.** Refunds, chargeback debits, fees, reversals of chargebacks when won, all as balanced entries.
+     7. **Feed fraud and risk.** Dispute rates per merchant, product or customer inform fraud rules; card networks monitor excessive chargeback ratios.
+   - **When to choose what:** Model each return flow explicitly, link everything to the original payment, keep a clawback and reserve policy for marketplaces, and monitor dispute rates as a risk metric.
+   - **Numbers:**
+     - Card network dispute windows often extend to around 120 days after the transaction (rules vary by network and reason code), so liability lingers long after settlement.
+   - **Pitfalls:**
+     - Editing or deleting the original payment on refund.
+     - Allowing refunds totalling more than the captured amount.
+     - No plan for chargebacks after seller payouts.
+     - Missing evidence deadlines because disputes aren't tracked as workflows.
+   - **Follow-ups:**
+     - _A customer requests a refund while a chargeback is open. What happens?_ Don't refund; the chargeback already returned funds. Refunding would pay the customer twice; handle it through the dispute.
+     - _How do you handle refunds in a different currency than the original?_ Refund in the original currency; the FX difference is a gain or loss posted to FX accounts in the ledger.
+     - _How do reserves work?_ Hold back a percentage of a risky seller's payouts for a period to cover future refunds and chargebacks.
+   - **Example:** A marketplace paid sellers daily, so chargebacks weeks later left negative balances it couldn't recover. It introduced seller receivables offset against future payouts, rolling reserves for new sellers, and a dispute dashboard with evidence deadlines; unrecovered chargeback losses fell by two thirds.
+   - **Sources:** [Stripe documentation: Disputes and fraud](https://docs.stripe.com/disputes); [Visa: Dispute management guidelines for merchants](https://usa.visa.com/dam/VCOM/global/support-legal/documents/merchants-dispute-management-guidelines.pdf)
+149. **How do you represent money, rounding and multiple currencies correctly?** [mine · Intermediate · Transactions, Databases]
+   - **Trap:** "Store amounts as floats or decimals in dollars and round at the end." — _Why it fails:_ Floats can't represent many decimal values exactly, rounding at different points produces cent discrepancies, currencies have different minor units, and splitting an amount can lose or invent a cent. — _Probing:_ Integer minor units, currency-aware precision, explicit rounding rules, allocation, and FX handling. — _Say:_ "Integer minor units with an explicit currency on every amount, currency-specific exponents, a defined rounding mode at defined points, allocation algorithms that distribute remainders so totals always match, and FX recorded with the rate used."
+   - **Thesis:** Money is an amount plus a currency, stored as an integer in the currency's minor unit, with rounding applied deliberately at specified steps using a specified mode. Splits must allocate remainders so totals reconcile, and currency conversion records rate, source and timestamp.
+   - **60-second answer:** I'd never use floats: 0.1 plus 0.2 isn't 0.3 in binary floating point. Amounts are integers in minor units, such as cents or pence, paired with an ISO 4217 currency code, and the number of decimals depends on the currency: zero for JPY, two for USD, three for some like BHD or KWD. Calculations like interest or fees may need more precision internally, using decimal arithmetic, then rounding to minor units at a defined point with a defined mode, often half-even (banker's rounding) to avoid bias, or whatever regulation or the contract specifies. Splitting 100.00 three ways gives 33.33, 33.33 and 33.34; an allocation function distributes the remainder so the parts always sum to the total. Currency conversion stores the rate, its source and timestamp, and posts FX gains or losses to dedicated ledger accounts. I'd centralise all of this in a money library so every service rounds the same way.
+   - **Key points:**
+     1. **Integer minor units.** Store cents as integers (int64); never binary floats for money.
+     2. **Currency on every amount.** Amount and ISO currency code travel together; adding different currencies without conversion is a type error.
+     3. **Currency-specific exponents.** JPY has no minor unit, USD two decimals, some currencies three; don't hard-code two decimals.
+     4. **Defined rounding points and modes.** Specify where rounding happens (per line, per invoice) and how (half-even, half-up), matching regulation and contracts.
+     5. **Allocation without losing cents.** Split amounts so parts sum exactly to the total, assigning remainders deterministically.
+     6. **FX with provenance.** Record rate, source, timestamp and both amounts; book FX differences to dedicated accounts.
+     7. **One shared money library.** Centralise arithmetic, rounding and formatting so services agree.
+   - **When to choose what:** Integer minor units plus currency everywhere, decimal arithmetic for intermediate calculations, explicit rounding policy, allocation functions for splits, and a single shared library.
+   - **Numbers:**
+     - Interest example: 1,000.00 at 7.5% annual for 31 days = 1,000 × 0.075 × 31/365 = 6.369863…; rounded half-even to 6.37. Rounding daily and summing can differ from rounding once at the end, so the contract must specify which.
+   - **Pitfalls:**
+     - Floats in amounts or calculations.
+     - Assuming every currency has two decimals.
+     - Rounding inconsistently across services, causing reconciliation differences.
+     - Splits that lose or create a cent.
+   - **Follow-ups:**
+     - _Where should rounding happen for a multi-line invoice?_ Wherever the business or tax rules say (often per line for tax), consistently, and documented, since per-line and per-total rounding can differ by cents.
+     - _How do you display amounts?_ Format from minor units using the currency exponent and the user's locale; never parse formatted strings back into amounts.
+     - _How do you handle prices with more precision than the minor unit, like fuel or FX rates?_ Store them as decimals with the needed precision and round to minor units only when creating a chargeable amount.
+   - **Example:** A lending platform's interest calculated with floats drifted by a few cents per loan over its life, causing reconciliation breaks with the bank. Moving to integer minor units, decimal intermediate calculations, daily half-even rounding per the loan contract, and a shared money library eliminated the differences.
+   - **Sources:** [Martin Fowler: Money pattern](https://martinfowler.com/eaaCatalog/money.html); [ISO 4217 currency codes (SIX)](https://www.six-group.com/en/products-services/financial-information/data-standards.html)
+150. **Design daily interest accrual and end-of-day processing for millions of loans.** [mine · Advanced · Transactions, Messaging]
+   - **Trap:** "A nightly cron job loops over all loans and updates balances." — _Why it fails:_ A single job that mutates balances isn't idempotent, can't resume after failure, may run twice or skip a day, and blocks if it runs past the next day's start. Backdated payments also require recalculating past accruals. — _Probing:_ Idempotent per-loan-per-day accrual, partitioned resumable processing, business dates, backdated corrections and reconciliation. — _Say:_ "Accrual is an idempotent operation keyed by (loan, business date) that posts ledger entries, run as a partitioned, checkpointed job against a defined business date, with catch-up for missed days and recalculation logic for backdated transactions."
+   - **Thesis:** Daily accrual is a ledger operation per loan per business date: deterministic, idempotent and recorded as entries, not balance updates. Run it as a partitioned, resumable batch tied to an explicit business date, handle missed days and backdated events, and reconcile totals.
+   - **60-second answer:** I'd define a business date separate from wall-clock time, advanced by an end-of-day process once the day is closed. For each active loan, accrual computes interest for that business date from the balance and rate in effect, using the contract's day-count convention, and posts ledger entries keyed by (loan id, business date), so rerunning is harmless. The batch is partitioned by loan id across workers, checkpointed so it can resume, and monitored for completion before the next day opens. If the system was down, catch-up processes each missed date in order. Backdated events are the trap: a payment received today but effective three days ago changes the balance on which three accruals were computed. The engine must reverse and recompute accruals from the effective date forward, posting adjustments rather than editing history. After the run, totals per product are reconciled against expected aggregates, and exceptions such as loans failing calculation go to a queue for review rather than blocking the whole batch.
+   - **Key points:**
+     1. **Business date, not wall clock.** An explicit date advanced by end-of-day processing, so jobs, cut-offs and accruals agree.
+     2. **Idempotent per loan per day.** Accrual keyed by (loan, business date); reruns detect existing entries and do nothing.
+     3. **Ledger entries, not balance updates.** Accrued interest posts balanced entries (interest receivable, interest income).
+     4. **Day-count conventions.** Actual/365, actual/360, 30/360 and others affect results; follow the contract and regulation.
+     5. **Partitioned, resumable batch.** Shard by loan id, checkpoint progress, retry failures per loan, and finish within the window.
+     6. **Catch-up and backdating.** Process missed dates in order; on backdated events, reverse and recompute accruals from the effective date.
+     7. **Reconcile and isolate exceptions.** Compare totals to expectations; send failing loans to an exceptions queue without blocking the batch.
+   - **When to choose what:** Idempotent per-loan-per-date accrual posting ledger entries, a partitioned checkpointed batch, explicit business dates, and a recalculation engine for backdated events.
+   - **Numbers:**
+     - Throughput: 5 million loans in a 2-hour window needs about 700 loans/s; across 20 workers, 35 loans/s each, comfortable if each accrual is a few database operations.
+   - **Pitfalls:**
+     - Mutating balances directly in a loop.
+     - Jobs that can run twice and double-accrue.
+     - Ignoring backdated payments, leaving accrued interest wrong.
+     - One failing loan aborting the whole batch.
+   - **Follow-ups:**
+     - _How do you handle a rate change mid-month?_ Store rate history with effective dates; accrual for each date uses the rate effective on that date.
+     - _What if end-of-day takes longer than the window?_ Keep the business date closed for the batch while new activity is recorded for the next business date; scale partitions and alert on duration trends.
+     - _How do you test accrual logic?_ Golden test cases from finance with expected results per convention, property tests for idempotency, and parallel runs comparing old and new engines.
+   - **Example:** A lender's nightly accrual job crashed halfway one night and was rerun from the start, double-accruing interest for 1.2 million loans. Rebuilding it around (loan, business date) idempotency keys, partitioned checkpoints and a backdating recalculation engine made reruns safe and corrected backdated payments automatically.
+   - **Sources:** [Martin Fowler: Retroactive event](https://martinfowler.com/eaaDev/RetroactiveEvent.html); [Martin Fowler: Accounting patterns](https://martinfowler.com/eaaDev/AccountingNarrative.html)
+151. **Design KYC onboarding and ongoing AML monitoring for a fintech.** [mine · Intermediate · Cost & compliance, Messaging]
+   - **Trap:** "Call an identity verification vendor at signup; if it passes, the customer is verified forever." — _Why it fails:_ KYC is risk-based and ongoing: sanctions lists change daily, customer risk changes, transactions need monitoring, and regulators expect auditable decisions, case management and periodic review. — _Probing:_ Risk-based verification, ongoing screening, transaction monitoring, case management and auditability. — _Say:_ "Onboarding is a risk-based workflow with vendor checks and manual review for edge cases; after that, continuous sanctions and PEP screening, rules and models for transaction monitoring, a case management system for analysts, and every decision recorded with its evidence."
+   - **Thesis:** KYC and AML are continuous, risk-based processes, not a one-time check: verify identity at onboarding proportionate to risk, screen against sanctions and PEP lists continuously, monitor transactions for suspicious patterns, route alerts to analysts through case management, and keep auditable records of every decision.
+   - **60-second answer:** Onboarding is a workflow: collect identity data and documents, run vendor checks (document verification, liveness, database matching), screen against sanctions and politically exposed persons lists, compute a risk score from geography, product and behaviour, and decide: approve, reject, or request more information or manual review. It must handle vendor outages, since the onboarding state machine can pause and resume, and retries shouldn't create duplicate vendor charges. After onboarding, screening continues: when sanctions lists update, re-screen the customer base, and when customers change details, re-screen them. Transaction monitoring applies rules, like structuring just under reporting thresholds or rapid movement of funds, and models, generating alerts. Alerts become cases in a case management system where analysts investigate, document, and escalate to regulatory reports where required. Everything is auditable: inputs, vendor responses, rules and versions, decisions and who made them. Periodic reviews refresh customer information based on risk level.
+   - **Key points:**
+     1. **Risk-based onboarding.** Verification depth depends on product, geography and risk score; low risk can be streamlined, high risk gets enhanced due diligence.
+     2. **Workflow with manual review.** A state machine handling vendor results, requests for more information, manual review and decisions, resilient to vendor outages.
+     3. **Continuous screening.** Re-screen customers when sanctions and PEP lists change, and when customer details change.
+     4. **Transaction monitoring.** Rules and models for suspicious patterns; tune to balance detection against false positives.
+     5. **Case management.** Alerts become cases with assignment, investigation notes, escalation and regulatory reporting.
+     6. **Auditability.** Store inputs, vendor responses, rule versions, decisions, decision makers and timestamps.
+     7. **Periodic review.** Refresh customer information on a schedule driven by risk level.
+   - **When to choose what:** Vendors for identity verification and list data, an in-house workflow and case management system for decisions and audit, and continuous screening and monitoring rather than one-time checks. Involve compliance in defining rules and thresholds.
+   - **Numbers:**
+     - False positive rates in rules-based transaction monitoring are often very high, frequently the large majority of alerts, which is why tuning, prioritisation and analyst tooling matter.
+   - **Pitfalls:**
+     - One-time verification with no ongoing screening.
+     - Decisions without stored evidence and rule versions.
+     - Vendor outages blocking onboarding with no pause-and-resume.
+     - Alert volumes so high analysts can't keep up.
+   - **Follow-ups:**
+     - _A sanctions list adds a name matching 200 customers. What happens?_ Automated re-screening creates alerts; fuzzy matches are triaged by analysts using additional data (date of birth, nationality) and confirmed matches trigger account restrictions and reporting.
+     - _How do you reduce false positives?_ Better matching (more attributes, transliteration handling), rule tuning with feedback from analyst outcomes, and risk-based prioritisation of alerts.
+     - _How do you handle customers in jurisdictions with different rules?_ Configure workflows and thresholds per jurisdiction and product, with compliance owning the policy.
+   - **Example:** A neobank onboarded customers with a single vendor call and no ongoing screening; a regulator review found missing re-screening and decision records. The rebuilt pipeline uses a resumable onboarding workflow, daily list re-screening, rule-based monitoring with an analyst case tool, and a full audit trail per decision.
+   - **Sources:** [FATF: Guidance for a risk-based approach](https://www.fatf-gafi.org/en/publications/Fatfrecommendations/Guidance-rba-banking-sector.html); [OFAC: Sanctions list service](https://ofac.treasury.gov/sanctions-list-service)
 
 ### Adtech
+152. **Design a real-time bidder that must respond to ad auctions within about 100 ms at very high request rates.** [mine · Advanced · Latency, Scaling]
+   - **Trap:** "Look up the user profile, campaigns and budgets in the database for each bid request." — _Why it fails:_ Network round trips to databases blow the latency budget at hundreds of thousands of requests per second, and a late response is simply a lost auction, so the system must work from local, precomputed data. — _Probing:_ Latency budgets, in-memory data, precomputation, timeouts with no-bid fallbacks, and capacity. — _Say:_ "Bid decisions run on in-memory data: campaign and targeting indexes replicated to every bidder, user segments in a low-latency store or local cache, budgets as local allowances, a strict internal deadline, and a no-bid response whenever the deadline approaches."
+   - **Thesis:** In real-time bidding, latency is correctness: a late answer loses the auction. Keep the decision path in memory with precomputed campaign indexes and user segments, enforce a strict internal deadline with no-bid fallbacks, and handle budgets and logging asynchronously.
+   - **60-second answer:** An exchange sends a bid request and expects a response within its timeout, often around 100 ms including network time, so the bidder's own budget may be 10 to 30 ms. Every database call in that path is a risk. I'd precompute and replicate the campaign index (targeting rules, creatives, bid prices) to every bidder instance's memory, refreshed every few seconds. User data, like segments and frequency counts, lives in a low-latency key-value store close to the bidders, with a strict timeout and local caching; if it doesn't answer in time, bid without it or don't bid. Budgets are local allowances handed out by a central pacer, so no global lookup per bid. Model scoring for bid price must fit the budget, often a lightweight model. Everything non-essential, like logging bids, wins and impressions, goes asynchronously to a stream. The bidder tracks the deadline per request and returns no-bid rather than responding late. And capacity is planned for peak QPS with headroom, across regions close to exchanges.
+   - **Key points:**
+     1. **Latency is the product.** Responses after the exchange timeout are discarded; budget a strict internal deadline below it.
+     2. **In-memory campaign index.** Targeting rules and campaigns replicated to each bidder, refreshed frequently, queried locally.
+     3. **Fast user data with fallback.** Low-latency key-value lookups with tight timeouts; bid without enrichment or no-bid if it's slow.
+     4. **Local budget allowances.** A central pacer allocates spend slices to bidders, avoiding a global budget check per request.
+     5. **Lightweight models.** Bid price prediction fits within a few milliseconds; heavier models run offline to produce features.
+     6. **Async everything else.** Bid, win and impression logging via streams; never in the request path.
+     7. **Deploy near exchanges.** Regional deployments reduce network time, which consumes much of the overall budget.
+   - **When to choose what:** Precompute, replicate and keep the hot path in memory; enforce deadlines with no-bid fallbacks; push spend control and logging out of the request path.
+   - **Numbers:**
+     - Example: 500,000 bid requests/s at 5 ms of CPU each = 2,500 cores busy; at 60% utilisation about 4,200 cores across regions.
+     - A 100 ms exchange timeout with 40–60 ms of network round trip leaves the bidder perhaps 20–40 ms.
+   - **Pitfalls:**
+     - Database calls in the bid path.
+     - Waiting for slow enrichment instead of bidding without it.
+     - Global budget checks per bid creating a bottleneck.
+     - Synchronous logging adding latency.
+   - **Follow-ups:**
+     - _How do you update campaigns quickly without hurting latency?_ Build new index snapshots off the hot path and swap them atomically in each bidder (copy-on-write), every few seconds.
+     - _How do you test bidder latency?_ Replay recorded bid traffic at production rates and track p99 and p99.9 latency and timeout rates per deploy.
+     - _What happens if the user store is down?_ Bid with contextual targeting only, or no-bid for campaigns requiring user data, while the rest keep working.
+   - **Example:** A bidder's win rate dropped because 8% of responses arrived after the exchange timeout due to user-profile lookups. Moving to an in-memory campaign index, a 5 ms timeout on profile lookups with contextual fallback, and async logging cut timeouts below 0.5%.
+   - **Sources:** [IAB Tech Lab: OpenRTB specification](https://iabtechlab.com/standards/openrtb/)
+153. **Thousands of bidders spend from the same campaign budget. How do you pace spend and avoid overspending?** [mine · Advanced · Consistency, Scaling]
+   - **Trap:** "Each bid checks and decrements a central budget counter." — _Why it fails:_ A central counter per bid is a bottleneck at high QPS and adds latency; and because wins and costs are known only later, even a perfect counter overspends unless you account for in-flight bids. — _Probing:_ Distributed allowances, delayed win notifications, pacing curves and accepted overspend tolerance. — _Say:_ "A central budget service hands each bidder small spend allowances (leases), bidders spend locally and report back, unclaimed allowance returns, and pacing spreads spend across the day; we budget for in-flight exposure and accept a small, bounded overspend."
+   - **Thesis:** Budget control in adtech is a distributed rate-limiting problem with delayed feedback. Split budgets into allowances leased to bidders, account for in-flight bids whose cost isn't known yet, pace spend over time rather than spending as fast as possible, and bound overspend explicitly.
+   - **60-second answer:** A campaign has 10,000 dollars for the day across thousands of bidder instances worldwide. Checking a central counter on every bid is too slow and too contended, so a budget service grants each bidder a small allowance, say a few dollars, refreshed as it's used. Bidders spend from local allowances without network calls. The complication is delay: when you bid you don't know if you'll win, and win notifications and actual prices arrive later, so bidders must count potential spend of outstanding bids against the allowance, releasing it if the bid loses. Pacing decides how fast to spend: rather than exhausting the budget by 9 a.m., the pacer targets a spend curve across the day, often following traffic patterns, and adjusts bid participation or bid prices to stay on track. Near budget exhaustion, allowances shrink so overspend stays small. Finally, contracts usually tolerate a small overspend, and billing caps at the budget, so the residual is a known cost.
+   - **Key points:**
+     1. **Allowances, not per-bid checks.** A central service leases spend slices to bidders, who spend locally and report back.
+     2. **Account for in-flight bids.** Outstanding bids reserve potential spend until win or loss is known.
+     3. **Delayed feedback.** Win notices and impression costs arrive later; reconcile actual spend against allowances continuously.
+     4. **Pacing curves.** Spread spend across the day according to expected traffic, adjusting participation rate or bid price to stay on schedule.
+     5. **Shrink allowances near the end.** Smaller slices as the budget nears exhaustion keep overspend bounded.
+     6. **Bounded overspend and billing caps.** Accept a small known overspend; bill advertisers no more than their budget.
+     7. **Return unused allowance.** Expiring leases return unspent budget so idle or failed bidders don't strand money.
+   - **When to choose what:** Leased allowances with in-flight accounting and a pacing controller; tune slice sizes to trade overspend against coordination overhead; cap billing at budget.
+   - **Numbers:**
+     - Overspend bound sketch: 2,000 bidders each holding a $0.50 allowance means up to $1,000 could be committed simultaneously; near exhaustion, shrinking slices to $0.02 caps that at $40.
+   - **Pitfalls:**
+     - Central counter per bid.
+     - Ignoring outstanding bids, so many bidders win simultaneously past the budget.
+     - Spending the whole daily budget in the first hour.
+     - Allowances that never expire when a bidder dies.
+   - **Follow-ups:**
+     - _How does pacing decide how fast to spend?_ A controller compares actual cumulative spend with the target curve and adjusts the fraction of auctions entered or bid levels, like a feedback loop.
+     - _What if a region loses connectivity to the budget service?_ Bidders keep spending only their current allowance, then stop bidding for that campaign until connectivity returns.
+     - _How do you handle very small budgets?_ Use smaller allowances and fewer bidders for that campaign, or centralise its bidding to avoid overspend relative to its size.
+   - **Example:** Campaigns were overspending by up to 15% because bidders counted only confirmed wins. Reserving spend for outstanding bids, leasing $1 allowances shrinking to $0.05 near exhaustion, and pacing to an hourly curve cut overspend below 1% and stopped budgets running out by mid-morning.
+   - **Sources:** [Agarwal et al.: Budget pacing for targeted online advertisements at LinkedIn (KDD 2014)](https://dl.acm.org/doi/10.1145/2623330.2623366)
+154. **Enforce "show this ad to a user at most 3 times a day" across billions of impressions.** [mine · Intermediate · Caching, Scaling]
+   - **Trap:** "Count impressions per user per campaign in the database and check before each bid." — _Why it fails:_ The check must happen within milliseconds at very high QPS, impressions are recorded after the bid, and exact global counting across regions is expensive, so a strict per-bid database read doesn't fit. — _Probing:_ Fast counters with TTLs, approximate and eventually consistent counting, and accepting small overcaps. — _Say:_ "Counters keyed by (user, campaign, day) in a low-latency store with TTLs, read at bid time with a tight timeout, incremented asynchronously from impression events, accepting small overcaps from delayed events and cross-region lag."
+   - **Thesis:** Frequency capping is a high-volume, latency-critical counting problem with delayed signals. Keep counters in a fast key-value store with expiring windows, read them in the bid path with tight timeouts, update them from impression streams, and accept bounded overcapping instead of strict global consistency.
+   - **60-second answer:** At bid time the bidder needs 'how many times has this user seen this campaign today', within a millisecond or two. I'd store counters keyed by user and campaign with a day window, in a low-latency store such as Redis or Aerospike close to the bidders, with TTLs so old windows disappear. Impressions are confirmed after the bid is won and the ad renders, so counters are incremented from the impression event stream, not at bid time. That lag means a user can occasionally exceed the cap: two auctions won in quick succession before the first impression is counted. Most advertisers accept small overcaps; to reduce them, increment a pending counter on win and correct on impression. For many campaigns per user, store a per-user map of campaign counts to fetch in one read. Across regions, either route a user's bids to a home region or accept cross-region lag. If the store is slow, fall back conservatively by skipping capped campaigns or bidding without them.
+   - **Key points:**
+     1. **Fast keyed counters.** Key (user, campaign, window) in a low-latency store, read in one round trip per bid.
+     2. **Expiring windows.** TTLs or time-bucketed keys implement daily or hourly caps without cleanup jobs.
+     3. **Update from impressions.** Increment counts from impression events, since bids and wins don't guarantee the ad was shown.
+     4. **Delayed signals cause overcaps.** Wins in quick succession before impressions are counted can exceed the cap; pending counters on win reduce it.
+     5. **Per-user aggregation.** Store all of a user's campaign counts together to read them in one request.
+     6. **Cross-region consistency.** Home-region routing for users or tolerance for replication lag between regions.
+     7. **Conservative fallback.** If counters are unavailable, don't bid on capped campaigns rather than risk heavy overexposure.
+   - **When to choose what:** Eventually consistent fast counters with TTLs, updated from impression streams, with pending increments on win for tighter caps; strict caps only where contracts require them.
+   - **Numbers:**
+     - Storage sketch: 500 million users × 20 active capped campaigns × ~20 bytes ≈ 200 GB of counters, fitting in a sharded in-memory or SSD-backed key-value cluster.
+   - **Pitfalls:**
+     - Database reads in the bid path.
+     - Counting bids or wins instead of impressions.
+     - No TTLs, so counters grow forever.
+     - Promising strict caps that the architecture can't enforce.
+   - **Follow-ups:**
+     - _How do you cap across devices?_ Use a cross-device identity graph to map devices to a person, accepting that coverage and accuracy are imperfect.
+     - _How do you implement 'at most 5 per 7 days' rolling windows?_ Daily buckets summed over the last seven, or a small list of timestamps per key trimmed on read.
+     - _What about privacy restrictions on user identifiers?_ Caps may need to rely on contextual signals or privacy-preserving APIs where persistent identifiers aren't available, with weaker enforcement.
+   - **Example:** An ad platform's frequency caps were exceeded by up to 40% during peak because counters updated only from hourly batch jobs. Moving to streaming increments into Redis with daily TTL keys and a pending counter on win brought overcaps to under 3%.
+   - **Sources:** [Aerospike: Real-time bidding and frequency capping use cases](https://aerospike.com/solutions/use-case/adtech/)
+155. **Count impressions and clicks for billing, filter fraud, and attribute conversions that happen days later.** [mine · Advanced · Messaging, Databases]
+   - **Trap:** "Stream events into counters and bill advertisers from the real-time dashboard." — _Why it fails:_ Real-time counts include duplicates, bots and late events, and attribution windows mean conversions arrive days later. Billing from them overcharges and can't be audited. — _Probing:_ Deduplication, fraud filtering, late data, attribution windows, and separating real-time estimates from billable counts. — _Say:_ "Real-time counts are estimates for dashboards and pacing; billable numbers come from a batch pipeline that dedupes by event id, filters invalid traffic, applies attribution windows and rules, and reconciles with partners before invoicing."
+   - **Thesis:** Ad metrics serve two masters: fast approximate numbers for pacing and dashboards, and exact, audited numbers for billing. Deduplicate by event id, filter invalid traffic, handle late events and attribution windows, and produce billable figures from a reproducible batch pipeline reconciled with partners.
+   - **60-second answer:** Events arrive from browsers, apps and partners, with retries, duplicates, bots and delays. I'd give every event a unique id at source and dedupe on it. The streaming path aggregates by event time into near-real-time counters for dashboards and budget pacing, accepting small errors. The billing path is batch: daily jobs over the raw event log that dedupe, apply invalid-traffic filtering such as known bots, data centre IPs, abnormal click rates and click spamming, and compute billable impressions and clicks per campaign. Attribution links conversions, like purchases or installs, to earlier ad interactions within a window, perhaps 7 days after click or 1 day after view, according to agreed rules such as last-click. Because conversions arrive late, attribution results for a day aren't final for a week or more, so reports show provisional numbers and are restated. Billing is generated from the reproducible batch output, versioned with the rules used, and reconciled against the exchange's or partner's counts, with discrepancy thresholds.
+   - **Key points:**
+     1. **Event ids at source.** Unique ids generated where events are created, used to deduplicate retries and replays.
+     2. **Two pipelines.** Streaming for fast estimates (pacing, dashboards); batch for exact, auditable billing numbers.
+     3. **Invalid traffic filtering.** Bot lists, data centre IPs, behavioural anomalies and click-spam detection before billing.
+     4. **Event-time processing.** Aggregate by when events occurred and handle late arrivals with restatements.
+     5. **Attribution windows and rules.** Configurable click-through and view-through windows and models (last-click, multi-touch), versioned.
+     6. **Provisional vs final numbers.** Reports mark data as provisional until windows close; billing runs on final numbers.
+     7. **Reconcile with partners.** Compare with exchange and advertiser counts; investigate discrepancies above agreed thresholds.
+   - **When to choose what:** Never bill from streaming estimates; bill from a reproducible batch pipeline with dedupe, fraud filtering and versioned attribution rules, reconciled with partners.
+   - **Numbers:**
+     - Discrepancy tolerance: industry practice often treats differences of a few percent between parties' impression counts as acceptable, investigating beyond that.
+   - **Pitfalls:**
+     - Billing from real-time counters.
+     - No event ids, so retries double-count.
+     - Attribution computed once and never restated as late conversions arrive.
+     - Fraud filtering applied inconsistently between reporting and billing.
+   - **Follow-ups:**
+     - _How do you dedupe billions of events efficiently?_ Partition by event id hash and time, dedupe within windows in batch, and use Bloom filters as a pre-check in streaming.
+     - _How do you explain a discrepancy to an advertiser?_ Break it down: dedupe, invalid traffic filtered, timezone differences, attribution rules and late events, with reproducible numbers.
+     - _What changes with privacy restrictions?_ Less deterministic attribution: aggregated, delayed and noised reporting from platform APIs, modelled conversions, and more reliance on first-party data.
+   - **Example:** An ad network billed from streaming counters and refunded advertisers after audits found 6% duplicate and bot clicks. A batch billing pipeline with event-id dedupe, invalid traffic rules and versioned 7-day click attribution now produces invoices, while streaming counts remain for pacing only.
+   - **Sources:** [Media Rating Council: Invalid traffic detection and filtration guidelines](https://mediaratingcouncil.org/standards-and-guidelines); [IAB Tech Lab: Open Measurement SDK](https://iabtechlab.com/standards/open-measurement-sdk/)
 
 ### E-commerce & marketplaces
 

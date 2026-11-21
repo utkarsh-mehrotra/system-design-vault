@@ -1,0 +1,78 @@
+{
+  "trap": {
+    "wrong": "\"Look up the user profile, campaigns and budgets in the database for each bid request.\"",
+    "why": "Network round trips to databases blow the latency budget at hundreds of thousands of requests per second, and a late response is simply a lost auction, so the system must work from local, precomputed data.",
+    "probe": "Latency budgets, in-memory data, precomputation, timeouts with no-bid fallbacks, and capacity.",
+    "say": "\"Bid decisions run on in-memory data: campaign and targeting indexes replicated to every bidder, user segments in a low-latency store or local cache, budgets as local allowances, a strict internal deadline, and a no-bid response whenever the deadline approaches.\""
+  },
+  "thesis": "In real-time bidding, latency is correctness: a late answer loses the auction. Keep the decision path in memory with precomputed campaign indexes and user segments, enforce a strict internal deadline with no-bid fallbacks, and handle budgets and logging asynchronously.",
+  "pitch": "An exchange sends a bid request and expects a response within its timeout, often around 100 ms including network time, so the bidder's own budget may be 10 to 30 ms. Every database call in that path is a risk. I'd precompute and replicate the campaign index (targeting rules, creatives, bid prices) to every bidder instance's memory, refreshed every few seconds. User data, like segments and frequency counts, lives in a low-latency key-value store close to the bidders, with a strict timeout and local caching; if it doesn't answer in time, bid without it or don't bid. Budgets are local allowances handed out by a central pacer, so no global lookup per bid. Model scoring for bid price must fit the budget, often a lightweight model. Everything non-essential, like logging bids, wins and impressions, goes asynchronously to a stream. The bidder tracks the deadline per request and returns no-bid rather than responding late. And capacity is planned for peak QPS with headroom, across regions close to exchanges.",
+  "points": [
+    {
+      "h": "Latency is the product",
+      "d": "Responses after the exchange timeout are discarded; budget a strict internal deadline below it."
+    },
+    {
+      "h": "In-memory campaign index",
+      "d": "Targeting rules and campaigns replicated to each bidder, refreshed frequently, queried locally."
+    },
+    {
+      "h": "Fast user data with fallback",
+      "d": "Low-latency key-value lookups with tight timeouts; bid without enrichment or no-bid if it's slow."
+    },
+    {
+      "h": "Local budget allowances",
+      "d": "A central pacer allocates spend slices to bidders, avoiding a global budget check per request."
+    },
+    {
+      "h": "Lightweight models",
+      "d": "Bid price prediction fits within a few milliseconds; heavier models run offline to produce features."
+    },
+    {
+      "h": "Async everything else",
+      "d": "Bid, win and impression logging via streams; never in the request path."
+    },
+    {
+      "h": "Deploy near exchanges",
+      "d": "Regional deployments reduce network time, which consumes much of the overall budget."
+    }
+  ],
+  "decision": "Precompute, replicate and keep the hot path in memory; enforce deadlines with no-bid fallbacks; push spend control and logging out of the request path.",
+  "numbers": [
+    "Example: 500,000 bid requests/s at 5 ms of CPU each = 2,500 cores busy; at 60% utilisation about 4,200 cores across regions.",
+    "A 100 ms exchange timeout with 40–60 ms of network round trip leaves the bidder perhaps 20–40 ms."
+  ],
+  "pitfalls": [
+    "Database calls in the bid path.",
+    "Waiting for slow enrichment instead of bidding without it.",
+    "Global budget checks per bid creating a bottleneck.",
+    "Synchronous logging adding latency."
+  ],
+  "followups": [
+    {
+      "q": "How do you update campaigns quickly without hurting latency?",
+      "a": "Build new index snapshots off the hot path and swap them atomically in each bidder (copy-on-write), every few seconds."
+    },
+    {
+      "q": "How do you test bidder latency?",
+      "a": "Replay recorded bid traffic at production rates and track p99 and p99.9 latency and timeout rates per deploy."
+    },
+    {
+      "q": "What happens if the user store is down?",
+      "a": "Bid with contextual targeting only, or no-bid for campaigns requiring user data, while the rest keep working."
+    }
+  ],
+  "example": "A bidder's win rate dropped because 8% of responses arrived after the exchange timeout due to user-profile lookups. Moving to an in-memory campaign index, a 5 ms timeout on profile lookups with contextual fallback, and async logging cut timeouts below 0.5%.",
+  "related": [
+    "budget-pacing-overspend",
+    "frequency-capping-scale",
+    "size-system-50-000-requests",
+    "walk-one-request-dns-database"
+  ],
+  "sources": [
+    {
+      "title": "IAB Tech Lab: OpenRTB specification",
+      "url": "https://iabtechlab.com/standards/openrtb/"
+    }
+  ]
+}

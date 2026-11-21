@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"A nightly cron job loops over all loans and updates balances.\"",
+    "why": "A single job that mutates balances isn't idempotent, can't resume after failure, may run twice or skip a day, and blocks if it runs past the next day's start. Backdated payments also require recalculating past accruals.",
+    "probe": "Idempotent per-loan-per-day accrual, partitioned resumable processing, business dates, backdated corrections and reconciliation.",
+    "say": "\"Accrual is an idempotent operation keyed by (loan, business date) that posts ledger entries, run as a partitioned, checkpointed job against a defined business date, with catch-up for missed days and recalculation logic for backdated transactions.\""
+  },
+  "thesis": "Daily accrual is a ledger operation per loan per business date: deterministic, idempotent and recorded as entries, not balance updates. Run it as a partitioned, resumable batch tied to an explicit business date, handle missed days and backdated events, and reconcile totals.",
+  "pitch": "I'd define a business date separate from wall-clock time, advanced by an end-of-day process once the day is closed. For each active loan, accrual computes interest for that business date from the balance and rate in effect, using the contract's day-count convention, and posts ledger entries keyed by (loan id, business date), so rerunning is harmless. The batch is partitioned by loan id across workers, checkpointed so it can resume, and monitored for completion before the next day opens. If the system was down, catch-up processes each missed date in order. Backdated events are the trap: a payment received today but effective three days ago changes the balance on which three accruals were computed. The engine must reverse and recompute accruals from the effective date forward, posting adjustments rather than editing history. After the run, totals per product are reconciled against expected aggregates, and exceptions such as loans failing calculation go to a queue for review rather than blocking the whole batch.",
+  "points": [
+    {
+      "h": "Business date, not wall clock",
+      "d": "An explicit date advanced by end-of-day processing, so jobs, cut-offs and accruals agree."
+    },
+    {
+      "h": "Idempotent per loan per day",
+      "d": "Accrual keyed by (loan, business date); reruns detect existing entries and do nothing."
+    },
+    {
+      "h": "Ledger entries, not balance updates",
+      "d": "Accrued interest posts balanced entries (interest receivable, interest income)."
+    },
+    {
+      "h": "Day-count conventions",
+      "d": "Actual/365, actual/360, 30/360 and others affect results; follow the contract and regulation."
+    },
+    {
+      "h": "Partitioned, resumable batch",
+      "d": "Shard by loan id, checkpoint progress, retry failures per loan, and finish within the window."
+    },
+    {
+      "h": "Catch-up and backdating",
+      "d": "Process missed dates in order; on backdated events, reverse and recompute accruals from the effective date."
+    },
+    {
+      "h": "Reconcile and isolate exceptions",
+      "d": "Compare totals to expectations; send failing loans to an exceptions queue without blocking the batch."
+    }
+  ],
+  "decision": "Idempotent per-loan-per-date accrual posting ledger entries, a partitioned checkpointed batch, explicit business dates, and a recalculation engine for backdated events.",
+  "numbers": [
+    "Throughput: 5 million loans in a 2-hour window needs about 700 loans/s; across 20 workers, 35 loans/s each, comfortable if each accrual is a few database operations."
+  ],
+  "pitfalls": [
+    "Mutating balances directly in a loop.",
+    "Jobs that can run twice and double-accrue.",
+    "Ignoring backdated payments, leaving accrued interest wrong.",
+    "One failing loan aborting the whole batch."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a rate change mid-month?",
+      "a": "Store rate history with effective dates; accrual for each date uses the rate effective on that date."
+    },
+    {
+      "q": "What if end-of-day takes longer than the window?",
+      "a": "Keep the business date closed for the batch while new activity is recorded for the next business date; scale partitions and alert on duration trends."
+    },
+    {
+      "q": "How do you test accrual logic?",
+      "a": "Golden test cases from finance with expected results per convention, property tests for idempotency, and parallel runs comparing old and new engines."
+    }
+  ],
+  "example": "A lender's nightly accrual job crashed halfway one night and was rerun from the start, double-accruing interest for 1.2 million loans. Rebuilding it around (loan, business date) idempotency keys, partitioned checkpoints and a backdating recalculation engine made reruns safe and corrected backdated payments automatically.",
+  "related": [
+    "double-entry-ledger-design",
+    "money-rounding-currency",
+    "design-fan-out-fan-pipeline",
+    "design-scheduler-millions-delayed-jobs"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Retroactive event",
+      "url": "https://martinfowler.com/eaaDev/RetroactiveEvent.html"
+    },
+    {
+      "title": "Martin Fowler: Accounting patterns",
+      "url": "https://martinfowler.com/eaaDev/AccountingNarrative.html"
+    }
+  ]
+}

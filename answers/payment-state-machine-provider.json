@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Call the provider's charge API; if it returns success, mark the order paid, otherwise mark it failed.\"",
+    "why": "A timeout doesn't mean failure (the charge may have succeeded), webhooks arrive late, duplicated or out of order, and authorise and capture are separate steps with their own failures. Treating it as one call loses or double-charges money.",
+    "probe": "Explicit states, unknown outcomes, idempotency keys, webhook handling and reconciliation.",
+    "say": "\"I model payments as a state machine (created, authorising, authorised, capturing, captured, failed, refunded) with an 'unknown' path for timeouts resolved by querying the provider, idempotency keys on every call, idempotent ordered webhook processing, and daily reconciliation.\""
+  },
+  "thesis": "Payments are long-running, asynchronous processes with uncertain outcomes. Model them as an explicit state machine, use idempotency keys on every provider call, treat timeouts as 'unknown' to be resolved, process webhooks idempotently and in a way that tolerates reordering, and reconcile against provider reports.",
+  "pitch": "I'd store a payment record with a state and history. Creating the payment records intent with an idempotency key. Authorising calls the provider with that key; success moves to authorised, a decline to failed, and a timeout or 5xx moves to 'authorisation unknown', resolved by retrying with the same key or querying the provider, never by assuming failure. Capture happens on fulfilment, possibly partial, again idempotent. Refunds are their own records against the capture, partial or full. Webhooks from the provider are verified by signature, deduplicated by event id, and applied only if they move the state forward according to allowed transitions, so a late 'authorised' after 'captured' is ignored. Some events like disputes arrive weeks later. Every state change posts ledger entries. A daily reconciliation compares our payments with the provider's settlement report to catch anything missed.",
+  "points": [
+    {
+      "h": "Explicit states and transitions",
+      "d": "Created, authorising, authorised, capturing, captured, partially refunded, refunded, failed, disputed, with allowed transitions enforced."
+    },
+    {
+      "h": "Unknown is a real state",
+      "d": "Timeouts and 5xx don't mean declined; resolve by retrying with the same idempotency key or querying the provider."
+    },
+    {
+      "h": "Idempotency keys on every call",
+      "d": "Derived from your payment id and operation, so retries never double-authorise, capture or refund."
+    },
+    {
+      "h": "Authorise and capture separately",
+      "d": "Authorisations hold funds and expire; capture on fulfilment, possibly partially; void unused authorisations."
+    },
+    {
+      "h": "Webhooks as hints, applied idempotently",
+      "d": "Verify signatures, dedupe by event id, apply only forward transitions, and fetch current state from the API when in doubt."
+    },
+    {
+      "h": "Ledger entries per transition",
+      "d": "Every state change posts balanced entries so money movements are auditable."
+    },
+    {
+      "h": "Reconcile daily",
+      "d": "Compare with provider settlement files; handle fees, currency and missing events."
+    }
+  ],
+  "decision": "State machine plus idempotency plus webhook dedupe plus reconciliation for any payment integration; never infer final outcomes from timeouts.",
+  "numbers": [
+    "Card authorisations typically expire after a number of days (often around 7, varying by network and merchant type), so capture or re-authorise before then."
+  ],
+  "pitfalls": [
+    "Marking payments failed on timeout, then double-charging on retry.",
+    "Processing webhooks in arrival order without checking transitions.",
+    "No reconciliation, so missing webhooks go unnoticed.",
+    "Forgetting to void unused authorisations, holding customers' funds."
+  ],
+  "followups": [
+    {
+      "q": "The provider says captured, but you never got the webhook. How do you find out?",
+      "a": "Reconciliation against the settlement report, and a sweeper that queries the provider for payments stuck in intermediate states beyond a threshold."
+    },
+    {
+      "q": "How do you handle partial captures and refunds?",
+      "a": "Track captured and refunded amounts against the authorised amount, each operation with its own idempotency key and ledger entries."
+    },
+    {
+      "q": "How do you support multiple providers?",
+      "a": "A provider-agnostic state machine with adapters per provider, and routing rules for cost, approval rates and failover."
+    }
+  ],
+  "example": "A marketplace treated provider timeouts as declines, and customers who retried were charged twice. Introducing an 'unknown' state with automatic status queries, idempotency keys per attempt, and a sweeper for stuck payments ended duplicate charges, and reconciliation now catches the occasional missed webhook within a day.",
+  "related": [
+    "build-idempotency-write-api-clients",
+    "double-entry-ledger-design",
+    "chargebacks-refunds-reversals",
+    "outgoing-webhooks-design"
+  ],
+  "sources": [
+    {
+      "title": "Stripe documentation: Place a hold on a payment method (authorise and capture)",
+      "url": "https://docs.stripe.com/payments/place-a-hold-on-a-payment-method"
+    },
+    {
+      "title": "Stripe API reference: Idempotent requests",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  ]
+}

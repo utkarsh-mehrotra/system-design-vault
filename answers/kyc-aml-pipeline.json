@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Call an identity verification vendor at signup; if it passes, the customer is verified forever.\"",
+    "why": "KYC is risk-based and ongoing: sanctions lists change daily, customer risk changes, transactions need monitoring, and regulators expect auditable decisions, case management and periodic review.",
+    "probe": "Risk-based verification, ongoing screening, transaction monitoring, case management and auditability.",
+    "say": "\"Onboarding is a risk-based workflow with vendor checks and manual review for edge cases; after that, continuous sanctions and PEP screening, rules and models for transaction monitoring, a case management system for analysts, and every decision recorded with its evidence.\""
+  },
+  "thesis": "KYC and AML are continuous, risk-based processes, not a one-time check: verify identity at onboarding proportionate to risk, screen against sanctions and PEP lists continuously, monitor transactions for suspicious patterns, route alerts to analysts through case management, and keep auditable records of every decision.",
+  "pitch": "Onboarding is a workflow: collect identity data and documents, run vendor checks (document verification, liveness, database matching), screen against sanctions and politically exposed persons lists, compute a risk score from geography, product and behaviour, and decide: approve, reject, or request more information or manual review. It must handle vendor outages, since the onboarding state machine can pause and resume, and retries shouldn't create duplicate vendor charges. After onboarding, screening continues: when sanctions lists update, re-screen the customer base, and when customers change details, re-screen them. Transaction monitoring applies rules, like structuring just under reporting thresholds or rapid movement of funds, and models, generating alerts. Alerts become cases in a case management system where analysts investigate, document, and escalate to regulatory reports where required. Everything is auditable: inputs, vendor responses, rules and versions, decisions and who made them. Periodic reviews refresh customer information based on risk level.",
+  "points": [
+    {
+      "h": "Risk-based onboarding",
+      "d": "Verification depth depends on product, geography and risk score; low risk can be streamlined, high risk gets enhanced due diligence."
+    },
+    {
+      "h": "Workflow with manual review",
+      "d": "A state machine handling vendor results, requests for more information, manual review and decisions, resilient to vendor outages."
+    },
+    {
+      "h": "Continuous screening",
+      "d": "Re-screen customers when sanctions and PEP lists change, and when customer details change."
+    },
+    {
+      "h": "Transaction monitoring",
+      "d": "Rules and models for suspicious patterns; tune to balance detection against false positives."
+    },
+    {
+      "h": "Case management",
+      "d": "Alerts become cases with assignment, investigation notes, escalation and regulatory reporting."
+    },
+    {
+      "h": "Auditability",
+      "d": "Store inputs, vendor responses, rule versions, decisions, decision makers and timestamps."
+    },
+    {
+      "h": "Periodic review",
+      "d": "Refresh customer information on a schedule driven by risk level."
+    }
+  ],
+  "decision": "Vendors for identity verification and list data, an in-house workflow and case management system for decisions and audit, and continuous screening and monitoring rather than one-time checks. Involve compliance in defining rules and thresholds.",
+  "numbers": [
+    "False positive rates in rules-based transaction monitoring are often very high, frequently the large majority of alerts, which is why tuning, prioritisation and analyst tooling matter."
+  ],
+  "pitfalls": [
+    "One-time verification with no ongoing screening.",
+    "Decisions without stored evidence and rule versions.",
+    "Vendor outages blocking onboarding with no pause-and-resume.",
+    "Alert volumes so high analysts can't keep up."
+  ],
+  "followups": [
+    {
+      "q": "A sanctions list adds a name matching 200 customers. What happens?",
+      "a": "Automated re-screening creates alerts; fuzzy matches are triaged by analysts using additional data (date of birth, nationality) and confirmed matches trigger account restrictions and reporting."
+    },
+    {
+      "q": "How do you reduce false positives?",
+      "a": "Better matching (more attributes, transliteration handling), rule tuning with feedback from analyst outcomes, and risk-based prioritisation of alerts."
+    },
+    {
+      "q": "How do you handle customers in jurisdictions with different rules?",
+      "a": "Configure workflows and thresholds per jurisdiction and product, with compliance owning the policy."
+    }
+  ],
+  "example": "A neobank onboarded customers with a single vendor call and no ongoing screening; a regulator review found missing re-screening and decision records. The rebuilt pipeline uses a resumable onboarding workflow, daily list re-screening, rule-based monitoring with an analyst case tool, and a full audit trail per decision.",
+  "related": [
+    "audit-logs-tamper-evident",
+    "third-party-worse-sla",
+    "approximate-counting-sketches",
+    "consent-audit-access"
+  ],
+  "sources": [
+    {
+      "title": "FATF: Guidance for a risk-based approach",
+      "url": "https://www.fatf-gafi.org/en/publications/Fatfrecommendations/Guidance-rba-banking-sector.html"
+    },
+    {
+      "title": "OFAC: Sanctions list service",
+      "url": "https://ofac.treasury.gov/sanctions-list-service"
+    }
+  ]
+}

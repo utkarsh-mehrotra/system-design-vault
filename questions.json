@@ -3025,6 +3025,159 @@
         "Observability"
       ],
       "legacy": []
+    },
+    {
+      "id": "payment-state-machine-provider",
+      "cat": "domains",
+      "topic": "Fintech & lending",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Integrate a card payment provider: authorise, capture, refund, with webhooks. What does your payment state machine look like?",
+      "also": [],
+      "a": [
+        "Payments are long-running, asynchronous processes with uncertain outcomes. Model them as an explicit state machine, use idempotency keys on every provider call, treat timeouts as 'unknown' to be resolved, process webhooks idempotently and in a way that tolerates reordering, and reconcile against provider reports."
+      ],
+      "tags": [
+        "Transactions",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "chargebacks-refunds-reversals",
+      "cat": "domains",
+      "topic": "Fintech & lending",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design refunds, reversals and chargebacks. What makes them harder than the original payment?",
+      "also": [],
+      "a": [
+        "Money flowing back is a separate lifecycle, not an undo. Refunds (merchant-initiated), reversals (voiding before settlement) and chargebacks (customer bank-initiated disputes) each need their own records, states, ledger entries and handling of funds that may already have moved onward."
+      ],
+      "tags": [
+        "Transactions",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "money-rounding-currency",
+      "cat": "domains",
+      "topic": "Fintech & lending",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "How do you represent money, rounding and multiple currencies correctly?",
+      "also": [],
+      "a": [
+        "Money is an amount plus a currency, stored as an integer in the currency's minor unit, with rounding applied deliberately at specified steps using a specified mode. Splits must allocate remainders so totals reconcile, and currency conversion records rate, source and timestamp."
+      ],
+      "tags": [
+        "Transactions",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "interest-accrual-eod-batch",
+      "cat": "domains",
+      "topic": "Fintech & lending",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design daily interest accrual and end-of-day processing for millions of loans.",
+      "also": [],
+      "a": [
+        "Daily accrual is a ledger operation per loan per business date: deterministic, idempotent and recorded as entries, not balance updates. Run it as a partitioned, resumable batch tied to an explicit business date, handle missed days and backdated events, and reconcile totals."
+      ],
+      "tags": [
+        "Transactions",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "kyc-aml-pipeline",
+      "cat": "domains",
+      "topic": "Fintech & lending",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design KYC onboarding and ongoing AML monitoring for a fintech.",
+      "also": [],
+      "a": [
+        "KYC and AML are continuous, risk-based processes, not a one-time check: verify identity at onboarding proportionate to risk, screen against sanctions and PEP lists continuously, monitor transactions for suspicious patterns, route alerts to analysts through case management, and keep auditable records of every decision."
+      ],
+      "tags": [
+        "Cost & compliance",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "rtb-bidding-100ms",
+      "cat": "domains",
+      "topic": "Adtech",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design a real-time bidder that must respond to ad auctions within about 100 ms at very high request rates.",
+      "also": [],
+      "a": [
+        "In real-time bidding, latency is correctness: a late answer loses the auction. Keep the decision path in memory with precomputed campaign indexes and user segments, enforce a strict internal deadline with no-bid fallbacks, and handle budgets and logging asynchronously."
+      ],
+      "tags": [
+        "Latency",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "budget-pacing-overspend",
+      "cat": "domains",
+      "topic": "Adtech",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Thousands of bidders spend from the same campaign budget. How do you pace spend and avoid overspending?",
+      "also": [],
+      "a": [
+        "Budget control in adtech is a distributed rate-limiting problem with delayed feedback. Split budgets into allowances leased to bidders, account for in-flight bids whose cost isn't known yet, pace spend over time rather than spending as fast as possible, and bound overspend explicitly."
+      ],
+      "tags": [
+        "Consistency",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "frequency-capping-scale",
+      "cat": "domains",
+      "topic": "Adtech",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Enforce \"show this ad to a user at most 3 times a day\" across billions of impressions.",
+      "also": [],
+      "a": [
+        "Frequency capping is a high-volume, latency-critical counting problem with delayed signals. Keep counters in a fast key-value store with expiring windows, read them in the bid path with tight timeouts, update them from impression streams, and accept bounded overcapping instead of strict global consistency."
+      ],
+      "tags": [
+        "Caching",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "ad-event-counting-attribution",
+      "cat": "domains",
+      "topic": "Adtech",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Count impressions and clicks for billing, filter fraud, and attribute conversions that happen days later.",
+      "also": [],
+      "a": [
+        "Ad metrics serve two masters: fast approximate numbers for pacing and dashboards, and exact, audited numbers for billing. Deduplicate by event id, filter invalid traffic, handle late events and attribution windows, and produce billable figures from a reproducible batch pipeline reconciled with partners."
+      ],
+      "tags": [
+        "Messaging",
+        "Databases"
+      ],
+      "legacy": []
     }
   ]
 }

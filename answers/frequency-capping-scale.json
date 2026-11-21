@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Count impressions per user per campaign in the database and check before each bid.\"",
+    "why": "The check must happen within milliseconds at very high QPS, impressions are recorded after the bid, and exact global counting across regions is expensive, so a strict per-bid database read doesn't fit.",
+    "probe": "Fast counters with TTLs, approximate and eventually consistent counting, and accepting small overcaps.",
+    "say": "\"Counters keyed by (user, campaign, day) in a low-latency store with TTLs, read at bid time with a tight timeout, incremented asynchronously from impression events, accepting small overcaps from delayed events and cross-region lag.\""
+  },
+  "thesis": "Frequency capping is a high-volume, latency-critical counting problem with delayed signals. Keep counters in a fast key-value store with expiring windows, read them in the bid path with tight timeouts, update them from impression streams, and accept bounded overcapping instead of strict global consistency.",
+  "pitch": "At bid time the bidder needs 'how many times has this user seen this campaign today', within a millisecond or two. I'd store counters keyed by user and campaign with a day window, in a low-latency store such as Redis or Aerospike close to the bidders, with TTLs so old windows disappear. Impressions are confirmed after the bid is won and the ad renders, so counters are incremented from the impression event stream, not at bid time. That lag means a user can occasionally exceed the cap: two auctions won in quick succession before the first impression is counted. Most advertisers accept small overcaps; to reduce them, increment a pending counter on win and correct on impression. For many campaigns per user, store a per-user map of campaign counts to fetch in one read. Across regions, either route a user's bids to a home region or accept cross-region lag. If the store is slow, fall back conservatively by skipping capped campaigns or bidding without them.",
+  "points": [
+    {
+      "h": "Fast keyed counters",
+      "d": "Key (user, campaign, window) in a low-latency store, read in one round trip per bid."
+    },
+    {
+      "h": "Expiring windows",
+      "d": "TTLs or time-bucketed keys implement daily or hourly caps without cleanup jobs."
+    },
+    {
+      "h": "Update from impressions",
+      "d": "Increment counts from impression events, since bids and wins don't guarantee the ad was shown."
+    },
+    {
+      "h": "Delayed signals cause overcaps",
+      "d": "Wins in quick succession before impressions are counted can exceed the cap; pending counters on win reduce it."
+    },
+    {
+      "h": "Per-user aggregation",
+      "d": "Store all of a user's campaign counts together to read them in one request."
+    },
+    {
+      "h": "Cross-region consistency",
+      "d": "Home-region routing for users or tolerance for replication lag between regions."
+    },
+    {
+      "h": "Conservative fallback",
+      "d": "If counters are unavailable, don't bid on capped campaigns rather than risk heavy overexposure."
+    }
+  ],
+  "decision": "Eventually consistent fast counters with TTLs, updated from impression streams, with pending increments on win for tighter caps; strict caps only where contracts require them.",
+  "numbers": [
+    "Storage sketch: 500 million users × 20 active capped campaigns × ~20 bytes ≈ 200 GB of counters, fitting in a sharded in-memory or SSD-backed key-value cluster."
+  ],
+  "pitfalls": [
+    "Database reads in the bid path.",
+    "Counting bids or wins instead of impressions.",
+    "No TTLs, so counters grow forever.",
+    "Promising strict caps that the architecture can't enforce."
+  ],
+  "followups": [
+    {
+      "q": "How do you cap across devices?",
+      "a": "Use a cross-device identity graph to map devices to a person, accepting that coverage and accuracy are imperfect."
+    },
+    {
+      "q": "How do you implement 'at most 5 per 7 days' rolling windows?",
+      "a": "Daily buckets summed over the last seven, or a small list of timestamps per key trimmed on read."
+    },
+    {
+      "q": "What about privacy restrictions on user identifiers?",
+      "a": "Caps may need to rely on contextual signals or privacy-preserving APIs where persistent identifiers aren't available, with weaker enforcement."
+    }
+  ],
+  "example": "An ad platform's frequency caps were exceeded by up to 40% during peak because counters updated only from hourly batch jobs. Moving to streaming increments into Redis with daily TTL keys and a pending counter on win brought overcaps to under 3%.",
+  "related": [
+    "rtb-bidding-100ms",
+    "budget-pacing-overspend",
+    "approximate-counting-sketches",
+    "caching-story-hot-keys-large"
+  ],
+  "sources": [
+    {
+      "title": "Aerospike: Real-time bidding and frequency capping use cases",
+      "url": "https://aerospike.com/solutions/use-case/adtech/"
+    }
+  ]
+}
