@@ -1,0 +1,74 @@
+{
+  "thesis": "Use keyset (cursor) pagination: sort by a stable, indexed key with a unique tiebreaker and fetch rows after the last one seen. Offset pagination gets slower with every page and shifts when data changes. Bound page size and decide how results behave as data changes underneath.",
+  "pitch": "Offset pagination, LIMIT 50 OFFSET 100000, makes the database read and discard a hundred thousand rows to return fifty, so deep pages get slow, and if rows are inserted or deleted while a user pages, they see duplicates or miss items. Keyset pagination fixes both: order by an indexed column plus a unique tiebreaker, like (created_at, id), and ask for rows where (created_at, id) is less than the last row of the previous page, limit 50. Each page is an index range scan of fifty rows regardless of depth. I'd return an opaque cursor encoding the last key and the sort, so clients can't construct arbitrary positions and the server can change the encoding. Page size is capped. The trade-offs: no jumping to page 237, and total counts are expensive, so show approximate counts or 'more results' instead. For search engines, use their search-after or scroll mechanisms rather than deep from/size.",
+  "points": [
+    {
+      "h": "Why offset hurts",
+      "d": "OFFSET N reads and discards N rows, so cost grows linearly with depth. Concurrent inserts and deletes shift rows between pages, causing duplicates or skips."
+    },
+    {
+      "h": "Keyset pagination",
+      "d": "WHERE (sort_key, id) < (:last_sort, :last_id) ORDER BY sort_key DESC, id DESC LIMIT :n. Uses the index directly; every page costs about the same."
+    },
+    {
+      "h": "Stable sort with a tiebreaker",
+      "d": "The sort must be deterministic: add the primary key as a tiebreaker so rows with equal sort values don't flip between pages."
+    },
+    {
+      "h": "Opaque cursors",
+      "d": "Encode the last key (and filters) into a signed or encoded token. Clients pass it back; the server can change the format without breaking them."
+    },
+    {
+      "h": "Bounded page size",
+      "d": "Cap the limit (for example 100) to protect the database and response size."
+    },
+    {
+      "h": "Counts and jumping",
+      "d": "Exact totals over huge filtered sets are expensive; use estimates, cached counts, or 'load more'. Arbitrary page jumps aren't supported; offer filters and search instead."
+    },
+    {
+      "h": "Changing data",
+      "d": "Keyset pagination naturally shows new items only at the start; items edited to move in the sort order may appear twice or be skipped. Snapshot reads are an option if exact consistency matters."
+    }
+  ],
+  "decision": "Keyset pagination for any large or growing dataset and all APIs. Offset only for small, bounded result sets or admin tools where deep pages are rare. Search engines: search_after with a point-in-time view for deep result sets.",
+  "numbers": [
+    "Depth cost: page 2,000 at 50 per page with OFFSET reads about 100,000 rows; keyset reads about 50 rows via the index for any page."
+  ],
+  "pitfalls": [
+    "Sorting by a non-unique column without a tiebreaker.",
+    "No index matching the sort and filter columns, so keyset pagination still scans.",
+    "Exposing raw keys as cursors and letting clients craft them.",
+    "Computing COUNT(*) over millions of rows on every page request."
+  ],
+  "followups": [
+    {
+      "q": "How do you support both forward and backward paging?",
+      "a": "Store both first and last keys in the cursor and flip the comparison and sort direction for previous pages, then reverse the results."
+    },
+    {
+      "q": "What if the user changes filters or sort?",
+      "a": "The cursor encodes them; a mismatch invalidates the cursor and the client starts from the first page."
+    },
+    {
+      "q": "How do you export all rows of a huge table?",
+      "a": "Keyset iteration by primary key in batches, ideally from a replica or snapshot, not offset paging through an API."
+    }
+  ],
+  "example": "A transactions API switched from offset to keyset pagination on (posted_at, id). Page latency at depth 10,000 went from 4 seconds to 15 ms, and clients stopped seeing duplicate transactions while new ones arrived.",
+  "related": [
+    "safely-backfill-data-production",
+    "design-indexes-table-takes-90",
+    "version-public-api-cannot-force"
+  ],
+  "sources": [
+    {
+      "title": "Markus Winand: No offset (keyset pagination)",
+      "url": "https://use-the-index-luke.com/no-offset"
+    },
+    {
+      "title": "Elasticsearch documentation: Paginate search results",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html"
+    }
+  ]
+}

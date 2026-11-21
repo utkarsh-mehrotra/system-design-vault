@@ -1,0 +1,76 @@
+{
+  "thesis": "You rarely need a global order, only order per entity. Partition by the key whose order matters, process each key sequentially, and run many keys in parallel. Size partitions for peak parallelism, and protect order during retries and rebalances.",
+  "pitch": "The trick is to find the scope of ordering. For an account, deposits and withdrawals must apply in order, but two different accounts are independent. So I'd key messages by account id: Kafka guarantees order within a partition, so all of an account's events go to one partition and are consumed in order, while different partitions are consumed in parallel. Partition count caps parallelism, so I'd choose it for peak consumer count with room to grow, because changing it later remaps keys. Inside a consumer I can go further: process different keys from the same partition concurrently while keeping each key sequential, with per-key queues, as Confluent's parallel consumer does. Then the edge cases: a retry must not let a later message for the same key overtake the failed one; during a rebalance, a partition's in-flight work must finish or be abandoned before the new owner starts; and sequence numbers per key let consumers detect gaps and duplicates.",
+  "points": [
+    {
+      "h": "Order per key, not globally",
+      "d": "Identify the entity whose events must be ordered (account, order, device). Global ordering forces a single consumer and kills throughput."
+    },
+    {
+      "h": "Partition by that key",
+      "d": "Same key, same partition, which gives ordered delivery. Different partitions run in parallel across consumers in a group."
+    },
+    {
+      "h": "Partition count sets max parallelism",
+      "d": "A consumer group can't have more active consumers than partitions. Choose the count for peak load plus growth; increasing it later changes key-to-partition mapping for new messages."
+    },
+    {
+      "h": "Key-level parallelism within a partition",
+      "d": "A consumer can process different keys concurrently while serialising per key, raising throughput without more partitions."
+    },
+    {
+      "h": "Retries without reordering",
+      "d": "If a message for key K fails, later messages for K must wait (block that key, not the partition) or be parked with it."
+    },
+    {
+      "h": "Rebalances",
+      "d": "Commit offsets only after processing; on revocation, finish or abandon in-flight work cleanly. Cooperative rebalancing reduces disruption."
+    },
+    {
+      "h": "Sequence numbers per key",
+      "d": "Producers stamp a per-key sequence; consumers detect gaps (missing events) and duplicates, and can reorder small windows if needed."
+    }
+  ],
+  "decision": "Key by the ordering entity and parallelise across keys. Add key-level concurrency in consumers when partitions are the bottleneck. Use per-key sequence numbers wherever correctness depends on order.",
+  "numbers": [
+    "Parallelism: 48 partitions allow up to 48 consumers in a group. If each processes 500 msgs/s, peak throughput is about 24,000 msgs/s.",
+    "Hot keys limit throughput: one key can only go as fast as one sequential processor. A key at 2,000 msgs/s needs per-message processing under 0.5 ms."
+  ],
+  "pitfalls": [
+    "Keying by a random or round-robin value and losing per-entity order.",
+    "Retrying a failed message asynchronously while later messages for the same key proceed.",
+    "Committing offsets before processing completes, so a rebalance skips messages.",
+    "A very hot key that one consumer can't keep up with."
+  ],
+  "followups": [
+    {
+      "q": "You need more partitions. What happens to ordering?",
+      "a": "Adding partitions changes which partition new messages for a key go to, so for a short time old and new messages for a key may be on different partitions. Drain or pause producers, or create a new topic and migrate."
+    },
+    {
+      "q": "How do you handle a very hot key?",
+      "a": "Check whether its events truly need total order. If only sub-entities need order, refine the key. Otherwise make processing for that key faster or batch it."
+    },
+    {
+      "q": "How do you order events from multiple producers for the same key?",
+      "a": "Route writes for a key through a single producer or the owning service, or use per-key sequence numbers assigned by the source of truth."
+    }
+  ],
+  "example": "A wallet service keys transaction events by account id across 64 partitions. Consumers use key-level concurrency, so each account is processed sequentially while thousands of accounts run in parallel. A failed event parks only that account's subsequent events until it's resolved.",
+  "related": [
+    "poison-message-blocks-partition-design",
+    "exactly-once-practice-kafka-flink",
+    "design-outbox-inbox-pattern-reliable",
+    "hot-partition-shows-up-2"
+  ],
+  "sources": [
+    {
+      "title": "Apache Kafka documentation: Design (partitions and ordering)",
+      "url": "https://kafka.apache.org/documentation/#design"
+    },
+    {
+      "title": "Confluent: Parallel consumer for Apache Kafka",
+      "url": "https://github.com/confluentinc/parallel-consumer"
+    }
+  ]
+}

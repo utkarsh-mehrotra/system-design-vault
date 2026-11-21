@@ -1,0 +1,71 @@
+{
+  "thesis": "Both. The customer needs an answer now, so placing the order is a synchronous request that commits the order and returns its status. Everything that follows (fulfilment, notifications, loyalty points, analytics) reacts to an OrderPlaced event published reliably from that commit.",
+  "pitch": "I'd make the order write synchronous: validate the cart, check price and stock, authorise payment if that's part of placement, commit the order, and return an order id and status in one request. The customer gets a definite answer, and errors like out-of-stock or a declined card show immediately. In the same transaction I'd write an OrderPlaced event to an outbox, and everything downstream consumes it: warehouse fulfilment, confirmation email, loyalty, fraud review, analytics. That keeps the user-facing path short and dependent on only the services needed for the decision, while downstream consumers can be slow, fail or be added later without touching checkout. Where something downstream can still change the order, like fraud review cancelling it, the order has explicit states and the customer is notified when it changes.",
+  "points": [
+    {
+      "h": "The decision is synchronous",
+      "d": "The customer needs to know immediately whether the order went through. Validation, pricing, stock reservation and payment authorisation produce that answer."
+    },
+    {
+      "h": "Side effects are events",
+      "d": "Fulfilment, emails, loyalty, analytics and CRM don't affect the immediate answer. They subscribe to OrderPlaced and act independently."
+    },
+    {
+      "h": "Publish reliably with an outbox",
+      "d": "Write the order and the event in one transaction, then relay the event. Never commit the order and then hope the publish succeeds."
+    },
+    {
+      "h": "Minimise synchronous dependencies",
+      "d": "Every synchronous call on the order path adds latency and a way to fail. Keep only what's needed for the decision; use local data or cached reference data where possible."
+    },
+    {
+      "h": "Explicit order states",
+      "d": "Placed, paid, fulfilling, shipped, cancelled. Asynchronous steps move the order between states and the customer can see where it is."
+    },
+    {
+      "h": "Defend the trade-off",
+      "d": "Fully event-driven placement would mean the customer waits on a 'pending' screen for an unknown time. Fully synchronous would chain fulfilment and email into checkout and make it fragile."
+    }
+  ],
+  "decision": "Synchronous for the steps that decide the order's success; events for everything after. If a downstream step can reverse the order, model it as a state change with customer notification rather than making it synchronous.",
+  "numbers": [
+    "Latency budget example: placement path under 1 second at p99, including payment authorisation; downstream processing within seconds to minutes depending on the consumer."
+  ],
+  "pitfalls": [
+    "Calling fulfilment, email and loyalty synchronously during checkout.",
+    "Publishing the event outside the order transaction (dual write).",
+    "Going fully async and leaving the customer unsure whether the order exists.",
+    "Consumers that aren't idempotent, sending duplicate emails or double points on redelivery."
+  ],
+  "followups": [
+    {
+      "q": "What if stock reservation is in another service?",
+      "a": "Call it synchronously with a short timeout if the answer is needed before confirming, or accept the order optimistically and compensate (cancel and notify) if the reservation later fails. The business decides which experience is acceptable."
+    },
+    {
+      "q": "How do you handle payment that takes several seconds?",
+      "a": "Authorise synchronously if it fits the budget; otherwise accept the order as 'payment pending', return quickly, and notify on completion."
+    },
+    {
+      "q": "How do downstream teams get the data they need?",
+      "a": "The event carries the facts consumers commonly need (order id, items, amounts, customer id), with a versioned schema, so they don't call back into the order service for every event."
+    }
+  ],
+  "example": "Checkout reserves stock and authorises payment synchronously, commits the order with an outbox event, and returns 'Order placed' in 700 ms. The warehouse, email service and loyalty service each consume OrderPlaced; when the email provider is down for an hour, orders keep flowing and emails catch up.",
+  "related": [
+    "choose-between-synchronous-asynchronous-communication",
+    "design-outbox-inbox-pattern-reliable",
+    "replace-two-phase-commit-across",
+    "evolve-event-schema-breaking-consumers"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: What do you mean by 'event-driven'?",
+      "url": "https://martinfowler.com/articles/201701-event-driven.html"
+    },
+    {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  ]
+}

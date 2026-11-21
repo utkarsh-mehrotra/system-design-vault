@@ -1,0 +1,70 @@
+{
+  "thesis": "Write-through updates cache and store together, keeping them aligned at the cost of write latency. Write-back acknowledges after updating the cache and writes the store later: fast, but risks loss. Write-around writes only to the store and lets reads populate the cache, avoiding pollution with rarely read data. Most application caches use cache-aside with write-around plus invalidation.",
+  "pitch": "The question is what happens on a write. Write-through: write to the store and the cache synchronously, so reads right after a write hit a fresh cache; writes are slower and you may cache data nobody reads. Write-back, or write-behind: write to the cache, acknowledge, and flush to the store asynchronously, which is great for write-heavy, loss-tolerant workloads like counters and metrics but dangerous for anything you can't lose, because a cache failure loses unflushed writes. Write-around: write only to the store, and the next read misses and loads it; best when written data is often not read soon, avoiding cache churn. In practice, for most services I'd use cache-aside: read from cache, on miss load from the database and populate; on write, update the database and delete the cache key, so the next read loads fresh data.",
+  "points": [
+    {
+      "h": "Write-through",
+      "d": "Synchronous write to store and cache. Reads after writes are fresh. Write latency includes both, and rarely read data still occupies cache."
+    },
+    {
+      "h": "Write-back (write-behind)",
+      "d": "Write to cache, acknowledge, persist later in batches. Lowest write latency and fewer store writes. Data loss if the cache fails before flushing; ordering and durability need care."
+    },
+    {
+      "h": "Write-around",
+      "d": "Write to the store only. The cache fills on read. Avoids polluting the cache with write-once data; first read after a write is a miss."
+    },
+    {
+      "h": "Cache-aside, the common default",
+      "d": "Application owns caching: read-through on miss, and on write update the database then delete (not update) the cache key."
+    },
+    {
+      "h": "Delete rather than update on write",
+      "d": "Updating the cache on write can race with concurrent writes and leave a stale value. Deleting forces a fresh load; combined with TTLs, it bounds staleness."
+    },
+    {
+      "h": "Durability decides write-back",
+      "d": "Use write-back only when losing a window of writes is acceptable or the cache itself is durable and replicated."
+    }
+  ],
+  "decision": "Cache-aside with delete-on-write for most application data. Write-through when reads immediately follow writes and a miss is expensive. Write-back for high-volume, loss-tolerant aggregates (view counts, rate counters). Write-around for write-heavy data that's rarely read back soon.",
+  "numbers": [
+    "Write-back batching: 10,000 counter increments/s flushed every second as aggregated updates per key can turn into a few hundred database writes/s instead of 10,000."
+  ],
+  "pitfalls": [
+    "Write-back for financial or order data, losing writes on a cache node failure.",
+    "Update-on-write races: two writers interleave and the cache ends up with the older value.",
+    "Write-through for data that's rarely read, filling the cache with cold entries.",
+    "Forgetting that the cache and the database can't be updated atomically; design for brief inconsistency."
+  ],
+  "followups": [
+    {
+      "q": "Why delete instead of update on write?",
+      "a": "With concurrent writers, 'update database then set cache' can apply in a different order to each store, leaving stale data. Delete makes the next read load whatever is current."
+    },
+    {
+      "q": "Can delete-on-write still leave stale data?",
+      "a": "Yes, a reader can load an old value just before the write and put it into the cache just after the delete. TTLs bound the staleness; versioned keys or leases close the gap further."
+    },
+    {
+      "q": "When would you use a read-through cache library?",
+      "a": "When you want the caching logic centralised (the cache loads from the store on miss), which simplifies application code but couples the cache to the data source."
+    }
+  ],
+  "example": "A social app keeps post view counts with write-back: increments go to Redis and are flushed every 5 seconds, accepting the loss of a few seconds of counts on failure. Post content uses cache-aside: edits update Postgres and delete the cached post.",
+  "related": [
+    "design-cache-invalidation-rules-not",
+    "should-cache-client-edge-service",
+    "handle-cache-stampede-thundering-herd"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    },
+    {
+      "title": "Nishtala et al.: Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  ]
+}

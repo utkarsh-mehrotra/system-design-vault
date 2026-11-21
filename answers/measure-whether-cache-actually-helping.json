@@ -1,0 +1,71 @@
+{
+  "thesis": "A cache helps if it reduces user latency or origin cost enough to justify its cost and complexity. Measure hit ratio by key class, latency with and without hits, origin load saved, evictions, and cost per hit. A high hit ratio on cheap reads can still be pointless.",
+  "pitch": "I'd measure outcomes, not just hit ratio. Per key class, record hit ratio and the latency of hits versus misses, which tells you the latency saved per hit. Compare origin load, database queries or CPU, against what it would be without the cache, which you can estimate from misses plus hits that would have gone through. Track eviction rate and memory usage: high evictions with a low hit ratio means the cache is too small or the access pattern has a long tail. Then cost: cache cluster cost versus database capacity saved. And complexity cost: staleness bugs and invalidation code. Sometimes the answer is that the cache isn't helping: the query was already fast, or the keys are too diverse to ever hit. A clean experiment is to bypass the cache for a small percentage of traffic and compare latency and origin load directly.",
+  "points": [
+    {
+      "h": "Hit ratio per key class",
+      "d": "An overall hit ratio hides that some key classes hit 99% and others 5%. Break it down by key prefix or data type."
+    },
+    {
+      "h": "Latency saved",
+      "d": "Measure p50 and p99 for hits and misses. If misses take 3 ms and hits 1 ms, the cache saves little; if misses take 300 ms, it matters a lot."
+    },
+    {
+      "h": "Origin load saved",
+      "d": "Database queries or CPU avoided. This is often the real value: the database can be smaller or survive peaks."
+    },
+    {
+      "h": "Evictions and memory",
+      "d": "High eviction rates with low hit ratio suggest the cache is too small or caching the wrong things. Look at time-to-eviction versus time-to-reuse."
+    },
+    {
+      "h": "Cost per hit",
+      "d": "Cache infrastructure cost divided by hits, compared with the cost of serving those reads from the origin."
+    },
+    {
+      "h": "Bypass experiment",
+      "d": "Route a small percentage of requests around the cache and compare user latency and origin load. It gives a direct counterfactual."
+    },
+    {
+      "h": "Complexity and correctness cost",
+      "d": "Count staleness incidents and invalidation code. A cache that saves little but causes bugs should go."
+    }
+  ],
+  "decision": "Keep caches that measurably reduce user latency or origin capacity needs. Remove or shrink caches for already-fast queries or key classes with persistently low hit ratios.",
+  "numbers": [
+    "Expected latency = hit ratio × hit latency + (1 − hit ratio) × miss latency. At 90% hits, 1 ms hits and 50 ms misses: 0.9 + 5 = 5.9 ms average, versus 50 ms without the cache.",
+    "With 3 ms misses, the same 90% hit ratio gives 1.2 ms vs 3 ms: probably not worth a cluster."
+  ],
+  "pitfalls": [
+    "Celebrating a 95% hit ratio on data that was cheap to fetch anyway.",
+    "Measuring only average latency and missing that misses dominate p99.",
+    "Ignoring evictions caused by a few large values.",
+    "Keeping a cache because removing it feels risky, without data."
+  ],
+  "followups": [
+    {
+      "q": "Hit ratio dropped from 90% to 60% overnight. What do you check?",
+      "a": "A deploy that changed key construction, a new traffic pattern (crawler, new feature), memory pressure causing evictions, or a cache node failure that remapped keys."
+    },
+    {
+      "q": "How do you size a cache?",
+      "a": "From the working set: measure how many distinct keys are reused within the TTL and their size; plot hit ratio against cache size using a replay or simulation of access logs."
+    },
+    {
+      "q": "Should every service have a cache?",
+      "a": "No. Add one when measurements show expensive repeated reads; otherwise it's extra failure modes for little gain."
+    }
+  ],
+  "example": "A team found their Redis cache for user settings had a 97% hit ratio, but the database query took 1.5 ms at p99 and the cache hit 0.8 ms. They removed the cache, deleted the invalidation code and saw no change in user latency.",
+  "related": [
+    "should-cache-client-edge-service",
+    "design-cache-invalidation-rules-not",
+    "design-metrics-actually-tell-me"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    }
+  ]
+}

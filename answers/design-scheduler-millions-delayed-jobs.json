@@ -1,0 +1,76 @@
+{
+  "thesis": "Store jobs by due time in time-bucketed, sharded storage; have workers claim due jobs with leases; execute at least once and make jobs idempotent; and design explicitly for clock skew and catching up after an outage.",
+  "pitch": "Millions of delayed jobs a day is tens to hundreds per second on average, with peaks, so throughput isn't the hard part; correctness and recovery are. I'd store each job with its due time, partitioned by shard and time bucket, say per minute, so finding due jobs is a cheap range scan rather than scanning everything. A poller per shard, with one active owner per shard enforced by a lease, moves due jobs into a ready queue, or workers claim them directly by atomically setting a lease with an expiry. Workers execute and mark done; if a worker dies, the lease expires and the job is reclaimed, so execution is at least once and jobs must be idempotent. Clocks: use the database's or coordinator's time, not each worker's, and tolerate small skew. After an outage there's a backlog of overdue jobs, so catch-up must be rate-limited and prioritised, with a policy for jobs that are now too late to matter.",
+  "points": [
+    {
+      "h": "Storage by due time",
+      "d": "Index or partition by (shard, due_time). Time buckets (per minute) make 'what's due now' a small range query. Old buckets are dropped once processed."
+    },
+    {
+      "h": "Sharding for scale",
+      "d": "Hash job id into N shards; each shard has one active poller at a time, which avoids duplicate polling and contention."
+    },
+    {
+      "h": "Claim with leases",
+      "d": "A worker atomically marks a job claimed with a lease expiry (conditional update). If it doesn't finish in time, another worker can reclaim it."
+    },
+    {
+      "h": "At-least-once, idempotent jobs",
+      "d": "Leases can expire while a slow worker still runs, so jobs may run twice. Use idempotency keys or check-and-set in the job's own effects."
+    },
+    {
+      "h": "Clock skew",
+      "d": "Use one time source (the database's now()) for due checks and lease expiry. Allow a small tolerance; don't depend on second-level precision across machines."
+    },
+    {
+      "h": "Catch-up after an outage",
+      "d": "Rate-limit the backlog, process the most urgent or oldest first, and define expiry rules (for example skip reminders more than 1 hour late)."
+    },
+    {
+      "h": "Observability",
+      "d": "Metrics on scheduling lag (actual start minus due time), backlog per shard, failures and retries."
+    }
+  ],
+  "decision": "For millions of jobs a day, a relational or key-value store with time-bucketed indexes and leases is enough; reach for dedicated workflow engines (Temporal, etc.) when jobs have multi-step state and long durations. Use broker delay features only for short delays within their limits.",
+  "numbers": [
+    "Load: 5 million jobs/day ≈ 58 jobs/s average; with a 10x peak at certain times (for example the top of the hour), plan for around 600 jobs/s.",
+    "Storage: 5 million jobs × 1 KB = 5 GB/day; with 7-day retention of completed jobs, about 35 GB."
+  ],
+  "pitfalls": [
+    "Polling a single table with 'WHERE due_time <= now()' and no partitioning, which slows as the table grows.",
+    "Multiple pollers per shard grabbing the same jobs.",
+    "Non-idempotent jobs running twice after a lease expiry.",
+    "Releasing a huge backlog all at once after an outage, overloading downstream services."
+  ],
+  "followups": [
+    {
+      "q": "Many jobs are due at exactly 09:00. How do you avoid a thundering herd?",
+      "a": "Spread them with small jitter if the use case allows, rate-limit execution, and pre-load the bucket into the ready queue slightly ahead of time."
+    },
+    {
+      "q": "How do you cancel or reschedule a job?",
+      "a": "Update its due time or status by job id; the poller only picks jobs in 'scheduled' status, and workers re-check status before executing."
+    },
+    {
+      "q": "Why not just use Kafka with delayed delivery?",
+      "a": "Kafka has no native per-message delay; you'd build delay topics or a scheduler anyway. Some queues (SQS) support delays only up to a limit (15 minutes), not days."
+    }
+  ],
+  "example": "A lending platform schedules 4 million repayment reminders and retries per day. Jobs are stored in Postgres partitioned by day with an index on (shard, due_time); 32 shard pollers move due jobs into a queue; workers use the reminder id as an idempotency key with the SMS provider. After a 40-minute outage, catch-up ran at 3x normal rate and skipped reminders more than 2 hours late.",
+  "related": [
+    "track-status-long-running-jobs",
+    "raft-paxos-quorums-gossip-appear",
+    "build-idempotency-write-api-clients",
+    "handle-cache-stampede-thundering-herd"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Distributed periodic scheduling with Cron",
+      "url": "https://sre.google/sre-book/distributed-periodic-scheduling/"
+    },
+    {
+      "title": "AWS SQS documentation: Delay queues",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-delay-queues.html"
+    }
+  ]
+}

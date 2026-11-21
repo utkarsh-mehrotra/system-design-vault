@@ -1,0 +1,75 @@
+{
+  "thesis": "Treat event schemas as public contracts: register them, enforce a compatibility rule in CI and at publish time, make additive changes by default, and write consumers as tolerant readers. Breaking changes get a new event type or topic with a deprecation window, informed by a list of who consumes what.",
+  "pitch": "Events outlive the code that produced them, and producers often don't know all consumers. So I'd use a schema registry with Avro, Protobuf or JSON Schema and a compatibility mode, usually backward or full, checked in CI and enforced when producers register a schema. Safe changes: adding optional fields with defaults, adding new event types. Unsafe changes: removing or renaming fields, changing types, or changing meaning. Consumers ignore unknown fields and handle missing optional ones. When a breaking change is truly needed, I'd publish a new version as a new event type or topic, dual-publish for a period, track which consumers have migrated, and retire the old one on a date. Semantic changes are the sneaky ones: same field, different meaning, such as amount switching from pounds to pence, which no schema check catches, so they also need a new field name.",
+  "points": [
+    {
+      "h": "Schema registry with compatibility",
+      "d": "Producers register schemas; the registry rejects changes that violate the configured compatibility (backward, forward or full)."
+    },
+    {
+      "h": "Additive by default",
+      "d": "New optional fields with defaults are safe. Never remove, rename or change the type of a field consumers may read."
+    },
+    {
+      "h": "Tolerant readers",
+      "d": "Consumers ignore unknown fields, tolerate missing optional fields, and handle unknown enum values with a safe default."
+    },
+    {
+      "h": "Compatibility checks in CI",
+      "d": "Fail the build if a schema change breaks compatibility, before it ever reaches production."
+    },
+    {
+      "h": "Breaking changes as new versions",
+      "d": "New event type or topic (OrderPlacedV2), dual-publish during migration, then retire the old one."
+    },
+    {
+      "h": "Know your consumers",
+      "d": "Maintain an inventory of consumer groups per topic and their owners, so deprecation is communicated and tracked."
+    },
+    {
+      "h": "Semantic changes need new names",
+      "d": "Changing units, meaning or business rules of an existing field breaks consumers silently. Add a new field instead."
+    }
+  ],
+  "decision": "Backward or full compatibility enforced by a registry for all shared topics. Additive evolution for most changes; versioned new types for breaking ones, with dual-publishing and a dated deprecation.",
+  "numbers": [
+    "Deprecation window example: dual-publish for at least one full release cycle of the slowest consumer team, often 1–3 months for internal consumers."
+  ],
+  "pitfalls": [
+    "Renaming a field because it reads better, breaking every consumer.",
+    "Strict deserialisation that rejects unknown fields.",
+    "Changing the meaning or units of an existing field.",
+    "Deleting the old topic before all consumers have moved, with no inventory to check."
+  ],
+  "followups": [
+    {
+      "q": "Backward vs forward compatibility?",
+      "a": "Backward: new readers can read old data, so consumers upgrade first. Forward: old readers can read new data, so producers can upgrade first. Full means both; it's the safest for independently deployed teams."
+    },
+    {
+      "q": "How do you replay old events with a new schema?",
+      "a": "The registry stores every version; consumers deserialise with the writer's schema and project into their current model, with defaults for added fields."
+    },
+    {
+      "q": "JSON without a registry?",
+      "a": "Possible with JSON Schema and contract tests, but enforcement is weaker. At least validate in CI and in the producer, and version event types explicitly."
+    }
+  ],
+  "example": "The order service needed to split 'address' into structured fields. It added the new fields alongside the old string, consumers migrated over six weeks tracked via the consumer inventory, and the old field was deprecated, never repurposed.",
+  "related": [
+    "version-public-api-cannot-force",
+    "design-backward-compatibility-schemas-change",
+    "poison-message-blocks-partition-design",
+    "plan-rollback-release-has-already"
+  ],
+  "sources": [
+    {
+      "title": "Confluent documentation: Schema evolution and compatibility",
+      "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+    },
+    {
+      "title": "Martin Fowler: Tolerant reader",
+      "url": "https://martinfowler.com/bliki/TolerantReader.html"
+    }
+  ]
+}

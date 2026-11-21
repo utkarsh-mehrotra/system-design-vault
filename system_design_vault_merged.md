@@ -601,21 +601,181 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### Caching strategy
 23. **Where should I cache: client, edge, service, or DB layer?** [ref · Fundamental · Caching, Latency]
-   - Closer to the user means lower latency and weaker control over invalidation. Match the layer to data volatility and sharing: edge for public static, service for computed results, DB layer for hot rows.
+   - **Thesis:** Cache as close to the user as the data's sharing and freshness allow. The closer the cache, the bigger the latency win and the weaker your control over invalidation, so match each layer to how volatile and how shared the data is.
+   - **60-second answer:** I'd walk the layers. The client, meaning the browser or app, is best for per-user data and static assets with long cache lifetimes and versioned file names; it removes requests entirely but you can't invalidate it, so you rely on short TTLs or versioning. The edge or CDN is best for public or per-region content shared by many users, like images, scripts and catalogue pages, with TTLs, purge APIs and stale-while-revalidate. The service-side cache, Redis or Memcached, is best for computed results and hot objects shared across instances, where you control invalidation precisely. In-process caches are the fastest but per instance, fine for small, slow-changing reference data. The database's own buffer cache already holds hot pages; a cache in front helps when queries are expensive, not just when rows are hot. So the choice is driven by who shares the data, how stale it can be, and whether you need to invalidate it on demand.
+   - **Key points:**
+     1. **Client cache.** HTTP caching headers (Cache-Control, ETag) and app storage. Zero network cost on hits. Use content hashes in asset URLs so you can cache 'forever' and still deploy changes.
+     2. **Edge / CDN.** Shared across users in a region, absorbs most traffic for public content, and protects the origin. Supports TTLs, purges and serving stale content when the origin is down.
+     3. **Service-side shared cache.** Redis or Memcached for computed results, sessions, and hot objects. Precise invalidation and data structures, at the cost of a network hop and another system to run.
+     4. **In-process cache.** Fastest (no network), but duplicated per instance and inconsistent across them. Good for reference data with short TTLs.
+     5. **Database layer.** Buffer pools and query caches. Materialised views for expensive aggregations. A separate cache helps when the work, not the I/O, is expensive.
+     6. **Choose by sharing and volatility.** Personal and stable: client. Public and stable: edge. Shared and changing: service cache with invalidation. Highly volatile or must be correct: maybe don't cache.
+   - **When to choose what:** Layer them: versioned static assets at client and edge with long TTLs; public pages at the edge with short TTLs and stale-while-revalidate; computed and per-user data in a service cache; nothing cached that must be strictly current (balances used for decisions).
+   - **Numbers:**
+     - Latency intuition: client hit ~0 ms, edge hit typically tens of milliseconds closer than origin, service cache hit around a millisecond in-zone, in-process hit microseconds.
+   - **Pitfalls:**
+     - Caching personalised responses at the edge without varying on user, leaking one user's page to another.
+     - Long client TTLs on non-versioned URLs, so users keep stale code after a deploy.
+     - Caching everything in-process across 100 instances, multiplying memory and staleness.
+     - Caching data used for correctness decisions.
+   - **Follow-ups:**
+     - _How do you cache personalised pages?_ Cache the shared shell at the edge and fetch personal fragments separately, or use edge logic that varies by a coarse segment instead of individual user.
+     - _What does stale-while-revalidate give you?_ The cache serves a slightly stale response immediately while fetching a fresh one in the background, hiding origin latency and smoothing load.
+     - _How do you invalidate CDN content quickly?_ Purge APIs by URL or tag (surrogate keys), or version the URL so new content has a new key.
+   - **Example:** A product catalogue serves images and scripts from a CDN with year-long TTLs and hashed file names, product pages at the edge with a 60-second TTL and stale-while-revalidate, prices from a Redis cache invalidated on price change, and the cart directly from the database.
+   - **Sources:** [MDN: HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching); [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/)
 24. **How do I pick between write-through, write-back, and write-around caching?** [ref · Fundamental · Caching]
-   - Write-through keeps cache and store aligned at write cost. Write-back is fast but risks loss on cache failure. Write-around avoids polluting the cache with data that is rarely read.
+   - **Thesis:** Write-through updates cache and store together, keeping them aligned at the cost of write latency. Write-back acknowledges after updating the cache and writes the store later: fast, but risks loss. Write-around writes only to the store and lets reads populate the cache, avoiding pollution with rarely read data. Most application caches use cache-aside with write-around plus invalidation.
+   - **60-second answer:** The question is what happens on a write. Write-through: write to the store and the cache synchronously, so reads right after a write hit a fresh cache; writes are slower and you may cache data nobody reads. Write-back, or write-behind: write to the cache, acknowledge, and flush to the store asynchronously, which is great for write-heavy, loss-tolerant workloads like counters and metrics but dangerous for anything you can't lose, because a cache failure loses unflushed writes. Write-around: write only to the store, and the next read misses and loads it; best when written data is often not read soon, avoiding cache churn. In practice, for most services I'd use cache-aside: read from cache, on miss load from the database and populate; on write, update the database and delete the cache key, so the next read loads fresh data.
+   - **Key points:**
+     1. **Write-through.** Synchronous write to store and cache. Reads after writes are fresh. Write latency includes both, and rarely read data still occupies cache.
+     2. **Write-back (write-behind).** Write to cache, acknowledge, persist later in batches. Lowest write latency and fewer store writes. Data loss if the cache fails before flushing; ordering and durability need care.
+     3. **Write-around.** Write to the store only. The cache fills on read. Avoids polluting the cache with write-once data; first read after a write is a miss.
+     4. **Cache-aside, the common default.** Application owns caching: read-through on miss, and on write update the database then delete (not update) the cache key.
+     5. **Delete rather than update on write.** Updating the cache on write can race with concurrent writes and leave a stale value. Deleting forces a fresh load; combined with TTLs, it bounds staleness.
+     6. **Durability decides write-back.** Use write-back only when losing a window of writes is acceptable or the cache itself is durable and replicated.
+   - **When to choose what:** Cache-aside with delete-on-write for most application data. Write-through when reads immediately follow writes and a miss is expensive. Write-back for high-volume, loss-tolerant aggregates (view counts, rate counters). Write-around for write-heavy data that's rarely read back soon.
+   - **Numbers:**
+     - Write-back batching: 10,000 counter increments/s flushed every second as aggregated updates per key can turn into a few hundred database writes/s instead of 10,000.
+   - **Pitfalls:**
+     - Write-back for financial or order data, losing writes on a cache node failure.
+     - Update-on-write races: two writers interleave and the cache ends up with the older value.
+     - Write-through for data that's rarely read, filling the cache with cold entries.
+     - Forgetting that the cache and the database can't be updated atomically; design for brief inconsistency.
+   - **Follow-ups:**
+     - _Why delete instead of update on write?_ With concurrent writers, 'update database then set cache' can apply in a different order to each store, leaving stale data. Delete makes the next read load whatever is current.
+     - _Can delete-on-write still leave stale data?_ Yes, a reader can load an old value just before the write and put it into the cache just after the delete. TTLs bound the staleness; versioned keys or leases close the gap further.
+     - _When would you use a read-through cache library?_ When you want the caching logic centralised (the cache loads from the store on miss), which simplifies application code but couples the cache to the data source.
+   - **Example:** A social app keeps post view counts with write-back: increments go to Redis and are flushed every 5 seconds, accepting the loss of a few seconds of counts on failure. Post content uses cache-aside: edits update Postgres and delete the cached post.
+   - **Sources:** [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/); [Nishtala et al.: Scaling Memcache at Facebook (NSDI 2013)](https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala)
 25. **How do I design cache invalidation rules that do not become a nightmare?** [ref · Intermediate · Caching]
-   - Prefer TTLs with jitter plus event-driven invalidation for the few cases that need it. Version keys instead of deleting, keep key construction in one place, and accept bounded staleness explicitly.
+   - **Thesis:** Make staleness a decision, not an accident: give every cached item a TTL with jitter that states how stale it may be, add event-driven invalidation only for data that must change faster than the TTL, prefer versioned keys over deletes, and build keys in one place.
+   - **60-second answer:** Invalidation gets nightmarish when it's ad hoc: every code path that writes data has to remember every cache key derived from it. I'd simplify with four rules. First, every entry has a TTL that encodes acceptable staleness for that data, with jitter so entries don't expire together. Second, for data that must update quickly, like prices or permissions, invalidate on change via events, so the service that owns the data publishes a change event and cache owners react, rather than writers calling caches directly. Third, where possible use versioned keys: include a version or updated-at in the key so a change creates a new key and old entries simply age out, which avoids races between delete and refill. Fourth, centralise key construction in one module so the mapping from data to keys is in one place. And I'd accept bounded staleness explicitly in product requirements.
+   - **Key points:**
+     1. **TTL as a staleness contract.** Choose a TTL per data type from how stale it may be (catalogue description: an hour; price: a minute; permissions: seconds). Every entry has one, as a safety net.
+     2. **Jitter.** Randomise TTLs (for example ±10%) so entries created together don't expire together and cause a load spike.
+     3. **Event-driven invalidation for fast-changing data.** The owning service publishes change events; cache layers subscribe and delete or refresh affected keys. Writers don't need to know about every cache.
+     4. **Versioned keys.** Key includes a version (product:123:v42). Updates bump the version; readers use the new key, and old entries expire. No delete-refill race.
+     5. **One place for key construction.** A shared module builds keys from inputs, so invalidation logic and read logic agree, and you can find every key derived from an entity.
+     6. **Bounded staleness is a product decision.** Agree how stale each view may be, write it down, and monitor it. Then cache behaviour is testable.
+   - **When to choose what:** TTL plus jitter for everything; event-driven invalidation for the few data types with tight freshness needs; versioned keys where races matter; don't cache data where any staleness is unacceptable.
+   - **Numbers:**
+     - Jitter example: a 300-second TTL with ±30 seconds of jitter spreads expirations of a batch of keys over a minute instead of one instant.
+   - **Pitfalls:**
+     - No TTL on entries 'because we invalidate', so a missed invalidation means stale data forever.
+     - Writers calling cache deletes for keys they know about, missing derived keys (lists, aggregates).
+     - Identical TTLs on a batch of keys, causing synchronised expiry.
+     - Key construction duplicated across services with slight differences.
+   - **Follow-ups:**
+     - _How do you invalidate derived data like a list of a user's posts?_ Either keep short TTLs on lists, invalidate list keys on post change events, or store lists as ids and fetch items separately so only item caches need invalidation.
+     - _What if the invalidation event is lost?_ The TTL bounds the damage. For critical data, use versioned keys or check a version stamp on read.
+     - _How do you test invalidation?_ Integration tests that write through the real path and assert the next read reflects it, plus monitoring of a sample of cache entries against the source.
+   - **Example:** A marketplace caches listings for 10 minutes with jitter, but prices use versioned keys bumped by a PriceChanged event, so price updates appear within a second while descriptions can lag.
+   - **Sources:** [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/); [Nishtala et al.: Scaling Memcache at Facebook (NSDI 2013)](https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala)
 26. **How do I handle cache stampede and thundering herd?** [ref · Intermediate · Caching, Reliability]
-   - Request coalescing so one caller rebuilds, stale-while-revalidate, TTL jitter, early refresh, and a lock or lease with a short timeout.
+   - **Thesis:** A stampede happens when a hot entry expires and many requests rebuild it at once. Make sure only one caller rebuilds (request coalescing or a lease), let others use stale data while it does (stale-while-revalidate), and avoid synchronised expiry (jitter, early refresh).
+   - **60-second answer:** When a popular key expires, every concurrent request misses and goes to the database at the same moment, which can take the database down and keep the cache empty. I'd layer defences. Request coalescing: within a process, concurrent misses for a key wait on one in-flight load, often called single-flight. Across processes, a short lease or lock in the cache, as described in Facebook's memcache paper, where the first misser gets the right to rebuild and others wait briefly or get the stale value. Stale-while-revalidate: keep the old value past its soft TTL and serve it while one caller refreshes in the background. Probabilistic early refresh: as an entry nears expiry, a small and increasing fraction of requests refresh it early, so it rarely expires under load. And jitter on TTLs so a batch of keys doesn't expire together. For extreme hot keys, pre-warm or refresh them on a schedule.
+   - **Key points:**
+     1. **Understand the failure.** Hot key expires, N concurrent requests miss, N identical database queries run. If the query is slow, the herd grows while it runs.
+     2. **In-process request coalescing.** Concurrent requests for the same key share one in-flight load (single-flight). Cuts the herd to one per instance.
+     3. **Distributed leases or locks.** First miss acquires a short-lived lease in the cache; others wait briefly, retry, or receive stale data. The lease must expire in case the holder dies.
+     4. **Stale-while-revalidate.** Store a soft expiry and a hard expiry. After soft expiry, serve stale and refresh in the background; only after hard expiry do callers block.
+     5. **Probabilistic early expiration.** Each read near expiry refreshes with a probability that rises as expiry approaches, so refresh happens before expiry, spread across time.
+     6. **Jitter and pre-warming.** Randomised TTLs avoid mass expiry; scheduled refresh of known hot keys keeps them always warm.
+     7. **Protect the origin anyway.** Concurrency limits on the expensive query path, so even a stampede that gets through can't overwhelm the database.
+   - **When to choose what:** Single-flight in every service that caches; stale-while-revalidate for hot, tolerably stale data; distributed leases for very expensive rebuilds; jitter always.
+   - **Numbers:**
+     - Herd size: a key read 5,000 times/s with a 200 ms rebuild query sees about 1,000 concurrent misses without coalescing; with single-flight across 20 instances, 20; with a distributed lease, 1.
+   - **Pitfalls:**
+     - Locks without expiry: a crashed holder leaves the key locked and everyone waiting.
+     - Waiting callers with no timeout, piling up behind a slow rebuild.
+     - Coalescing only in-process while running hundreds of instances.
+     - Cold start after a cache flush or failover with no warming plan.
+   - **Follow-ups:**
+     - _The whole cache cluster restarts. How do you avoid a database meltdown?_ Warm the hottest keys before taking traffic, ramp traffic gradually, keep coalescing and concurrency limits on the database path, and consider a replicated cache so a node loss doesn't empty everything.
+     - _How does stale-while-revalidate interact with correctness?_ It serves data up to soft TTL plus refresh time old. Only use it for data where that's acceptable.
+     - _What about negative caching?_ Cache 'not found' results briefly too, or a flood of requests for a missing key hammers the database.
+   - **Example:** A homepage feed cached for 60 seconds caused a database spike every minute at peak. Adding single-flight, a 10-second stale-while-revalidate window, and ±10% TTL jitter flattened database load to one rebuild per key per minute.
+   - **Sources:** [Nishtala et al.: Scaling Memcache at Facebook (leases)](https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala); [RFC 5861: HTTP Cache-Control extensions for stale content](https://www.rfc-editor.org/rfc/rfc5861)
 27. **What is my caching story for hot keys and large objects?** [ref · Intermediate · Caching, Scaling]
-   - Replicate hot keys across nodes or add a local near-cache, split large values, compress, and cap object size. Watch for one key saturating one cache shard.
+   - **Thesis:** Hot keys concentrate load on one cache shard; large objects waste memory, bandwidth and latency. Spread hot keys (local near-caches, replicas of the key) and break up or shrink large values (split, compress, cap size), and watch per-shard load so one key can't saturate one node.
+   - **60-second answer:** In a sharded cache, each key lives on one node, so a very hot key, like a celebrity profile or a flash-sale product, can saturate that node's CPU or network while the rest idle. I'd first add a small in-process near-cache with a short TTL in each service instance, which absorbs most reads for the hottest keys. For extreme cases, replicate the key: store it under N suffixed keys on different shards and read a random one, accepting slightly more work on updates. For large objects, the problems are memory pressure, eviction of many small useful keys, slow network transfer and serialisation, and blocking on single-threaded caches like Redis. So I'd cap object size, compress, split large values into chunks or store only the frequently used parts, and keep really large blobs in object storage with the cache holding metadata or a pointer. And monitor per-shard ops and bandwidth plus a top-keys report.
+   - **Key points:**
+     1. **Detect hot keys.** Per-shard metrics (ops/s, network, CPU) and top-key sampling. One shard far above the others usually means a hot key.
+     2. **Near-cache in each instance.** A tiny in-process cache with a TTL of a few seconds for the hottest keys removes most network reads. Accept a few seconds of staleness.
+     3. **Replicate hot keys.** Write key:1..key:N across shards; readers pick one at random. Updates write all copies or use short TTLs.
+     4. **Cap and compress large values.** Set a maximum size; compress (often a big win for JSON); avoid storing large blobs that are rarely read in full.
+     5. **Split or reshape large objects.** Store parts separately (profile summary vs full history) so common reads fetch only what they need.
+     6. **Large blobs belong elsewhere.** Images, documents and big payloads go to object storage or a CDN; cache a pointer or metadata.
+     7. **Mind single-threaded caches.** In Redis, a command on a very large value or a huge collection blocks other requests on that node.
+   - **When to choose what:** Near-cache for read-hot keys with tolerable staleness; key replication for extreme cases; size caps, compression and reshaping for large values; object storage for blobs.
+   - **Numbers:**
+     - Network math: a 500 KB value read 2,000 times/s is 1 GB/s from one shard, enough to saturate a typical node's network. A near-cache with a 2-second TTL across 50 instances cuts that to about 25 reads/s.
+     - Compression: JSON often compresses several times over with fast codecs, trading a little CPU for memory and bandwidth.
+   - **Pitfalls:**
+     - Assuming consistent hashing spreads load; it spreads keys, not traffic to one key.
+     - Storing multi-megabyte objects in Redis and blocking the event loop.
+     - Near-caches with long TTLs, serving stale data for minutes.
+     - Large values evicting many small hot ones under memory pressure.
+   - **Follow-ups:**
+     - _How do you update a replicated hot key consistently?_ Write all replicas (or bump a version used in the key) and rely on short TTLs to cover any copy that missed the update.
+     - _How do you find big keys in Redis?_ Use sampling tools such as redis-cli --bigkeys or memory usage commands, and enforce size limits in the client library.
+     - _When is a near-cache dangerous?_ For data that must be consistent across instances, such as permissions just revoked. Keep TTLs very short or invalidate via events.
+   - **Example:** During a flash sale one product key took 40% of all cache traffic and saturated a shard. A 1-second near-cache in each API instance dropped that shard's load by 95%; product detail objects were also split so the sale page fetched a 4 KB summary instead of a 300 KB document.
+   - **Sources:** [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/); [Redis documentation: Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/)
 28. **How do I measure whether a cache is actually helping?** [ref · Fundamental · Caching, Observability]
-   - Hit ratio by key class, latency with and without, origin load saved, eviction rate, and cost per hit. A high hit ratio on cheap reads can still be pointless.
+   - **Thesis:** A cache helps if it reduces user latency or origin cost enough to justify its cost and complexity. Measure hit ratio by key class, latency with and without hits, origin load saved, evictions, and cost per hit. A high hit ratio on cheap reads can still be pointless.
+   - **60-second answer:** I'd measure outcomes, not just hit ratio. Per key class, record hit ratio and the latency of hits versus misses, which tells you the latency saved per hit. Compare origin load, database queries or CPU, against what it would be without the cache, which you can estimate from misses plus hits that would have gone through. Track eviction rate and memory usage: high evictions with a low hit ratio means the cache is too small or the access pattern has a long tail. Then cost: cache cluster cost versus database capacity saved. And complexity cost: staleness bugs and invalidation code. Sometimes the answer is that the cache isn't helping: the query was already fast, or the keys are too diverse to ever hit. A clean experiment is to bypass the cache for a small percentage of traffic and compare latency and origin load directly.
+   - **Key points:**
+     1. **Hit ratio per key class.** An overall hit ratio hides that some key classes hit 99% and others 5%. Break it down by key prefix or data type.
+     2. **Latency saved.** Measure p50 and p99 for hits and misses. If misses take 3 ms and hits 1 ms, the cache saves little; if misses take 300 ms, it matters a lot.
+     3. **Origin load saved.** Database queries or CPU avoided. This is often the real value: the database can be smaller or survive peaks.
+     4. **Evictions and memory.** High eviction rates with low hit ratio suggest the cache is too small or caching the wrong things. Look at time-to-eviction versus time-to-reuse.
+     5. **Cost per hit.** Cache infrastructure cost divided by hits, compared with the cost of serving those reads from the origin.
+     6. **Bypass experiment.** Route a small percentage of requests around the cache and compare user latency and origin load. It gives a direct counterfactual.
+     7. **Complexity and correctness cost.** Count staleness incidents and invalidation code. A cache that saves little but causes bugs should go.
+   - **When to choose what:** Keep caches that measurably reduce user latency or origin capacity needs. Remove or shrink caches for already-fast queries or key classes with persistently low hit ratios.
+   - **Numbers:**
+     - Expected latency = hit ratio × hit latency + (1 − hit ratio) × miss latency. At 90% hits, 1 ms hits and 50 ms misses: 0.9 + 5 = 5.9 ms average, versus 50 ms without the cache.
+     - With 3 ms misses, the same 90% hit ratio gives 1.2 ms vs 3 ms: probably not worth a cluster.
+   - **Pitfalls:**
+     - Celebrating a 95% hit ratio on data that was cheap to fetch anyway.
+     - Measuring only average latency and missing that misses dominate p99.
+     - Ignoring evictions caused by a few large values.
+     - Keeping a cache because removing it feels risky, without data.
+   - **Follow-ups:**
+     - _Hit ratio dropped from 90% to 60% overnight. What do you check?_ A deploy that changed key construction, a new traffic pattern (crawler, new feature), memory pressure causing evictions, or a cache node failure that remapped keys.
+     - _How do you size a cache?_ From the working set: measure how many distinct keys are reused within the TTL and their size; plot hit ratio against cache size using a replay or simulation of access logs.
+     - _Should every service have a cache?_ No. Add one when measurements show expensive repeated reads; otherwise it's extra failure modes for little gain.
+   - **Example:** A team found their Redis cache for user settings had a 97% hit ratio, but the database query took 1.5 ms at p99 and the cache hit 0.8 ms. They removed the cache, deleted the invalidation code and saw no change in user latency.
+   - **Sources:** [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/)
 
 ### Pagination
 29. **How do I design pagination for massive datasets efficiently?** [ref · Intermediate · Databases, Scaling]
-   - Keyset (cursor) pagination over offset, a stable sort key with a tiebreaker, bounded page size, and a plan for results that change between pages.
+   - **Thesis:** Use keyset (cursor) pagination: sort by a stable, indexed key with a unique tiebreaker and fetch rows after the last one seen. Offset pagination gets slower with every page and shifts when data changes. Bound page size and decide how results behave as data changes underneath.
+   - **60-second answer:** Offset pagination, LIMIT 50 OFFSET 100000, makes the database read and discard a hundred thousand rows to return fifty, so deep pages get slow, and if rows are inserted or deleted while a user pages, they see duplicates or miss items. Keyset pagination fixes both: order by an indexed column plus a unique tiebreaker, like (created_at, id), and ask for rows where (created_at, id) is less than the last row of the previous page, limit 50. Each page is an index range scan of fifty rows regardless of depth. I'd return an opaque cursor encoding the last key and the sort, so clients can't construct arbitrary positions and the server can change the encoding. Page size is capped. The trade-offs: no jumping to page 237, and total counts are expensive, so show approximate counts or 'more results' instead. For search engines, use their search-after or scroll mechanisms rather than deep from/size.
+   - **Key points:**
+     1. **Why offset hurts.** OFFSET N reads and discards N rows, so cost grows linearly with depth. Concurrent inserts and deletes shift rows between pages, causing duplicates or skips.
+     2. **Keyset pagination.** WHERE (sort_key, id) < (:last_sort, :last_id) ORDER BY sort_key DESC, id DESC LIMIT :n. Uses the index directly; every page costs about the same.
+     3. **Stable sort with a tiebreaker.** The sort must be deterministic: add the primary key as a tiebreaker so rows with equal sort values don't flip between pages.
+     4. **Opaque cursors.** Encode the last key (and filters) into a signed or encoded token. Clients pass it back; the server can change the format without breaking them.
+     5. **Bounded page size.** Cap the limit (for example 100) to protect the database and response size.
+     6. **Counts and jumping.** Exact totals over huge filtered sets are expensive; use estimates, cached counts, or 'load more'. Arbitrary page jumps aren't supported; offer filters and search instead.
+     7. **Changing data.** Keyset pagination naturally shows new items only at the start; items edited to move in the sort order may appear twice or be skipped. Snapshot reads are an option if exact consistency matters.
+   - **When to choose what:** Keyset pagination for any large or growing dataset and all APIs. Offset only for small, bounded result sets or admin tools where deep pages are rare. Search engines: search_after with a point-in-time view for deep result sets.
+   - **Numbers:**
+     - Depth cost: page 2,000 at 50 per page with OFFSET reads about 100,000 rows; keyset reads about 50 rows via the index for any page.
+   - **Pitfalls:**
+     - Sorting by a non-unique column without a tiebreaker.
+     - No index matching the sort and filter columns, so keyset pagination still scans.
+     - Exposing raw keys as cursors and letting clients craft them.
+     - Computing COUNT(*) over millions of rows on every page request.
+   - **Follow-ups:**
+     - _How do you support both forward and backward paging?_ Store both first and last keys in the cursor and flip the comparison and sort direction for previous pages, then reverse the results.
+     - _What if the user changes filters or sort?_ The cursor encodes them; a mismatch invalidates the cursor and the client starts from the first page.
+     - _How do you export all rows of a huge table?_ Keyset iteration by primary key in batches, ideally from a replica or snapshot, not offset paging through an API.
+   - **Example:** A transactions API switched from offset to keyset pagination on (posted_at, id). Page latency at depth 10,000 went from 4 seconds to 15 ms, and clients stopped seeing duplicate transactions while new ones arrived.
+   - **Sources:** [Markus Winand: No offset (keyset pagination)](https://use-the-index-luke.com/no-offset); [Elasticsearch documentation: Paginate search results](https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html)
 
 ## Consistency & Transactions (10)
 
@@ -1136,44 +1296,247 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### Event-driven design
 49. **Event-driven or request-response for order placement? Decide and defend it.** [mine + ref · Fundamental · Messaging, Architecture]
-   - Customer needs an answer now, so the order write is synchronous. Downstream work (fulfilment, notifications) is asynchronous. Say where you need a durable event and where a call is enough.
-   - When producers should not wait or know about consumers, when work can be asynchronous, when many consumers need the same fact, or when you need replay. Not when the caller needs an immediate answer.
+   - **Thesis:** Both. The customer needs an answer now, so placing the order is a synchronous request that commits the order and returns its status. Everything that follows (fulfilment, notifications, loyalty points, analytics) reacts to an OrderPlaced event published reliably from that commit.
+   - **60-second answer:** I'd make the order write synchronous: validate the cart, check price and stock, authorise payment if that's part of placement, commit the order, and return an order id and status in one request. The customer gets a definite answer, and errors like out-of-stock or a declined card show immediately. In the same transaction I'd write an OrderPlaced event to an outbox, and everything downstream consumes it: warehouse fulfilment, confirmation email, loyalty, fraud review, analytics. That keeps the user-facing path short and dependent on only the services needed for the decision, while downstream consumers can be slow, fail or be added later without touching checkout. Where something downstream can still change the order, like fraud review cancelling it, the order has explicit states and the customer is notified when it changes.
+   - **Key points:**
+     1. **The decision is synchronous.** The customer needs to know immediately whether the order went through. Validation, pricing, stock reservation and payment authorisation produce that answer.
+     2. **Side effects are events.** Fulfilment, emails, loyalty, analytics and CRM don't affect the immediate answer. They subscribe to OrderPlaced and act independently.
+     3. **Publish reliably with an outbox.** Write the order and the event in one transaction, then relay the event. Never commit the order and then hope the publish succeeds.
+     4. **Minimise synchronous dependencies.** Every synchronous call on the order path adds latency and a way to fail. Keep only what's needed for the decision; use local data or cached reference data where possible.
+     5. **Explicit order states.** Placed, paid, fulfilling, shipped, cancelled. Asynchronous steps move the order between states and the customer can see where it is.
+     6. **Defend the trade-off.** Fully event-driven placement would mean the customer waits on a 'pending' screen for an unknown time. Fully synchronous would chain fulfilment and email into checkout and make it fragile.
+   - **When to choose what:** Synchronous for the steps that decide the order's success; events for everything after. If a downstream step can reverse the order, model it as a state change with customer notification rather than making it synchronous.
+   - **Numbers:**
+     - Latency budget example: placement path under 1 second at p99, including payment authorisation; downstream processing within seconds to minutes depending on the consumer.
+   - **Pitfalls:**
+     - Calling fulfilment, email and loyalty synchronously during checkout.
+     - Publishing the event outside the order transaction (dual write).
+     - Going fully async and leaving the customer unsure whether the order exists.
+     - Consumers that aren't idempotent, sending duplicate emails or double points on redelivery.
+   - **Follow-ups:**
+     - _What if stock reservation is in another service?_ Call it synchronously with a short timeout if the answer is needed before confirming, or accept the order optimistically and compensate (cancel and notify) if the reservation later fails. The business decides which experience is acceptable.
+     - _How do you handle payment that takes several seconds?_ Authorise synchronously if it fits the budget; otherwise accept the order as 'payment pending', return quickly, and notify on completion.
+     - _How do downstream teams get the data they need?_ The event carries the facts consumers commonly need (order id, items, amounts, customer id), with a versioned schema, so they don't call back into the order service for every event.
+   - **Example:** Checkout reserves stock and authorises payment synchronously, commits the order with an outbox event, and returns 'Order placed' in 700 ms. The warehouse, email service and loyalty service each consume OrderPlaced; when the email provider is down for an hour, orders keep flowing and emails catch up.
+   - **Sources:** [Martin Fowler: What do you mean by 'event-driven'?](https://martinfowler.com/articles/201701-event-driven.html); [microservices.io: Transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html)
    - _Also asked as:_ When do I choose event-driven over request-response?
 
 ### Delivery semantics
 50. **Exactly-once in practice: what do Kafka and Flink give you, and what do you still own?** [mine + ref · Advanced · Messaging]
-   - Idempotent producers, transactions, checkpointed state. The sink and any external side effect still need idempotency. Be precise: exactly-once processing, not exactly-once delivery.
-   - Assume at-least-once delivery and make consumers idempotent. Use transactional or idempotent producers and checkpointed processing where available, and note that external side effects need their own dedupe.
+   - **Thesis:** Kafka and Flink give exactly-once processing within their boundary: idempotent producers, transactions and checkpointed state make each record's effect on Kafka topics and Flink state happen once. Side effects outside that boundary (databases, APIs, emails) are still your job: make them idempotent or transactional with the checkpoint.
+   - **60-second answer:** Delivery over a network is at least once; what systems provide is exactly-once effect. Kafka's idempotent producer removes duplicates from producer retries per partition. Kafka transactions let a consume-transform-produce application atomically write output records and commit its consumer offsets, so downstream consumers reading with read_committed isolation see each result once. Flink checkpoints its state and source offsets consistently; on failure it rewinds to the last checkpoint and reprocesses, and its two-phase-commit sinks, including the Kafka sink, commit output only when a checkpoint completes. What you still own: any sink that isn't transactional with Flink or Kafka, such as a database write, an HTTP call to a partner, or an email. On replay after failure those happen again, so they need idempotency keys or upserts keyed by a deterministic id. Also, consumers reading with read_uncommitted see aborted data, and exactly-once adds latency, because output becomes visible only at transaction or checkpoint commit.
+   - **Key points:**
+     1. **Be precise about the claim.** Exactly-once processing (effects applied once) not exactly-once delivery. Records may be read and processed more than once internally; the system makes the visible result as if once.
+     2. **Kafka idempotent producer.** Producer id plus sequence numbers per partition let the broker discard duplicate writes from retries.
+     3. **Kafka transactions.** Atomically write to multiple partitions and commit consumer offsets. Consumers with read_committed see only committed transactions.
+     4. **Flink checkpoints.** Consistent snapshots of operator state and source positions. After a failure, the job restores state and replays input from the checkpointed offsets.
+     5. **Two-phase-commit sinks.** Flink sinks that support it pre-commit output during a checkpoint and commit when the checkpoint completes. Output visibility is tied to checkpoint frequency.
+     6. **What you still own.** External side effects: database writes, API calls, emails, payments. Make them idempotent (upsert by deterministic key, idempotency keys) because replay will repeat them.
+     7. **Costs.** Latency equal to checkpoint or transaction interval for visible output, more coordination overhead, and careful configuration (isolation level, transaction timeouts).
+   - **When to choose what:** Use Kafka transactions or Flink exactly-once for pipelines where Kafka-to-Kafka or Flink state correctness matters (aggregations, billing counts). For external sinks, rely on idempotent writes and treat the pipeline as at-least-once into them. If latency matters more than duplicates, at-least-once with idempotent consumers is simpler.
+   - **Numbers:**
+     - Visibility latency: with a 10-second checkpoint interval, transactional sink output appears in roughly 10-second steps; shortening the interval reduces latency but adds checkpoint overhead.
+   - **Pitfalls:**
+     - Claiming exactly-once end to end while the sink is a non-idempotent HTTP call.
+     - Downstream consumers using read_uncommitted and seeing aborted records.
+     - Transaction timeouts shorter than checkpoint intervals, causing aborted transactions and data loss or stalls.
+     - Using random ids generated during processing as idempotency keys; replay generates new ids. Keys must be deterministic from input.
+   - **Follow-ups:**
+     - _How do you write exactly-once into Postgres from Flink?_ Either a two-phase-commit sink that commits the database transaction on checkpoint completion, or idempotent upserts keyed by a deterministic id derived from the input, which is simpler and usually enough.
+     - _Does Kafka exactly-once cover consumers in other services?_ Only if they participate in the transaction or dedupe themselves. A normal consumer that writes to its own database must be idempotent.
+     - _What about sending emails from a stream?_ Emails can't be undone, so dedupe before sending: record the deterministic message id in a store and send with a provider idempotency key; accept a small risk window or confirm via provider status.
+   - **Example:** A billing pipeline aggregates usage events in Flink with exactly-once checkpoints and writes invoice line items into Kafka transactionally. The invoicing service consumes with read_committed and upserts line items by (customer, period, meter) so a replay never double-bills.
+   - **Sources:** [Apache Kafka documentation: Message delivery semantics](https://kafka.apache.org/documentation/#semantics); [Apache Flink blog: End-to-end exactly-once processing with Apache Kafka](https://flink.apache.org/2018/02/28/an-overview-of-end-to-end-exactly-once-processing-in-apache-flink-with-apache-kafka-too/)
    - _Also asked as:_ How do I handle exactly once versus at least once semantics in practice?
 
 ### Poison messages & dead letters
 51. **A poison message blocks a partition. Design the handling.** [mine + ref · Advanced · Messaging, Reliability]
-   - Bounded retries, retry topics with delay, dead-letter topic with context, alert on DLQ depth, and a safe replay tool. Decide when skipping is acceptable.
-   - Attempt counters, routing to a dead-letter destination after a limit, per-message isolation so one bad record does not block the stream, and alerts for investigation.
+   - **Thesis:** A poison message is one that fails every time. Don't let it block everything behind it: retry a bounded number of times, then move it aside to a retry or dead-letter topic with full context, keep the partition moving, alert on it, and provide a safe way to replay once fixed.
+   - **60-second answer:** In an ordered partition, a consumer that keeps failing on one message stops all progress for that partition, and lag climbs. I'd first separate transient from permanent failures: a timeout to a dependency is worth retrying; a deserialisation error or validation failure isn't. Transient failures get a few in-place retries with backoff, then move to a delayed retry topic, so the main partition continues. Permanent failures, or messages that exhaust retries, go to a dead-letter topic with the original payload, headers, error, stack trace, attempt count and source offset. The consumer commits past it and keeps going. I'd alert on DLQ arrivals, provide tooling to inspect, fix and replay messages from the DLQ back into the main flow, and decide whether skipping is acceptable: for strictly ordered entities, later messages for the same key may need to wait or be parked too.
+   - **Key points:**
+     1. **Classify failures.** Transient (timeouts, 503s, lock conflicts) vs permanent (schema errors, invalid data, bugs). Only transient failures deserve retries.
+     2. **Bounded in-place retries.** A few attempts with short backoff for transient errors. More than that stalls the partition.
+     3. **Retry topics with delay.** Move the message to a retry topic consumed after a delay (for example 1 minute, then 10, then 1 hour) so the main partition keeps flowing.
+     4. **Dead-letter topic with context.** Include the original payload and headers, error message, stack trace, attempt count, timestamps and source topic, partition and offset.
+     5. **Alert and own the DLQ.** DLQ arrivals are signals of bugs or bad data. Alert on rate and depth, assign ownership, and review regularly.
+     6. **Safe replay.** Tooling to replay selected DLQ messages after a fix, through the same idempotent consumer path, with rate limits.
+     7. **Ordering implications.** If later messages for the same key depend on the poisoned one, either park them too (per-key parking) or accept that they may be applied out of order. Decide per domain.
+   - **When to choose what:** Always have a dead-letter path for consumers of untrusted or evolving input. Use retry topics for transient failures in high-throughput streams. For strictly ordered domains, park per key rather than skipping silently.
+   - **Numbers:**
+     - Retry schedule example: 3 in-place attempts at 100 ms, 500 ms, 2 s; then retry topics at 1 min, 10 min, 1 h; then DLQ. Total time before DLQ about 71 minutes.
+   - **Pitfalls:**
+     - Infinite retries in place, stalling the partition for hours.
+     - Dead-lettering without context, so nobody can diagnose or replay.
+     - Nobody watching the DLQ, which silently accumulates lost business events.
+     - Skipping a message for an entity whose later messages depend on it, corrupting state.
+   - **Follow-ups:**
+     - _How do you find out whether a failure is permanent?_ By error type: deserialisation, schema and validation errors are permanent; network and dependency errors are usually transient. Unknown errors get limited retries then DLQ.
+     - _How do you park messages for one key without blocking the partition?_ Keep a 'parked keys' store; when a key is parked, route its subsequent messages to a parking topic until the poisoned one is resolved, then replay them in order.
+     - _What if thousands of messages hit the DLQ at once?_ That's an incident, likely a bad deploy or schema change. Pause consumers or roll back, fix, then replay in bulk with rate limits.
+   - **Example:** A schema change produced events with a missing required field. Consumers moved them to the DLQ with full context after one attempt, kept processing valid events, and paged the producing team. After the producer fix, a replay tool reprocessed the 18,000 dead-lettered events in 10 minutes.
+   - **Sources:** [Enterprise Integration Patterns: Dead letter channel](https://www.enterpriseintegrationpatterns.com/patterns/messaging/DeadLetterChannel.html); [Confluent: Error handling patterns for Apache Kafka applications](https://www.confluent.io/blog/error-handling-patterns-in-kafka/)
    - _Also asked as:_ How do I avoid processing the same event forever due to poison messages?
 52. **How do I design dead-letter queues and retry policies?** [ref · Intermediate · Messaging, Reliability]
-   - Bounded retries with backoff, delayed retry queues, a dead-letter queue carrying error context, alerting on its depth, and a safe replay path.
+   - **Thesis:** A retry policy decides which failures are worth trying again, how often and for how long; a dead-letter queue catches what's left so it isn't lost or blocking. Both need owners, alerts and a replay path, or they become a place where business events go to die.
+   - **60-second answer:** I'd define per consumer: which errors are retryable, the backoff schedule with jitter, the maximum attempts or total time, and what happens after, which is a move to a dead-letter queue. Retries should be delayed rather than immediate, using the broker's visibility timeout or delay features or separate retry queues, so a failing dependency gets breathing room. The DLQ message keeps the original payload plus metadata: error, attempts, first and last failure times, and source. Then operations: an alert when anything lands in the DLQ or when depth grows, a dashboard, a named owner, and a replay tool that sends messages back through the normal consumer after a fix. I'd also set DLQ retention long enough to investigate, and make consumers idempotent because replay means reprocessing.
+   - **Key points:**
+     1. **Retryable vs non-retryable.** Retry timeouts, throttling and temporary dependency errors. Don't retry validation failures, authorisation errors or deserialisation errors; send them straight to the DLQ.
+     2. **Delayed retries with backoff and jitter.** Use visibility timeouts or delay queues so retries happen after increasing intervals, not in a tight loop.
+     3. **Bound the attempts.** A maximum count (for example SQS's maxReceiveCount on a redrive policy) or a maximum age. After that, dead-letter.
+     4. **Enrich dead-lettered messages.** Keep payload and headers intact and add error details, attempt count and timestamps, so investigation doesn't require log archaeology.
+     5. **Alert, own, review.** An alert on any DLQ arrival for critical flows, or on rate for noisy ones. A team owns each DLQ and reviews it regularly.
+     6. **Replay tooling.** Inspect, filter, edit if needed, and redrive messages to the source queue at a controlled rate. Idempotent consumers make this safe.
+     7. **Retention.** DLQ retention longer than the main queue's, so messages survive weekends and investigations.
+   - **When to choose what:** Every production queue consumer has a DLQ and a retry policy. Critical business events alert on the first DLQ message; high-volume, low-value events alert on rates. Replay is a tested, routine operation.
+   - **Numbers:**
+     - Example policy: visibility timeout 30 s, exponential backoff on retries, maxReceiveCount 5, DLQ retention 14 days with an alert on depth greater than 0 for payment events.
+   - **Pitfalls:**
+     - Retrying non-retryable errors, wasting capacity and delaying the DLQ signal.
+     - A DLQ with no alert and no owner.
+     - Replaying into non-idempotent consumers and creating duplicates.
+     - Retry delays that are too short, hammering a struggling dependency.
+   - **Follow-ups:**
+     - _How do you prevent a downstream outage from filling the DLQ?_ Use a circuit breaker or pause consumption when the downstream is failing, so messages stay in the main queue rather than burning through retries and dead-lettering.
+     - _Should the DLQ be per consumer or shared?_ Per consumer (or per source queue), so ownership is clear and replay targets the right consumer.
+     - _How do you replay safely?_ Fix the cause, replay a small sample, watch for errors, then replay the rest with rate limiting.
+   - **Example:** An SQS-based notification consumer retries provider timeouts up to 5 times with visibility-based backoff. Invalid phone numbers go straight to the DLQ. When the provider had a 2-hour outage, a circuit breaker paused consumption, so the queue grew but the DLQ stayed empty; processing resumed automatically.
+   - **Sources:** [AWS SQS documentation: Using dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html); [AWS Builders' Library: Timeouts, retries and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/)
 
 ### Ordering
 53. **Keep ordering when you also need parallelism.** [mine + ref · Advanced · Consistency, Messaging]
-   - Key by the entity whose order matters, choose partition count for peak consumers, sequence numbers per key, and what happens during rebalance.
-   - Partition by the key whose order matters, sequence numbers for detecting gaps and duplicates, single consumer per partition, and care during rebalances and retries.
+   - **Thesis:** You rarely need a global order, only order per entity. Partition by the key whose order matters, process each key sequentially, and run many keys in parallel. Size partitions for peak parallelism, and protect order during retries and rebalances.
+   - **60-second answer:** The trick is to find the scope of ordering. For an account, deposits and withdrawals must apply in order, but two different accounts are independent. So I'd key messages by account id: Kafka guarantees order within a partition, so all of an account's events go to one partition and are consumed in order, while different partitions are consumed in parallel. Partition count caps parallelism, so I'd choose it for peak consumer count with room to grow, because changing it later remaps keys. Inside a consumer I can go further: process different keys from the same partition concurrently while keeping each key sequential, with per-key queues, as Confluent's parallel consumer does. Then the edge cases: a retry must not let a later message for the same key overtake the failed one; during a rebalance, a partition's in-flight work must finish or be abandoned before the new owner starts; and sequence numbers per key let consumers detect gaps and duplicates.
+   - **Key points:**
+     1. **Order per key, not globally.** Identify the entity whose events must be ordered (account, order, device). Global ordering forces a single consumer and kills throughput.
+     2. **Partition by that key.** Same key, same partition, which gives ordered delivery. Different partitions run in parallel across consumers in a group.
+     3. **Partition count sets max parallelism.** A consumer group can't have more active consumers than partitions. Choose the count for peak load plus growth; increasing it later changes key-to-partition mapping for new messages.
+     4. **Key-level parallelism within a partition.** A consumer can process different keys concurrently while serialising per key, raising throughput without more partitions.
+     5. **Retries without reordering.** If a message for key K fails, later messages for K must wait (block that key, not the partition) or be parked with it.
+     6. **Rebalances.** Commit offsets only after processing; on revocation, finish or abandon in-flight work cleanly. Cooperative rebalancing reduces disruption.
+     7. **Sequence numbers per key.** Producers stamp a per-key sequence; consumers detect gaps (missing events) and duplicates, and can reorder small windows if needed.
+   - **When to choose what:** Key by the ordering entity and parallelise across keys. Add key-level concurrency in consumers when partitions are the bottleneck. Use per-key sequence numbers wherever correctness depends on order.
+   - **Numbers:**
+     - Parallelism: 48 partitions allow up to 48 consumers in a group. If each processes 500 msgs/s, peak throughput is about 24,000 msgs/s.
+     - Hot keys limit throughput: one key can only go as fast as one sequential processor. A key at 2,000 msgs/s needs per-message processing under 0.5 ms.
+   - **Pitfalls:**
+     - Keying by a random or round-robin value and losing per-entity order.
+     - Retrying a failed message asynchronously while later messages for the same key proceed.
+     - Committing offsets before processing completes, so a rebalance skips messages.
+     - A very hot key that one consumer can't keep up with.
+   - **Follow-ups:**
+     - _You need more partitions. What happens to ordering?_ Adding partitions changes which partition new messages for a key go to, so for a short time old and new messages for a key may be on different partitions. Drain or pause producers, or create a new topic and migrate.
+     - _How do you handle a very hot key?_ Check whether its events truly need total order. If only sub-entities need order, refine the key. Otherwise make processing for that key faster or batch it.
+     - _How do you order events from multiple producers for the same key?_ Route writes for a key through a single producer or the owning service, or use per-key sequence numbers assigned by the source of truth.
+   - **Example:** A wallet service keys transaction events by account id across 64 partitions. Consumers use key-level concurrency, so each account is processed sequentially while thousands of accounts run in parallel. A failed event parks only that account's subsequent events until it's resolved.
+   - **Sources:** [Apache Kafka documentation: Design (partitions and ordering)](https://kafka.apache.org/documentation/#design); [Confluent: Parallel consumer for Apache Kafka](https://github.com/confluentinc/parallel-consumer)
    - _Also asked as:_ How do I handle ordering of events when it matters?
 
 ### Schedulers & long-running jobs
 54. **Design a scheduler for millions of delayed jobs a day.** [mine + ref · Advanced · Messaging, Scaling]
-   - Time-bucketed storage, a sharded poller with leases, at-least-once execution with idempotent jobs, clock skew, backlog catch-up after an outage.
-   - Sharded time-bucketed storage, workers claiming jobs with leases, idempotent job execution, retry with backoff, and recovery of jobs held by crashed workers.
+   - **Thesis:** Store jobs by due time in time-bucketed, sharded storage; have workers claim due jobs with leases; execute at least once and make jobs idempotent; and design explicitly for clock skew and catching up after an outage.
+   - **60-second answer:** Millions of delayed jobs a day is tens to hundreds per second on average, with peaks, so throughput isn't the hard part; correctness and recovery are. I'd store each job with its due time, partitioned by shard and time bucket, say per minute, so finding due jobs is a cheap range scan rather than scanning everything. A poller per shard, with one active owner per shard enforced by a lease, moves due jobs into a ready queue, or workers claim them directly by atomically setting a lease with an expiry. Workers execute and mark done; if a worker dies, the lease expires and the job is reclaimed, so execution is at least once and jobs must be idempotent. Clocks: use the database's or coordinator's time, not each worker's, and tolerate small skew. After an outage there's a backlog of overdue jobs, so catch-up must be rate-limited and prioritised, with a policy for jobs that are now too late to matter.
+   - **Key points:**
+     1. **Storage by due time.** Index or partition by (shard, due_time). Time buckets (per minute) make 'what's due now' a small range query. Old buckets are dropped once processed.
+     2. **Sharding for scale.** Hash job id into N shards; each shard has one active poller at a time, which avoids duplicate polling and contention.
+     3. **Claim with leases.** A worker atomically marks a job claimed with a lease expiry (conditional update). If it doesn't finish in time, another worker can reclaim it.
+     4. **At-least-once, idempotent jobs.** Leases can expire while a slow worker still runs, so jobs may run twice. Use idempotency keys or check-and-set in the job's own effects.
+     5. **Clock skew.** Use one time source (the database's now()) for due checks and lease expiry. Allow a small tolerance; don't depend on second-level precision across machines.
+     6. **Catch-up after an outage.** Rate-limit the backlog, process the most urgent or oldest first, and define expiry rules (for example skip reminders more than 1 hour late).
+     7. **Observability.** Metrics on scheduling lag (actual start minus due time), backlog per shard, failures and retries.
+   - **When to choose what:** For millions of jobs a day, a relational or key-value store with time-bucketed indexes and leases is enough; reach for dedicated workflow engines (Temporal, etc.) when jobs have multi-step state and long durations. Use broker delay features only for short delays within their limits.
+   - **Numbers:**
+     - Load: 5 million jobs/day ≈ 58 jobs/s average; with a 10x peak at certain times (for example the top of the hour), plan for around 600 jobs/s.
+     - Storage: 5 million jobs × 1 KB = 5 GB/day; with 7-day retention of completed jobs, about 35 GB.
+   - **Pitfalls:**
+     - Polling a single table with 'WHERE due_time <= now()' and no partitioning, which slows as the table grows.
+     - Multiple pollers per shard grabbing the same jobs.
+     - Non-idempotent jobs running twice after a lease expiry.
+     - Releasing a huge backlog all at once after an outage, overloading downstream services.
+   - **Follow-ups:**
+     - _Many jobs are due at exactly 09:00. How do you avoid a thundering herd?_ Spread them with small jitter if the use case allows, rate-limit execution, and pre-load the bucket into the ready queue slightly ahead of time.
+     - _How do you cancel or reschedule a job?_ Update its due time or status by job id; the poller only picks jobs in 'scheduled' status, and workers re-check status before executing.
+     - _Why not just use Kafka with delayed delivery?_ Kafka has no native per-message delay; you'd build delay topics or a scheduler anyway. Some queues (SQS) support delays only up to a limit (15 minutes), not days.
+   - **Example:** A lending platform schedules 4 million repayment reminders and retries per day. Jobs are stored in Postgres partitioned by day with an index on (shard, due_time); 32 shard pollers move due jobs into a queue; workers use the reminder id as an idempotency key with the SMS provider. After a 40-minute outage, catch-up ran at 3x normal rate and skipped reminders more than 2 hours late.
+   - **Sources:** [Google SRE book: Distributed periodic scheduling with Cron](https://sre.google/sre-book/distributed-periodic-scheduling/); [AWS SQS documentation: Delay queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-delay-queues.html)
    - _Also asked as:_ How do I design a job scheduler for millions of jobs a day?
 55. **How do I track the status of long-running jobs for users?** [ref · Intermediate · Messaging]
-   - A job record with state, progress and error, returned immediately with an id. Clients poll or subscribe. Make states resumable and make the record the source of truth, not the queue.
+   - **Thesis:** Return a job id immediately and make a durable job record the source of truth for its state, progress, result and error. Clients poll or subscribe for updates. The queue only carries work; it never answers 'what's the status?'.
+   - **60-second answer:** When a request kicks off work that takes seconds to hours, like an export, a report, or video processing, I'd create a job record first, with id, owner, state, progress, timestamps, result location and error, and return 202 Accepted with the job id and a status URL. Workers update the record as they go: queued, running with a percentage or step, succeeded with a result link, failed with a reason, or cancelled. Clients poll the status endpoint with sensible intervals, or subscribe via WebSocket, server-sent events or a webhook for completion. The record is the source of truth, not the queue, so status survives worker restarts and queue redeliveries. I'd add heartbeats so stuck jobs are detected, make job steps resumable for long work, and support cancellation by having workers check a cancel flag between steps.
+   - **Key points:**
+     1. **202 Accepted with a job id.** Return immediately with the job id and a status URL. The client doesn't hold a connection open for minutes.
+     2. **Job record as source of truth.** A table with state, progress, timestamps, owner, input reference, result reference and error. The queue message only carries the job id.
+     3. **Clear state machine.** queued, running, succeeded, failed, cancelled, with allowed transitions enforced by conditional updates.
+     4. **Progress and heartbeats.** Workers update progress and a heartbeat timestamp. A sweeper marks jobs with stale heartbeats as failed or requeues them.
+     5. **Notification options.** Polling with backoff (simple), WebSocket or server-sent events (live UI), webhooks (server-to-server), or email for very long jobs.
+     6. **Resumability.** Break long jobs into checkpointed steps so a retry continues from the last step rather than starting over.
+     7. **Cancellation and cleanup.** A cancel endpoint sets a flag; workers check it between steps. Results expire after a retention period.
+   - **When to choose what:** Polling for most cases; push (WebSocket or SSE) when users watch progress live; webhooks for API clients. Always back the API with a durable job record.
+   - **Numbers:**
+     - Polling cost: 10,000 active jobs polled every 5 seconds = 2,000 status reads/s, cheap if served from an indexed table or cache; use backoff (2 s, 5 s, 10 s) to cut it further.
+   - **Pitfalls:**
+     - Inferring status from the queue (message present means queued), which breaks on redelivery and doesn't record results.
+     - No heartbeat, so crashed jobs show 'running' forever.
+     - Status endpoints that leak other users' jobs; check ownership.
+     - Clients polling every 100 ms.
+   - **Follow-ups:**
+     - _How do you handle the same export requested twice?_ Dedupe with an idempotency key or by input fingerprint, returning the existing job id.
+     - _How do you show accurate progress?_ Report progress in known units (rows processed of total, steps completed) rather than time-based guesses.
+     - _How would webhooks be made reliable?_ Sign payloads, retry with backoff, record delivery attempts, and let clients fetch status as a fallback if a webhook is missed.
+   - **Example:** A loan portfolio export returns 202 with job id J. The worker updates the job every 10,000 rows; the UI polls with backoff and shows a progress bar; on completion the record holds a signed download URL valid for 24 hours.
+   - **Sources:** [Microsoft Azure Architecture Center: Asynchronous request-reply pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/async-request-reply)
 56. **How do I design a fan-out and fan-in pipeline for heavy computations?** [ref · Advanced · Scaling, Messaging]
-   - Split into idempotent tasks, track completion by counter or barrier, handle partial failure and stragglers, and bound concurrency to protect shared resources.
+   - **Thesis:** Split the work into independent, idempotent tasks; track completion with a durable counter or barrier; handle stragglers and partial failure explicitly; and cap concurrency so the fan-out doesn't overwhelm shared resources.
+   - **60-second answer:** For a heavy computation, say scoring a million loans, I'd fan out by splitting into tasks of a sensible size, for example 1,000 loans each, and writing a parent job record with the total task count. Tasks go onto a queue; workers process them idempotently, writing results keyed by task id, so retries don't double-count. Fan-in happens when all tasks complete: each task atomically records completion, through a counter decremented in the database or a set of completed task ids, and whoever completes the last task triggers aggregation. I'd plan for stragglers, a few tasks taking much longer, with timeouts, retries and possibly speculative duplicates, and for failures, deciding whether the job fails if one task fails or completes with partial results. And I'd limit concurrency, since a thousand workers hitting the same database at once is a self-inflicted outage.
+   - **Key points:**
+     1. **Task granularity.** Big enough that per-task overhead is small, small enough to balance load and retry cheaply. Seconds to a few minutes per task is a common target.
+     2. **Idempotent tasks with keyed results.** Write results by task id with upsert semantics, so a retried or duplicated task doesn't corrupt the aggregate.
+     3. **Completion tracking.** Parent record with total and completed counts, updated atomically, or a set of completed ids. The transition to 'all done' triggers fan-in exactly once (conditional update).
+     4. **Stragglers.** Timeouts and retries for stuck tasks; speculative execution of slow tasks if idempotent; splitting tasks that are unexpectedly large.
+     5. **Partial failure policy.** Fail the whole job, retry failed tasks a few times, or complete with partial results and a report. Decide per use case.
+     6. **Concurrency limits.** Bound concurrent workers per shared resource (database, external API) with semaphores or worker pool sizes.
+     7. **Use an engine when it pays.** Workflow engines and data processing frameworks (Step Functions map states, Spark, Beam) handle fan-out, retries and fan-in for you.
+   - **When to choose what:** Hand-rolled queue plus job record for moderate scale and simple aggregation. A workflow engine for multi-step orchestration with retries and visibility. A data processing framework for large-scale data-parallel work.
+   - **Numbers:**
+     - Sizing: 1 million items, 1,000 per task = 1,000 tasks. With 50 workers and 30 s per task, about 10 minutes, plus straggler time.
+     - Downstream load: 50 workers each issuing 100 queries/s = 5,000 queries/s on the shared database; confirm it can take that.
+   - **Pitfalls:**
+     - Non-idempotent tasks that double-count on retry.
+     - Counting completions in memory on one coordinator that can crash.
+     - Unbounded fan-out overwhelming a database or third-party API.
+     - Fan-in triggered twice because two tasks see 'all complete' at the same time.
+   - **Follow-ups:**
+     - _How do you make sure fan-in runs exactly once?_ A conditional update on the parent record from 'running' to 'aggregating'; only the update that succeeds triggers aggregation.
+     - _One task is 100x slower than others. What do you do?_ Detect via timeout, split it if the input can be subdivided, or run a speculative copy, then investigate the skew.
+     - _How do you report progress?_ Completed and total task counts on the parent record, exposed through the job status API.
+   - **Example:** Monthly risk scoring splits 2 million loans into 2,000 tasks on SQS. Forty workers write scores keyed by task id; a database counter tracks completions; the last task's conditional update triggers the portfolio aggregation. Concurrency is capped at 40 to protect the database.
+   - **Sources:** [Enterprise Integration Patterns: Scatter-gather](https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html); [Jeff Dean and Sanjay Ghemawat: MapReduce, simplified data processing on large clusters](https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/)
 
 ### Event schema evolution
 57. **Evolve an event schema without breaking consumers.** [mine + ref · Intermediate · Migration, Messaging]
-   - Schema registry with compatibility mode, additive changes, tolerant readers, versioned topics only as a last resort, and a deprecation window with consumer inventory.
-   - Schema registry with a compatibility rule, additive-only changes by default, tolerant readers, explicit versioning for breaks, and a plan to retire old versions.
+   - **Thesis:** Treat event schemas as public contracts: register them, enforce a compatibility rule in CI and at publish time, make additive changes by default, and write consumers as tolerant readers. Breaking changes get a new event type or topic with a deprecation window, informed by a list of who consumes what.
+   - **60-second answer:** Events outlive the code that produced them, and producers often don't know all consumers. So I'd use a schema registry with Avro, Protobuf or JSON Schema and a compatibility mode, usually backward or full, checked in CI and enforced when producers register a schema. Safe changes: adding optional fields with defaults, adding new event types. Unsafe changes: removing or renaming fields, changing types, or changing meaning. Consumers ignore unknown fields and handle missing optional ones. When a breaking change is truly needed, I'd publish a new version as a new event type or topic, dual-publish for a period, track which consumers have migrated, and retire the old one on a date. Semantic changes are the sneaky ones: same field, different meaning, such as amount switching from pounds to pence, which no schema check catches, so they also need a new field name.
+   - **Key points:**
+     1. **Schema registry with compatibility.** Producers register schemas; the registry rejects changes that violate the configured compatibility (backward, forward or full).
+     2. **Additive by default.** New optional fields with defaults are safe. Never remove, rename or change the type of a field consumers may read.
+     3. **Tolerant readers.** Consumers ignore unknown fields, tolerate missing optional fields, and handle unknown enum values with a safe default.
+     4. **Compatibility checks in CI.** Fail the build if a schema change breaks compatibility, before it ever reaches production.
+     5. **Breaking changes as new versions.** New event type or topic (OrderPlacedV2), dual-publish during migration, then retire the old one.
+     6. **Know your consumers.** Maintain an inventory of consumer groups per topic and their owners, so deprecation is communicated and tracked.
+     7. **Semantic changes need new names.** Changing units, meaning or business rules of an existing field breaks consumers silently. Add a new field instead.
+   - **When to choose what:** Backward or full compatibility enforced by a registry for all shared topics. Additive evolution for most changes; versioned new types for breaking ones, with dual-publishing and a dated deprecation.
+   - **Numbers:**
+     - Deprecation window example: dual-publish for at least one full release cycle of the slowest consumer team, often 1–3 months for internal consumers.
+   - **Pitfalls:**
+     - Renaming a field because it reads better, breaking every consumer.
+     - Strict deserialisation that rejects unknown fields.
+     - Changing the meaning or units of an existing field.
+     - Deleting the old topic before all consumers have moved, with no inventory to check.
+   - **Follow-ups:**
+     - _Backward vs forward compatibility?_ Backward: new readers can read old data, so consumers upgrade first. Forward: old readers can read new data, so producers can upgrade first. Full means both; it's the safest for independently deployed teams.
+     - _How do you replay old events with a new schema?_ The registry stores every version; consumers deserialise with the writer's schema and project into their current model, with defaults for added fields.
+     - _JSON without a registry?_ Possible with JSON Schema and contract tests, but enforcement is weaker. At least validate in CI and in the producer, and version event types explicitly.
+   - **Example:** The order service needed to split 'address' into structured fields. It added the new fields alongside the old string, consumers migrated over six weeks tracked via the consumer inventory, and the old field was deprecated, never repurposed.
+   - **Sources:** [Confluent documentation: Schema evolution and compatibility](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html); [Martin Fowler: Tolerant reader](https://martinfowler.com/bliki/TolerantReader.html)
    - _Also asked as:_ How do I design an event schema that can evolve safely?
 
 ## APIs & Boundaries (9)

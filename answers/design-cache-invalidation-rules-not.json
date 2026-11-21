@@ -1,0 +1,71 @@
+{
+  "thesis": "Make staleness a decision, not an accident: give every cached item a TTL with jitter that states how stale it may be, add event-driven invalidation only for data that must change faster than the TTL, prefer versioned keys over deletes, and build keys in one place.",
+  "pitch": "Invalidation gets nightmarish when it's ad hoc: every code path that writes data has to remember every cache key derived from it. I'd simplify with four rules. First, every entry has a TTL that encodes acceptable staleness for that data, with jitter so entries don't expire together. Second, for data that must update quickly, like prices or permissions, invalidate on change via events, so the service that owns the data publishes a change event and cache owners react, rather than writers calling caches directly. Third, where possible use versioned keys: include a version or updated-at in the key so a change creates a new key and old entries simply age out, which avoids races between delete and refill. Fourth, centralise key construction in one module so the mapping from data to keys is in one place. And I'd accept bounded staleness explicitly in product requirements.",
+  "points": [
+    {
+      "h": "TTL as a staleness contract",
+      "d": "Choose a TTL per data type from how stale it may be (catalogue description: an hour; price: a minute; permissions: seconds). Every entry has one, as a safety net."
+    },
+    {
+      "h": "Jitter",
+      "d": "Randomise TTLs (for example ±10%) so entries created together don't expire together and cause a load spike."
+    },
+    {
+      "h": "Event-driven invalidation for fast-changing data",
+      "d": "The owning service publishes change events; cache layers subscribe and delete or refresh affected keys. Writers don't need to know about every cache."
+    },
+    {
+      "h": "Versioned keys",
+      "d": "Key includes a version (product:123:v42). Updates bump the version; readers use the new key, and old entries expire. No delete-refill race."
+    },
+    {
+      "h": "One place for key construction",
+      "d": "A shared module builds keys from inputs, so invalidation logic and read logic agree, and you can find every key derived from an entity."
+    },
+    {
+      "h": "Bounded staleness is a product decision",
+      "d": "Agree how stale each view may be, write it down, and monitor it. Then cache behaviour is testable."
+    }
+  ],
+  "decision": "TTL plus jitter for everything; event-driven invalidation for the few data types with tight freshness needs; versioned keys where races matter; don't cache data where any staleness is unacceptable.",
+  "numbers": [
+    "Jitter example: a 300-second TTL with ±30 seconds of jitter spreads expirations of a batch of keys over a minute instead of one instant."
+  ],
+  "pitfalls": [
+    "No TTL on entries 'because we invalidate', so a missed invalidation means stale data forever.",
+    "Writers calling cache deletes for keys they know about, missing derived keys (lists, aggregates).",
+    "Identical TTLs on a batch of keys, causing synchronised expiry.",
+    "Key construction duplicated across services with slight differences."
+  ],
+  "followups": [
+    {
+      "q": "How do you invalidate derived data like a list of a user's posts?",
+      "a": "Either keep short TTLs on lists, invalidate list keys on post change events, or store lists as ids and fetch items separately so only item caches need invalidation."
+    },
+    {
+      "q": "What if the invalidation event is lost?",
+      "a": "The TTL bounds the damage. For critical data, use versioned keys or check a version stamp on read."
+    },
+    {
+      "q": "How do you test invalidation?",
+      "a": "Integration tests that write through the real path and assert the next read reflects it, plus monitoring of a sample of cache entries against the source."
+    }
+  ],
+  "example": "A marketplace caches listings for 10 minutes with jitter, but prices use versioned keys bumped by a PriceChanged event, so price updates appear within a second while descriptions can lag.",
+  "related": [
+    "pick-between-write-through-write",
+    "handle-cache-stampede-thundering-herd",
+    "should-cache-client-edge-service",
+    "give-users-read-writes-reads"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    },
+    {
+      "title": "Nishtala et al.: Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "thesis": "Hot keys concentrate load on one cache shard; large objects waste memory, bandwidth and latency. Spread hot keys (local near-caches, replicas of the key) and break up or shrink large values (split, compress, cap size), and watch per-shard load so one key can't saturate one node.",
+  "pitch": "In a sharded cache, each key lives on one node, so a very hot key, like a celebrity profile or a flash-sale product, can saturate that node's CPU or network while the rest idle. I'd first add a small in-process near-cache with a short TTL in each service instance, which absorbs most reads for the hottest keys. For extreme cases, replicate the key: store it under N suffixed keys on different shards and read a random one, accepting slightly more work on updates. For large objects, the problems are memory pressure, eviction of many small useful keys, slow network transfer and serialisation, and blocking on single-threaded caches like Redis. So I'd cap object size, compress, split large values into chunks or store only the frequently used parts, and keep really large blobs in object storage with the cache holding metadata or a pointer. And monitor per-shard ops and bandwidth plus a top-keys report.",
+  "points": [
+    {
+      "h": "Detect hot keys",
+      "d": "Per-shard metrics (ops/s, network, CPU) and top-key sampling. One shard far above the others usually means a hot key."
+    },
+    {
+      "h": "Near-cache in each instance",
+      "d": "A tiny in-process cache with a TTL of a few seconds for the hottest keys removes most network reads. Accept a few seconds of staleness."
+    },
+    {
+      "h": "Replicate hot keys",
+      "d": "Write key:1..key:N across shards; readers pick one at random. Updates write all copies or use short TTLs."
+    },
+    {
+      "h": "Cap and compress large values",
+      "d": "Set a maximum size; compress (often a big win for JSON); avoid storing large blobs that are rarely read in full."
+    },
+    {
+      "h": "Split or reshape large objects",
+      "d": "Store parts separately (profile summary vs full history) so common reads fetch only what they need."
+    },
+    {
+      "h": "Large blobs belong elsewhere",
+      "d": "Images, documents and big payloads go to object storage or a CDN; cache a pointer or metadata."
+    },
+    {
+      "h": "Mind single-threaded caches",
+      "d": "In Redis, a command on a very large value or a huge collection blocks other requests on that node."
+    }
+  ],
+  "decision": "Near-cache for read-hot keys with tolerable staleness; key replication for extreme cases; size caps, compression and reshaping for large values; object storage for blobs.",
+  "numbers": [
+    "Network math: a 500 KB value read 2,000 times/s is 1 GB/s from one shard, enough to saturate a typical node's network. A near-cache with a 2-second TTL across 50 instances cuts that to about 25 reads/s.",
+    "Compression: JSON often compresses several times over with fast codecs, trading a little CPU for memory and bandwidth."
+  ],
+  "pitfalls": [
+    "Assuming consistent hashing spreads load; it spreads keys, not traffic to one key.",
+    "Storing multi-megabyte objects in Redis and blocking the event loop.",
+    "Near-caches with long TTLs, serving stale data for minutes.",
+    "Large values evicting many small hot ones under memory pressure."
+  ],
+  "followups": [
+    {
+      "q": "How do you update a replicated hot key consistently?",
+      "a": "Write all replicas (or bump a version used in the key) and rely on short TTLs to cover any copy that missed the update."
+    },
+    {
+      "q": "How do you find big keys in Redis?",
+      "a": "Use sampling tools such as redis-cli --bigkeys or memory usage commands, and enforce size limits in the client library."
+    },
+    {
+      "q": "When is a near-cache dangerous?",
+      "a": "For data that must be consistent across instances, such as permissions just revoked. Keep TTLs very short or invalidate via events."
+    }
+  ],
+  "example": "During a flash sale one product key took 40% of all cache traffic and saturated a shard. A 1-second near-cache in each API instance dropped that shard's load by 95%; product detail objects were also split so the sale page fetched a 4 KB summary instead of a 300 KB document.",
+  "related": [
+    "hot-partition-shows-up-2",
+    "handle-cache-stampede-thundering-herd",
+    "should-cache-client-edge-service"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    },
+    {
+      "title": "Redis documentation: Client-side caching",
+      "url": "https://redis.io/docs/latest/develop/reference/client-side-caching/"
+    }
+  ]
+}

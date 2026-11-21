@@ -1,0 +1,75 @@
+{
+  "thesis": "A stampede happens when a hot entry expires and many requests rebuild it at once. Make sure only one caller rebuilds (request coalescing or a lease), let others use stale data while it does (stale-while-revalidate), and avoid synchronised expiry (jitter, early refresh).",
+  "pitch": "When a popular key expires, every concurrent request misses and goes to the database at the same moment, which can take the database down and keep the cache empty. I'd layer defences. Request coalescing: within a process, concurrent misses for a key wait on one in-flight load, often called single-flight. Across processes, a short lease or lock in the cache, as described in Facebook's memcache paper, where the first misser gets the right to rebuild and others wait briefly or get the stale value. Stale-while-revalidate: keep the old value past its soft TTL and serve it while one caller refreshes in the background. Probabilistic early refresh: as an entry nears expiry, a small and increasing fraction of requests refresh it early, so it rarely expires under load. And jitter on TTLs so a batch of keys doesn't expire together. For extreme hot keys, pre-warm or refresh them on a schedule.",
+  "points": [
+    {
+      "h": "Understand the failure",
+      "d": "Hot key expires, N concurrent requests miss, N identical database queries run. If the query is slow, the herd grows while it runs."
+    },
+    {
+      "h": "In-process request coalescing",
+      "d": "Concurrent requests for the same key share one in-flight load (single-flight). Cuts the herd to one per instance."
+    },
+    {
+      "h": "Distributed leases or locks",
+      "d": "First miss acquires a short-lived lease in the cache; others wait briefly, retry, or receive stale data. The lease must expire in case the holder dies."
+    },
+    {
+      "h": "Stale-while-revalidate",
+      "d": "Store a soft expiry and a hard expiry. After soft expiry, serve stale and refresh in the background; only after hard expiry do callers block."
+    },
+    {
+      "h": "Probabilistic early expiration",
+      "d": "Each read near expiry refreshes with a probability that rises as expiry approaches, so refresh happens before expiry, spread across time."
+    },
+    {
+      "h": "Jitter and pre-warming",
+      "d": "Randomised TTLs avoid mass expiry; scheduled refresh of known hot keys keeps them always warm."
+    },
+    {
+      "h": "Protect the origin anyway",
+      "d": "Concurrency limits on the expensive query path, so even a stampede that gets through can't overwhelm the database."
+    }
+  ],
+  "decision": "Single-flight in every service that caches; stale-while-revalidate for hot, tolerably stale data; distributed leases for very expensive rebuilds; jitter always.",
+  "numbers": [
+    "Herd size: a key read 5,000 times/s with a 200 ms rebuild query sees about 1,000 concurrent misses without coalescing; with single-flight across 20 instances, 20; with a distributed lease, 1."
+  ],
+  "pitfalls": [
+    "Locks without expiry: a crashed holder leaves the key locked and everyone waiting.",
+    "Waiting callers with no timeout, piling up behind a slow rebuild.",
+    "Coalescing only in-process while running hundreds of instances.",
+    "Cold start after a cache flush or failover with no warming plan."
+  ],
+  "followups": [
+    {
+      "q": "The whole cache cluster restarts. How do you avoid a database meltdown?",
+      "a": "Warm the hottest keys before taking traffic, ramp traffic gradually, keep coalescing and concurrency limits on the database path, and consider a replicated cache so a node loss doesn't empty everything."
+    },
+    {
+      "q": "How does stale-while-revalidate interact with correctness?",
+      "a": "It serves data up to soft TTL plus refresh time old. Only use it for data where that's acceptable."
+    },
+    {
+      "q": "What about negative caching?",
+      "a": "Cache 'not found' results briefly too, or a flood of requests for a missing key hammers the database."
+    }
+  ],
+  "example": "A homepage feed cached for 60 seconds caused a database spike every minute at peak. Adding single-flight, a 10-second stale-while-revalidate window, and ±10% TTL jitter flattened database load to one rebuild per key per minute.",
+  "related": [
+    "design-cache-invalidation-rules-not",
+    "caching-story-hot-keys-large",
+    "design-admission-control-service-stays",
+    "measure-whether-cache-actually-helping"
+  ],
+  "sources": [
+    {
+      "title": "Nishtala et al.: Scaling Memcache at Facebook (leases)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    },
+    {
+      "title": "RFC 5861: HTTP Cache-Control extensions for stale content",
+      "url": "https://www.rfc-editor.org/rfc/rfc5861"
+    }
+  ]
+}

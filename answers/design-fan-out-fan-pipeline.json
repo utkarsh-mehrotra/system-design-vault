@@ -1,0 +1,75 @@
+{
+  "thesis": "Split the work into independent, idempotent tasks; track completion with a durable counter or barrier; handle stragglers and partial failure explicitly; and cap concurrency so the fan-out doesn't overwhelm shared resources.",
+  "pitch": "For a heavy computation, say scoring a million loans, I'd fan out by splitting into tasks of a sensible size, for example 1,000 loans each, and writing a parent job record with the total task count. Tasks go onto a queue; workers process them idempotently, writing results keyed by task id, so retries don't double-count. Fan-in happens when all tasks complete: each task atomically records completion, through a counter decremented in the database or a set of completed task ids, and whoever completes the last task triggers aggregation. I'd plan for stragglers, a few tasks taking much longer, with timeouts, retries and possibly speculative duplicates, and for failures, deciding whether the job fails if one task fails or completes with partial results. And I'd limit concurrency, since a thousand workers hitting the same database at once is a self-inflicted outage.",
+  "points": [
+    {
+      "h": "Task granularity",
+      "d": "Big enough that per-task overhead is small, small enough to balance load and retry cheaply. Seconds to a few minutes per task is a common target."
+    },
+    {
+      "h": "Idempotent tasks with keyed results",
+      "d": "Write results by task id with upsert semantics, so a retried or duplicated task doesn't corrupt the aggregate."
+    },
+    {
+      "h": "Completion tracking",
+      "d": "Parent record with total and completed counts, updated atomically, or a set of completed ids. The transition to 'all done' triggers fan-in exactly once (conditional update)."
+    },
+    {
+      "h": "Stragglers",
+      "d": "Timeouts and retries for stuck tasks; speculative execution of slow tasks if idempotent; splitting tasks that are unexpectedly large."
+    },
+    {
+      "h": "Partial failure policy",
+      "d": "Fail the whole job, retry failed tasks a few times, or complete with partial results and a report. Decide per use case."
+    },
+    {
+      "h": "Concurrency limits",
+      "d": "Bound concurrent workers per shared resource (database, external API) with semaphores or worker pool sizes."
+    },
+    {
+      "h": "Use an engine when it pays",
+      "d": "Workflow engines and data processing frameworks (Step Functions map states, Spark, Beam) handle fan-out, retries and fan-in for you."
+    }
+  ],
+  "decision": "Hand-rolled queue plus job record for moderate scale and simple aggregation. A workflow engine for multi-step orchestration with retries and visibility. A data processing framework for large-scale data-parallel work.",
+  "numbers": [
+    "Sizing: 1 million items, 1,000 per task = 1,000 tasks. With 50 workers and 30 s per task, about 10 minutes, plus straggler time.",
+    "Downstream load: 50 workers each issuing 100 queries/s = 5,000 queries/s on the shared database; confirm it can take that."
+  ],
+  "pitfalls": [
+    "Non-idempotent tasks that double-count on retry.",
+    "Counting completions in memory on one coordinator that can crash.",
+    "Unbounded fan-out overwhelming a database or third-party API.",
+    "Fan-in triggered twice because two tasks see 'all complete' at the same time."
+  ],
+  "followups": [
+    {
+      "q": "How do you make sure fan-in runs exactly once?",
+      "a": "A conditional update on the parent record from 'running' to 'aggregating'; only the update that succeeds triggers aggregation."
+    },
+    {
+      "q": "One task is 100x slower than others. What do you do?",
+      "a": "Detect via timeout, split it if the input can be subdivided, or run a speculative copy, then investigate the skew."
+    },
+    {
+      "q": "How do you report progress?",
+      "a": "Completed and total task counts on the parent record, exposed through the job status API."
+    }
+  ],
+  "example": "Monthly risk scoring splits 2 million loans into 2,000 tasks on SQS. Forty workers write scores keyed by task id; a database counter tracks completions; the last task's conditional update triggers the portfolio aggregation. Concurrency is capped at 40 to protect the database.",
+  "related": [
+    "track-status-long-running-jobs",
+    "design-scheduler-millions-delayed-jobs",
+    "design-backpressure-high-traffic-system"
+  ],
+  "sources": [
+    {
+      "title": "Enterprise Integration Patterns: Scatter-gather",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html"
+    },
+    {
+      "title": "Jeff Dean and Sanjay Ghemawat: MapReduce, simplified data processing on large clusters",
+      "url": "https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/"
+    }
+  ]
+}

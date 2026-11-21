@@ -1,0 +1,71 @@
+{
+  "thesis": "Cache as close to the user as the data's sharing and freshness allow. The closer the cache, the bigger the latency win and the weaker your control over invalidation, so match each layer to how volatile and how shared the data is.",
+  "pitch": "I'd walk the layers. The client, meaning the browser or app, is best for per-user data and static assets with long cache lifetimes and versioned file names; it removes requests entirely but you can't invalidate it, so you rely on short TTLs or versioning. The edge or CDN is best for public or per-region content shared by many users, like images, scripts and catalogue pages, with TTLs, purge APIs and stale-while-revalidate. The service-side cache, Redis or Memcached, is best for computed results and hot objects shared across instances, where you control invalidation precisely. In-process caches are the fastest but per instance, fine for small, slow-changing reference data. The database's own buffer cache already holds hot pages; a cache in front helps when queries are expensive, not just when rows are hot. So the choice is driven by who shares the data, how stale it can be, and whether you need to invalidate it on demand.",
+  "points": [
+    {
+      "h": "Client cache",
+      "d": "HTTP caching headers (Cache-Control, ETag) and app storage. Zero network cost on hits. Use content hashes in asset URLs so you can cache 'forever' and still deploy changes."
+    },
+    {
+      "h": "Edge / CDN",
+      "d": "Shared across users in a region, absorbs most traffic for public content, and protects the origin. Supports TTLs, purges and serving stale content when the origin is down."
+    },
+    {
+      "h": "Service-side shared cache",
+      "d": "Redis or Memcached for computed results, sessions, and hot objects. Precise invalidation and data structures, at the cost of a network hop and another system to run."
+    },
+    {
+      "h": "In-process cache",
+      "d": "Fastest (no network), but duplicated per instance and inconsistent across them. Good for reference data with short TTLs."
+    },
+    {
+      "h": "Database layer",
+      "d": "Buffer pools and query caches. Materialised views for expensive aggregations. A separate cache helps when the work, not the I/O, is expensive."
+    },
+    {
+      "h": "Choose by sharing and volatility",
+      "d": "Personal and stable: client. Public and stable: edge. Shared and changing: service cache with invalidation. Highly volatile or must be correct: maybe don't cache."
+    }
+  ],
+  "decision": "Layer them: versioned static assets at client and edge with long TTLs; public pages at the edge with short TTLs and stale-while-revalidate; computed and per-user data in a service cache; nothing cached that must be strictly current (balances used for decisions).",
+  "numbers": [
+    "Latency intuition: client hit ~0 ms, edge hit typically tens of milliseconds closer than origin, service cache hit around a millisecond in-zone, in-process hit microseconds."
+  ],
+  "pitfalls": [
+    "Caching personalised responses at the edge without varying on user, leaking one user's page to another.",
+    "Long client TTLs on non-versioned URLs, so users keep stale code after a deploy.",
+    "Caching everything in-process across 100 instances, multiplying memory and staleness.",
+    "Caching data used for correctness decisions."
+  ],
+  "followups": [
+    {
+      "q": "How do you cache personalised pages?",
+      "a": "Cache the shared shell at the edge and fetch personal fragments separately, or use edge logic that varies by a coarse segment instead of individual user."
+    },
+    {
+      "q": "What does stale-while-revalidate give you?",
+      "a": "The cache serves a slightly stale response immediately while fetching a fresh one in the background, hiding origin latency and smoothing load."
+    },
+    {
+      "q": "How do you invalidate CDN content quickly?",
+      "a": "Purge APIs by URL or tag (surrogate keys), or version the URL so new content has a new key."
+    }
+  ],
+  "example": "A product catalogue serves images and scripts from a CDN with year-long TTLs and hashed file names, product pages at the edge with a 60-second TTL and stale-while-revalidate, prices from a Redis cache invalidated on price change, and the cart directly from the database.",
+  "related": [
+    "design-cache-invalidation-rules-not",
+    "measure-whether-cache-actually-helping",
+    "read-traffic-grows-10x-one",
+    "walk-one-request-dns-database"
+  ],
+  "sources": [
+    {
+      "title": "MDN: HTTP caching",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    },
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "thesis": "A retry policy decides which failures are worth trying again, how often and for how long; a dead-letter queue catches what's left so it isn't lost or blocking. Both need owners, alerts and a replay path, or they become a place where business events go to die.",
+  "pitch": "I'd define per consumer: which errors are retryable, the backoff schedule with jitter, the maximum attempts or total time, and what happens after, which is a move to a dead-letter queue. Retries should be delayed rather than immediate, using the broker's visibility timeout or delay features or separate retry queues, so a failing dependency gets breathing room. The DLQ message keeps the original payload plus metadata: error, attempts, first and last failure times, and source. Then operations: an alert when anything lands in the DLQ or when depth grows, a dashboard, a named owner, and a replay tool that sends messages back through the normal consumer after a fix. I'd also set DLQ retention long enough to investigate, and make consumers idempotent because replay means reprocessing.",
+  "points": [
+    {
+      "h": "Retryable vs non-retryable",
+      "d": "Retry timeouts, throttling and temporary dependency errors. Don't retry validation failures, authorisation errors or deserialisation errors; send them straight to the DLQ."
+    },
+    {
+      "h": "Delayed retries with backoff and jitter",
+      "d": "Use visibility timeouts or delay queues so retries happen after increasing intervals, not in a tight loop."
+    },
+    {
+      "h": "Bound the attempts",
+      "d": "A maximum count (for example SQS's maxReceiveCount on a redrive policy) or a maximum age. After that, dead-letter."
+    },
+    {
+      "h": "Enrich dead-lettered messages",
+      "d": "Keep payload and headers intact and add error details, attempt count and timestamps, so investigation doesn't require log archaeology."
+    },
+    {
+      "h": "Alert, own, review",
+      "d": "An alert on any DLQ arrival for critical flows, or on rate for noisy ones. A team owns each DLQ and reviews it regularly."
+    },
+    {
+      "h": "Replay tooling",
+      "d": "Inspect, filter, edit if needed, and redrive messages to the source queue at a controlled rate. Idempotent consumers make this safe."
+    },
+    {
+      "h": "Retention",
+      "d": "DLQ retention longer than the main queue's, so messages survive weekends and investigations."
+    }
+  ],
+  "decision": "Every production queue consumer has a DLQ and a retry policy. Critical business events alert on the first DLQ message; high-volume, low-value events alert on rates. Replay is a tested, routine operation.",
+  "numbers": [
+    "Example policy: visibility timeout 30 s, exponential backoff on retries, maxReceiveCount 5, DLQ retention 14 days with an alert on depth greater than 0 for payment events."
+  ],
+  "pitfalls": [
+    "Retrying non-retryable errors, wasting capacity and delaying the DLQ signal.",
+    "A DLQ with no alert and no owner.",
+    "Replaying into non-idempotent consumers and creating duplicates.",
+    "Retry delays that are too short, hammering a struggling dependency."
+  ],
+  "followups": [
+    {
+      "q": "How do you prevent a downstream outage from filling the DLQ?",
+      "a": "Use a circuit breaker or pause consumption when the downstream is failing, so messages stay in the main queue rather than burning through retries and dead-lettering."
+    },
+    {
+      "q": "Should the DLQ be per consumer or shared?",
+      "a": "Per consumer (or per source queue), so ownership is clear and replay targets the right consumer."
+    },
+    {
+      "q": "How do you replay safely?",
+      "a": "Fix the cause, replay a small sample, watch for errors, then replay the rest with rate limiting."
+    }
+  ],
+  "example": "An SQS-based notification consumer retries provider timeouts up to 5 times with visibility-based backoff. Invalid phone numbers go straight to the DLQ. When the provider had a 2-hour outage, a circuit breaker paused consumption, so the queue grew but the DLQ stayed empty; processing resumed automatically.",
+  "related": [
+    "poison-message-blocks-partition-design",
+    "retries-amplifying-outage-design-retries",
+    "should-use-queue-versus-direct"
+  ],
+  "sources": [
+    {
+      "title": "AWS SQS documentation: Using dead-letter queues",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+    },
+    {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  ]
+}

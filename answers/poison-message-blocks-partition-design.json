@@ -1,0 +1,75 @@
+{
+  "thesis": "A poison message is one that fails every time. Don't let it block everything behind it: retry a bounded number of times, then move it aside to a retry or dead-letter topic with full context, keep the partition moving, alert on it, and provide a safe way to replay once fixed.",
+  "pitch": "In an ordered partition, a consumer that keeps failing on one message stops all progress for that partition, and lag climbs. I'd first separate transient from permanent failures: a timeout to a dependency is worth retrying; a deserialisation error or validation failure isn't. Transient failures get a few in-place retries with backoff, then move to a delayed retry topic, so the main partition continues. Permanent failures, or messages that exhaust retries, go to a dead-letter topic with the original payload, headers, error, stack trace, attempt count and source offset. The consumer commits past it and keeps going. I'd alert on DLQ arrivals, provide tooling to inspect, fix and replay messages from the DLQ back into the main flow, and decide whether skipping is acceptable: for strictly ordered entities, later messages for the same key may need to wait or be parked too.",
+  "points": [
+    {
+      "h": "Classify failures",
+      "d": "Transient (timeouts, 503s, lock conflicts) vs permanent (schema errors, invalid data, bugs). Only transient failures deserve retries."
+    },
+    {
+      "h": "Bounded in-place retries",
+      "d": "A few attempts with short backoff for transient errors. More than that stalls the partition."
+    },
+    {
+      "h": "Retry topics with delay",
+      "d": "Move the message to a retry topic consumed after a delay (for example 1 minute, then 10, then 1 hour) so the main partition keeps flowing."
+    },
+    {
+      "h": "Dead-letter topic with context",
+      "d": "Include the original payload and headers, error message, stack trace, attempt count, timestamps and source topic, partition and offset."
+    },
+    {
+      "h": "Alert and own the DLQ",
+      "d": "DLQ arrivals are signals of bugs or bad data. Alert on rate and depth, assign ownership, and review regularly."
+    },
+    {
+      "h": "Safe replay",
+      "d": "Tooling to replay selected DLQ messages after a fix, through the same idempotent consumer path, with rate limits."
+    },
+    {
+      "h": "Ordering implications",
+      "d": "If later messages for the same key depend on the poisoned one, either park them too (per-key parking) or accept that they may be applied out of order. Decide per domain."
+    }
+  ],
+  "decision": "Always have a dead-letter path for consumers of untrusted or evolving input. Use retry topics for transient failures in high-throughput streams. For strictly ordered domains, park per key rather than skipping silently.",
+  "numbers": [
+    "Retry schedule example: 3 in-place attempts at 100 ms, 500 ms, 2 s; then retry topics at 1 min, 10 min, 1 h; then DLQ. Total time before DLQ about 71 minutes."
+  ],
+  "pitfalls": [
+    "Infinite retries in place, stalling the partition for hours.",
+    "Dead-lettering without context, so nobody can diagnose or replay.",
+    "Nobody watching the DLQ, which silently accumulates lost business events.",
+    "Skipping a message for an entity whose later messages depend on it, corrupting state."
+  ],
+  "followups": [
+    {
+      "q": "How do you find out whether a failure is permanent?",
+      "a": "By error type: deserialisation, schema and validation errors are permanent; network and dependency errors are usually transient. Unknown errors get limited retries then DLQ."
+    },
+    {
+      "q": "How do you park messages for one key without blocking the partition?",
+      "a": "Keep a 'parked keys' store; when a key is parked, route its subsequent messages to a parking topic until the poisoned one is resolved, then replay them in order."
+    },
+    {
+      "q": "What if thousands of messages hit the DLQ at once?",
+      "a": "That's an incident, likely a bad deploy or schema change. Pause consumers or roll back, fix, then replay in bulk with rate limits."
+    }
+  ],
+  "example": "A schema change produced events with a missing required field. Consumers moved them to the DLQ with full context after one attempt, kept processing valid events, and paged the producing team. After the producer fix, a replay tool reprocessed the 18,000 dead-lettered events in 10 minutes.",
+  "related": [
+    "design-dead-letter-queues-retry",
+    "keep-ordering-also-need-parallelism",
+    "evolve-event-schema-breaking-consumers",
+    "exactly-once-practice-kafka-flink"
+  ],
+  "sources": [
+    {
+      "title": "Enterprise Integration Patterns: Dead letter channel",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/DeadLetterChannel.html"
+    },
+    {
+      "title": "Confluent: Error handling patterns for Apache Kafka applications",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  ]
+}

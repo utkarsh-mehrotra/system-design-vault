@@ -1,0 +1,70 @@
+{
+  "thesis": "Return a job id immediately and make a durable job record the source of truth for its state, progress, result and error. Clients poll or subscribe for updates. The queue only carries work; it never answers 'what's the status?'.",
+  "pitch": "When a request kicks off work that takes seconds to hours, like an export, a report, or video processing, I'd create a job record first, with id, owner, state, progress, timestamps, result location and error, and return 202 Accepted with the job id and a status URL. Workers update the record as they go: queued, running with a percentage or step, succeeded with a result link, failed with a reason, or cancelled. Clients poll the status endpoint with sensible intervals, or subscribe via WebSocket, server-sent events or a webhook for completion. The record is the source of truth, not the queue, so status survives worker restarts and queue redeliveries. I'd add heartbeats so stuck jobs are detected, make job steps resumable for long work, and support cancellation by having workers check a cancel flag between steps.",
+  "points": [
+    {
+      "h": "202 Accepted with a job id",
+      "d": "Return immediately with the job id and a status URL. The client doesn't hold a connection open for minutes."
+    },
+    {
+      "h": "Job record as source of truth",
+      "d": "A table with state, progress, timestamps, owner, input reference, result reference and error. The queue message only carries the job id."
+    },
+    {
+      "h": "Clear state machine",
+      "d": "queued, running, succeeded, failed, cancelled, with allowed transitions enforced by conditional updates."
+    },
+    {
+      "h": "Progress and heartbeats",
+      "d": "Workers update progress and a heartbeat timestamp. A sweeper marks jobs with stale heartbeats as failed or requeues them."
+    },
+    {
+      "h": "Notification options",
+      "d": "Polling with backoff (simple), WebSocket or server-sent events (live UI), webhooks (server-to-server), or email for very long jobs."
+    },
+    {
+      "h": "Resumability",
+      "d": "Break long jobs into checkpointed steps so a retry continues from the last step rather than starting over."
+    },
+    {
+      "h": "Cancellation and cleanup",
+      "d": "A cancel endpoint sets a flag; workers check it between steps. Results expire after a retention period."
+    }
+  ],
+  "decision": "Polling for most cases; push (WebSocket or SSE) when users watch progress live; webhooks for API clients. Always back the API with a durable job record.",
+  "numbers": [
+    "Polling cost: 10,000 active jobs polled every 5 seconds = 2,000 status reads/s, cheap if served from an indexed table or cache; use backoff (2 s, 5 s, 10 s) to cut it further."
+  ],
+  "pitfalls": [
+    "Inferring status from the queue (message present means queued), which breaks on redelivery and doesn't record results.",
+    "No heartbeat, so crashed jobs show 'running' forever.",
+    "Status endpoints that leak other users' jobs; check ownership.",
+    "Clients polling every 100 ms."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle the same export requested twice?",
+      "a": "Dedupe with an idempotency key or by input fingerprint, returning the existing job id."
+    },
+    {
+      "q": "How do you show accurate progress?",
+      "a": "Report progress in known units (rows processed of total, steps completed) rather than time-based guesses."
+    },
+    {
+      "q": "How would webhooks be made reliable?",
+      "a": "Sign payloads, retry with backoff, record delivery attempts, and let clients fetch status as a fallback if a webhook is missed."
+    }
+  ],
+  "example": "A loan portfolio export returns 202 with job id J. The worker updates the job every 10,000 rows; the UI polls with backoff and shows a progress bar; on completion the record holds a signed download URL valid for 24 hours.",
+  "related": [
+    "design-scheduler-millions-delayed-jobs",
+    "choose-between-synchronous-asynchronous-communication",
+    "design-fan-out-fan-pipeline"
+  ],
+  "sources": [
+    {
+      "title": "Microsoft Azure Architecture Center: Asynchronous request-reply pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/async-request-reply"
+    }
+  ]
+}

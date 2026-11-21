@@ -1,0 +1,75 @@
+{
+  "thesis": "Kafka and Flink give exactly-once processing within their boundary: idempotent producers, transactions and checkpointed state make each record's effect on Kafka topics and Flink state happen once. Side effects outside that boundary (databases, APIs, emails) are still your job: make them idempotent or transactional with the checkpoint.",
+  "pitch": "Delivery over a network is at least once; what systems provide is exactly-once effect. Kafka's idempotent producer removes duplicates from producer retries per partition. Kafka transactions let a consume-transform-produce application atomically write output records and commit its consumer offsets, so downstream consumers reading with read_committed isolation see each result once. Flink checkpoints its state and source offsets consistently; on failure it rewinds to the last checkpoint and reprocesses, and its two-phase-commit sinks, including the Kafka sink, commit output only when a checkpoint completes. What you still own: any sink that isn't transactional with Flink or Kafka, such as a database write, an HTTP call to a partner, or an email. On replay after failure those happen again, so they need idempotency keys or upserts keyed by a deterministic id. Also, consumers reading with read_uncommitted see aborted data, and exactly-once adds latency, because output becomes visible only at transaction or checkpoint commit.",
+  "points": [
+    {
+      "h": "Be precise about the claim",
+      "d": "Exactly-once processing (effects applied once) not exactly-once delivery. Records may be read and processed more than once internally; the system makes the visible result as if once."
+    },
+    {
+      "h": "Kafka idempotent producer",
+      "d": "Producer id plus sequence numbers per partition let the broker discard duplicate writes from retries."
+    },
+    {
+      "h": "Kafka transactions",
+      "d": "Atomically write to multiple partitions and commit consumer offsets. Consumers with read_committed see only committed transactions."
+    },
+    {
+      "h": "Flink checkpoints",
+      "d": "Consistent snapshots of operator state and source positions. After a failure, the job restores state and replays input from the checkpointed offsets."
+    },
+    {
+      "h": "Two-phase-commit sinks",
+      "d": "Flink sinks that support it pre-commit output during a checkpoint and commit when the checkpoint completes. Output visibility is tied to checkpoint frequency."
+    },
+    {
+      "h": "What you still own",
+      "d": "External side effects: database writes, API calls, emails, payments. Make them idempotent (upsert by deterministic key, idempotency keys) because replay will repeat them."
+    },
+    {
+      "h": "Costs",
+      "d": "Latency equal to checkpoint or transaction interval for visible output, more coordination overhead, and careful configuration (isolation level, transaction timeouts)."
+    }
+  ],
+  "decision": "Use Kafka transactions or Flink exactly-once for pipelines where Kafka-to-Kafka or Flink state correctness matters (aggregations, billing counts). For external sinks, rely on idempotent writes and treat the pipeline as at-least-once into them. If latency matters more than duplicates, at-least-once with idempotent consumers is simpler.",
+  "numbers": [
+    "Visibility latency: with a 10-second checkpoint interval, transactional sink output appears in roughly 10-second steps; shortening the interval reduces latency but adds checkpoint overhead."
+  ],
+  "pitfalls": [
+    "Claiming exactly-once end to end while the sink is a non-idempotent HTTP call.",
+    "Downstream consumers using read_uncommitted and seeing aborted records.",
+    "Transaction timeouts shorter than checkpoint intervals, causing aborted transactions and data loss or stalls.",
+    "Using random ids generated during processing as idempotency keys; replay generates new ids. Keys must be deterministic from input."
+  ],
+  "followups": [
+    {
+      "q": "How do you write exactly-once into Postgres from Flink?",
+      "a": "Either a two-phase-commit sink that commits the database transaction on checkpoint completion, or idempotent upserts keyed by a deterministic id derived from the input, which is simpler and usually enough."
+    },
+    {
+      "q": "Does Kafka exactly-once cover consumers in other services?",
+      "a": "Only if they participate in the transaction or dedupe themselves. A normal consumer that writes to its own database must be idempotent."
+    },
+    {
+      "q": "What about sending emails from a stream?",
+      "a": "Emails can't be undone, so dedupe before sending: record the deterministic message id in a store and send with a provider idempotency key; accept a small risk window or confirm via provider status."
+    }
+  ],
+  "example": "A billing pipeline aggregates usage events in Flink with exactly-once checkpoints and writes invoice line items into Kafka transactionally. The invoicing service consumes with read_committed and upserts line items by (customer, period, meter) so a replay never double-bills.",
+  "related": [
+    "design-outbox-inbox-pattern-reliable",
+    "build-idempotency-write-api-clients",
+    "poison-message-blocks-partition-design",
+    "keep-ordering-also-need-parallelism"
+  ],
+  "sources": [
+    {
+      "title": "Apache Kafka documentation: Message delivery semantics",
+      "url": "https://kafka.apache.org/documentation/#semantics"
+    },
+    {
+      "title": "Apache Flink blog: End-to-end exactly-once processing with Apache Kafka",
+      "url": "https://flink.apache.org/2018/02/28/an-overview-of-end-to-end-exactly-once-processing-in-apache-flink-with-apache-kafka-too/"
+    }
+  ]
+}
