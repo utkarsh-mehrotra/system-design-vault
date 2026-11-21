@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Train an ML model to flag fraudulent listings and reviews and auto-delete them.\"",
+    "why": "Fraudsters adapt quickly, a single model has false positives that harm honest sellers, and without layered signals, human review, feedback loops and friction, enforcement is either too weak or too harsh.",
+    "probe": "Layered signals, risk scoring at multiple points, graduated actions, human review and adversarial adaptation.",
+    "say": "\"Risk scoring at key moments (signup, listing, review, payout) using rules, models and graph signals, graduated actions from friction to holds to removal, human review for uncertain cases, and feedback from outcomes to keep up with adapting fraudsters.\""
+  },
+  "thesis": "Marketplace fraud is adversarial and evolves, so defend in layers: score risk at each key action using rules, models and relationship signals, apply graduated responses rather than binary bans, route uncertain cases to humans, and feed outcomes back to adapt.",
+  "pitch": "I'd identify the moments that matter: account creation, listing creation, purchase, review submission and payout. At each, compute a risk score from several signal types. Account signals: age, verification, device fingerprint, IP reputation. Behaviour: listing velocity, price far below market, copied photos or descriptions, review bursts. Relationship signals: shared devices, payment methods or addresses across accounts, and graphs of reviewers and sellers who only interact with each other, a classic review-ring pattern. Rules catch known patterns quickly; models generalise; graph analysis finds rings. Actions are graduated: add friction like extra verification, hold a listing for review, delay payouts, down-weight suspicious reviews in ratings, or remove and ban when confident. Uncertain cases go to trust-and-safety reviewers with good tooling, and their decisions train models and tune rules. Payout holds are a powerful lever, since fraud is usually about extracting money. And I'd measure precision and recall, appeals, and time to action.",
+  "points": [
+    {
+      "h": "Score at key moments",
+      "d": "Signup, listing, purchase, review and payout each get risk evaluation suited to the threat."
+    },
+    {
+      "h": "Diverse signals",
+      "d": "Account age and verification, device and IP reputation, behavioural velocity, content similarity, price anomalies."
+    },
+    {
+      "h": "Graph signals",
+      "d": "Shared devices, payment instruments and reviewer-seller networks reveal rings that per-account checks miss."
+    },
+    {
+      "h": "Rules plus models",
+      "d": "Rules for known patterns and fast response; models for generalisation; both monitored for drift."
+    },
+    {
+      "h": "Graduated actions",
+      "d": "Friction, holds, down-weighting, payout delays, then removal and bans, matched to confidence."
+    },
+    {
+      "h": "Human review and feedback",
+      "d": "Analysts handle uncertain cases; decisions feed back to models and rules."
+    },
+    {
+      "h": "Protect the money exit",
+      "d": "Payout holds and verification for new or risky sellers limit losses even when detection lags."
+    }
+  ],
+  "decision": "Layered risk scoring with graduated responses, human review for the uncertain middle, graph analysis for organised fraud, and payout controls as a backstop.",
+  "numbers": [
+    "Trade-off example: a model at 95% precision flagging 10,000 listings a day wrongly blocks 500 honest listings daily, which is why low-confidence flags get friction or review rather than removal."
+  ],
+  "pitfalls": [
+    "Binary auto-ban decisions with high false positives.",
+    "Looking at accounts in isolation and missing rings.",
+    "Static rules that fraudsters learn to evade.",
+    "No appeals process for honest sellers."
+  ],
+  "followups": [
+    {
+      "q": "How do you detect fake review rings?",
+      "a": "Graph analysis of reviewer-seller interactions, timing bursts, shared devices or payment methods, and text similarity across reviews."
+    },
+    {
+      "q": "How do you avoid fraudsters learning your rules?",
+      "a": "Don't reveal exact reasons for actions, vary thresholds, combine many signals, and delay some actions so cause and effect are less obvious."
+    },
+    {
+      "q": "How do you measure success?",
+      "a": "Fraud losses, buyer complaint rates, precision of actions (appeal overturn rates), and time from fraud to detection."
+    }
+  ],
+  "example": "A marketplace found that 80% of fraudulent sellers shared devices or bank accounts with previously banned accounts. Adding graph-based linkage checks at signup and payout, with holds instead of instant payouts for linked accounts, reduced fraud losses by 60% with few complaints from legitimate sellers.",
+  "related": [
+    "credential-stuffing-ato",
+    "chargebacks-refunds-reversals",
+    "marketplace-split-payouts",
+    "content-moderation-pipeline"
+  ],
+  "sources": [
+    {
+      "title": "OWASP: Automated threats to web applications",
+      "url": "https://owasp.org/www-project-automated-threats-to-web-applications/"
+    }
+  ]
+}

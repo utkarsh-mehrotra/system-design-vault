@@ -1,0 +1,73 @@
+{
+  "trap": {
+    "wrong": "\"Compute the surge multiplier per request from current demand and supply in the area.\"",
+    "why": "Per-request computation flickers with noise, is expensive, can be gamed, and may differ between the price shown and the price charged. Customers need a stable, honest quote.",
+    "probe": "Aggregating supply and demand per area and time window, smoothing, price quotes with expiry, and ETA accuracy vs latency.",
+    "say": "\"Supply and demand are aggregated per hexagon every short interval and smoothed into surge levels; the app shows an upfront quote that's locked for a few minutes and honoured at booking; ETAs come from precomputed estimates refined by routing, measured against actuals.\""
+  },
+  "thesis": "Dynamic pricing works from aggregated, smoothed supply and demand per area and time window, not per request. Show customers a locked upfront quote that's honoured, compute ETAs with a mix of cached and routed estimates, and measure both against real outcomes.",
+  "pitch": "I'd divide the city into cells, for example H3 hexagons, and every 30 to 60 seconds compute demand (open requests, app opens) and supply (available drivers) per cell from the location and request streams. A pricing function turns the ratio into a surge level, smoothed over time and across neighbouring cells so prices don't flicker. When a customer requests a quote, the system combines base fare, estimated distance and time from routing, and the cell's current surge level into an upfront price with a quote id that's valid for a few minutes; booking charges that quote, regardless of surge changes in between. ETAs: pickup ETA from the matching candidates' routed times; trip ETA from a routing engine with traffic data, and for scale, cached estimates between cells refreshed periodically, refined for the final quote. Both prices and ETAs are logged with actual outcomes to monitor accuracy and calibrate models. Business and regulatory guardrails cap multipliers, especially in emergencies.",
+  "points": [
+    {
+      "h": "Aggregate per cell and window",
+      "d": "Demand and supply per hexagon over short windows, computed from streams, not per request."
+    },
+    {
+      "h": "Smooth over time and space",
+      "d": "Avoid flickering prices and sharp borders by smoothing across intervals and neighbouring cells."
+    },
+    {
+      "h": "Locked upfront quotes",
+      "d": "Quote id with price and expiry shown to the customer; booking honours it even if surge changes."
+    },
+    {
+      "h": "ETA layering",
+      "d": "Precomputed cell-to-cell estimates for speed, refined by routing with live traffic for the final quote."
+    },
+    {
+      "h": "Measure against actuals",
+      "d": "Compare predicted ETAs and prices with real trip times and costs; recalibrate continuously."
+    },
+    {
+      "h": "Guardrails",
+      "d": "Caps on multipliers, emergency rules and transparency requirements set by policy and regulation."
+    }
+  ],
+  "decision": "Periodic, smoothed, cell-level surge computation with locked quotes; layered ETA estimation with accuracy monitoring; policy caps owned by the business.",
+  "numbers": [
+    "Computation example: a city with 20,000 active hexagons recomputed every 30 seconds is about 670 cell updates per second, cheap compared with computing per request."
+  ],
+  "pitfalls": [
+    "Per-request surge that flickers between refreshes.",
+    "Charging a different price from the one shown.",
+    "Straight-line ETAs that ignore traffic.",
+    "No monitoring of ETA accuracy, so estimates drift."
+  ],
+  "followups": [
+    {
+      "q": "How do you stop drivers or riders gaming surge?",
+      "a": "Smoothing, minimum durations for surge levels, and signals that don't let a few actors (drivers going offline together) dominate."
+    },
+    {
+      "q": "What if the actual trip takes much longer than quoted?",
+      "a": "Honour the upfront price within policy, with exceptions for major route changes requested by the rider."
+    },
+    {
+      "q": "How do you test a new pricing function?",
+      "a": "Simulation on historical data, then controlled experiments by area and time, with guardrail metrics for completion and cancellation rates."
+    }
+  ],
+  "example": "A ride app's surge flickered every few seconds, so riders refreshed repeatedly hoping for lower prices. Moving to 60-second cell-level computation with temporal smoothing and 5-minute locked quotes reduced quote refreshes by half and eliminated complaints about charged prices differing from shown prices.",
+  "related": [
+    "dispatch-matching-shortage",
+    "driver-location-updates-scale",
+    "checkout-promotions-consistency",
+    "geospatial-nearby-queries"
+  ],
+  "sources": [
+    {
+      "title": "Uber engineering: H3, Uber's hexagonal hierarchical spatial index",
+      "url": "https://www.uber.com/blog/h3/"
+    }
+  ]
+}

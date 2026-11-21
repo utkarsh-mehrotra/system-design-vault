@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Write every location update to the main database and query it for nearby drivers.\"",
+    "why": "That's over a hundred thousand writes per second of data that's stale within seconds, crushing a transactional database built for durable, consistent writes.",
+    "probe": "Separating hot current state from history, in-memory geospatial indexes, streaming ingestion and smoothing noisy GPS.",
+    "say": "\"Current location goes to a sharded in-memory geospatial index with short TTLs for matching; the full stream goes through Kafka to cheap storage for history and analytics; and noisy GPS is filtered and snapped to roads before use.\""
+  },
+  "thesis": "Location updates are high-volume, short-lived data. Keep only the latest position per driver in an in-memory, sharded geospatial index for real-time queries, stream all updates to durable cheap storage for history, and clean noisy GPS before it drives decisions.",
+  "pitch": "Each driver app sends its position every few seconds over a persistent connection or lightweight HTTP. An ingestion tier validates and authenticates updates and publishes them to a stream partitioned by driver or region. A location service consumes the stream and maintains each driver's latest position, status and timestamp in an in-memory geospatial index, sharded by region, with entries expiring if a driver stops reporting. Matching and 'drivers near me' queries hit that index. The same stream lands in object storage or a time-series store for trip reconstruction, analytics, disputes and ETA model training, at far lower cost than a transactional database. GPS is noisy, especially in dense cities, so I'd filter outliers, smooth with a Kalman filter or similar, and map-match to roads. Riders watching a car approach get updates pushed through a subscription channel for that trip, not by polling. Clients adapt update frequency, more often when on a trip, less when idle, to save battery and bandwidth.",
+  "points": [
+    {
+      "h": "Separate current state from history",
+      "d": "Latest position in memory for real-time queries; full history in a stream and cheap storage."
+    },
+    {
+      "h": "Streaming ingestion",
+      "d": "Updates published to a partitioned stream decouple ingestion from consumers (matching, ETA, analytics)."
+    },
+    {
+      "h": "Sharded in-memory geospatial index",
+      "d": "Region-sharded cells with TTLs so offline drivers disappear automatically."
+    },
+    {
+      "h": "Clean the signal",
+      "d": "Outlier filtering, smoothing and map-matching to roads before using positions for ETAs and billing."
+    },
+    {
+      "h": "Push updates to watchers",
+      "d": "Riders tracking a trip subscribe to that driver's position channel instead of polling."
+    },
+    {
+      "h": "Adaptive frequency",
+      "d": "More frequent updates during trips, less when idle, balancing accuracy with battery and cost."
+    },
+    {
+      "h": "Durable where it matters",
+      "d": "Trip-critical events (pickup, drop-off) recorded transactionally; raw pings are best-effort."
+    }
+  ],
+  "decision": "In-memory geospatial index for the latest position, a partitioned stream for fan-out, and object or time-series storage for history; never the transactional database for raw pings.",
+  "numbers": [
+    "500,000 drivers updating every 4 seconds ≈ 125,000 updates/s; at ~100 bytes each that's ~12.5 MB/s, ~1 TB/day of raw history before compression."
+  ],
+  "pitfalls": [
+    "Raw pings into the main database.",
+    "No TTL, so offline drivers appear available.",
+    "Using unfiltered GPS for fares and ETAs.",
+    "Riders polling for driver location every second."
+  ],
+  "followups": [
+    {
+      "q": "How do you compute the fare distance if GPS is noisy?",
+      "a": "Use map-matched trip paths from the cleaned history, with fallbacks to routing estimates where data is missing."
+    },
+    {
+      "q": "What happens when a region's location shard fails?",
+      "a": "Replicas or rapid rebuild from the stream (latest positions arrive within seconds anyway), with matching degraded briefly in that region."
+    },
+    {
+      "q": "How do you handle drivers in tunnels or with poor connectivity?",
+      "a": "Dead reckoning from last speed and heading for a short time, and marking positions as estimated."
+    }
+  ],
+  "example": "A ride-hailing startup wrote every GPS ping to Postgres; at 40,000 drivers the database saturated. Moving latest positions to Redis GEO sharded by city with 30-second TTLs, and streaming raw pings to Kafka and S3, removed the database load and made history cheap to keep.",
+  "related": [
+    "geospatial-nearby-queries",
+    "dispatch-matching-shortage",
+    "realtime-delivery-polling-websockets",
+    "estimation-dau-qps-storage"
+  ],
+  "sources": [
+    {
+      "title": "Redis documentation: Geospatial",
+      "url": "https://redis.io/docs/latest/develop/data-types/geospatial/"
+    },
+    {
+      "title": "Newson and Krumm: Hidden Markov map matching through noise and sparseness",
+      "url": "https://www.microsoft.com/en-us/research/publication/hidden-markov-map-matching-noise-sparseness/"
+    }
+  ]
+}

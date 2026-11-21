@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"When an order is paid, immediately transfer each seller's share to their bank.\"",
+    "why": "Refunds, cancellations and chargebacks happen after payment, sellers can have negative balances, bank transfers fail, and regulations may restrict holding or moving funds. Instant payouts make recovery hard.",
+    "probe": "Ledger-based seller balances, payout schedules and holds, failed payouts, negative balances and compliance.",
+    "say": "\"Each order posts ledger entries crediting seller balances net of fees; payouts run on a schedule from available balance after a hold period, are idempotent per payout id, handle bank failures, and net refunds and chargebacks against future earnings.\""
+  },
+  "thesis": "Marketplace money flows through a ledger: buyer payments credit seller balances minus fees, funds become available after holds, payouts move available balances to sellers on a schedule, and refunds or chargebacks debit balances. This decouples order events from bank transfers and makes recovery possible.",
+  "pitch": "When a buyer pays 100 for an order with two sellers, I'd post ledger entries: cash in, seller A's pending balance plus 60 minus their fee, seller B's pending balance plus 30 minus theirs, and platform fee revenue. Pending funds move to available after a hold period, for example after delivery or a few days, which covers most cancellations and refunds. A payout job periodically creates payouts from available balances above a threshold, each with its own id and state machine: created, submitted to the bank or payment provider, paid, or failed with a reason like invalid account. Failed payouts return funds to the balance and notify the seller. Refunds and chargebacks debit the seller's balance, which can go negative; future earnings offset it, or the platform pursues recovery. Using the payment provider's marketplace or connected-accounts product handles a lot of this, including regulatory requirements around holding funds and verifying sellers' identities. Reconciliation ties provider balances, bank statements and the ledger together daily.",
+  "points": [
+    {
+      "h": "Ledger-based seller balances",
+      "d": "Orders, fees, refunds and payouts are ledger entries; balances are derived, auditable and support partial operations."
+    },
+    {
+      "h": "Pending vs available funds",
+      "d": "Hold periods before funds become payable cover cancellations, delivery disputes and early refunds."
+    },
+    {
+      "h": "Scheduled, idempotent payouts",
+      "d": "Payout records with ids and states, created from available balance on a schedule or threshold."
+    },
+    {
+      "h": "Handle failed payouts",
+      "d": "Invalid bank details or rejections return funds to balance and prompt the seller to update details."
+    },
+    {
+      "h": "Negative balances and recovery",
+      "d": "Refunds and chargebacks after payout debit balances; offset against future earnings or recover via policy."
+    },
+    {
+      "h": "Compliance",
+      "d": "Seller identity verification, rules on holding customer funds, and tax reporting; provider marketplace products often cover these."
+    },
+    {
+      "h": "Daily reconciliation",
+      "d": "Match ledger, provider balances and bank movements; investigate breaks."
+    }
+  ],
+  "decision": "Ledger plus hold periods plus scheduled payouts, ideally on a payment provider's marketplace product. Instant payouts only as a deliberate product feature with risk controls and reserves.",
+  "numbers": [
+    "Example policy: funds available 7 days after delivery confirmation, weekly payouts above a minimum threshold, 10% rolling reserve for new sellers for 90 days."
+  ],
+  "pitfalls": [
+    "Paying sellers at the moment of buyer payment.",
+    "No ledger, just payout records, so balances can't be explained.",
+    "Ignoring failed bank transfers.",
+    "No plan for refunds after payout."
+  ],
+  "followups": [
+    {
+      "q": "How do you offer instant payouts safely?",
+      "a": "Only for sellers with good history, up to a risk-based limit, possibly for a fee, with reserves covering expected refunds."
+    },
+    {
+      "q": "How do you handle multi-currency sellers?",
+      "a": "Seller balances per currency, FX at payout with recorded rates, and FX accounts in the ledger."
+    },
+    {
+      "q": "What do sellers need to see?",
+      "a": "A statement of orders, fees, refunds, holds and payouts that ties exactly to the ledger."
+    }
+  ],
+  "example": "A marketplace paid sellers instantly and lost money when chargebacks arrived weeks later. Moving to ledger balances with 7-day holds, weekly payouts, reserves for new sellers and offsets for negative balances cut unrecovered losses sharply, and seller statements now reconcile to the cent.",
+  "related": [
+    "double-entry-ledger-design",
+    "chargebacks-refunds-reversals",
+    "payment-state-machine-provider",
+    "listing-review-fraud"
+  ],
+  "sources": [
+    {
+      "title": "Stripe documentation: Connect (marketplace payments)",
+      "url": "https://docs.stripe.com/connect"
+    },
+    {
+      "title": "Modern Treasury: Accounting for developers",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  ]
+}

@@ -4019,7 +4019,7 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Example:** After splitting the payments monolith, a staff engineer compared DORA metrics for the payments teams against two unmigrated teams over the same quarter: lead time dropped from 6 days to 2, deploy frequency tripled, and incidents were flat. The write-up also reported a 22% infrastructure cost increase, which led to rightsizing work.
    - **Sources:** [DORA: Software delivery performance metrics](https://dora.dev/guides/dora-metrics-four-keys/)
 
-## Domain Traps (9)
+## Domain Traps (16)
 
 ### Fintech & lending
 147. **Integrate a card payment provider: authorise, capture, refund, with webhooks. What does your payment state machine look like?** [mine · Advanced · Transactions, Reliability]
@@ -4261,8 +4261,187 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Sources:** [Media Rating Council: Invalid traffic detection and filtration guidelines](https://mediaratingcouncil.org/standards-and-guidelines); [IAB Tech Lab: Open Measurement SDK](https://iabtechlab.com/standards/open-measurement-sdk/)
 
 ### E-commerce & marketplaces
+156. **The cart showed one price, checkout charged another, and a single-use coupon was used twice. How do you design checkout and promotions?** [mine · Advanced · Consistency, APIs]
+   - **Trap:** "Recalculate the price from the current catalogue and promotions at payment time." — _Why it fails:_ Prices and promotions change between cart and payment, so customers get charged amounts they never saw. Without reservations, limited coupons can be redeemed concurrently beyond their limits. — _Probing:_ Price quotes, promotion evaluation order, atomic redemption and consistency between displayed and charged totals. — _Say:_ "Checkout creates a priced quote with a short expiry, showing exactly what will be charged; payment charges that quote; limited promotions are reserved atomically at quote time and confirmed on payment or released on expiry."
+   - **Thesis:** Checkout must charge exactly what the customer agreed to. Freeze a priced quote (items, prices, discounts, tax, shipping) with an expiry, evaluate promotions with deterministic rules, reserve limited redemptions atomically, and confirm or release them with the order.
+   - **60-second answer:** The cart is a live view; checkout needs a commitment. When the customer starts checkout, I'd compute a quote: line prices from the catalogue at that moment, promotions applied by a deterministic engine with explicit stacking and priority rules, tax and shipping, and a total. The quote has an id and an expiry, maybe 15 to 30 minutes, and payment charges that quote, not a recalculation. If the quote expires or inputs change, like the address or items, a new quote is shown before charging. Limited promotions, such as single-use codes or the first 1,000 redemptions, are reserved atomically when the quote is created, with a conditional update or token pool, confirmed when the order is paid, and released on expiry or failure, exactly like inventory holds. Prices and discount allocations per line are stored on the order for refunds and accounting. And the promotion engine's rules are versioned and testable, because stacking bugs are expensive.
+   - **Key points:**
+     1. **Priced quotes with expiry.** Freeze the total and its components when checkout starts; charge the quote id, not a recalculation.
+     2. **Re-quote on change.** Address, items or expiry changes produce a new quote shown to the customer before payment.
+     3. **Deterministic promotion engine.** Explicit eligibility, stacking, priority and exclusivity rules, versioned and unit-tested.
+     4. **Atomic redemption reservations.** Limited coupons reserved with conditional updates at quote time; confirmed on payment, released on expiry.
+     5. **Store allocations per line.** Discounts allocated to lines and stored on the order, so partial refunds return the right amounts.
+     6. **Idempotent order creation.** Payment and order creation keyed by quote id so retries don't create duplicate orders.
+   - **When to choose what:** Quote-then-charge for every checkout, with redemption reservations for limited promotions and allocations stored per line. Displayed totals and charged totals come from the same quote.
+   - **Numbers:**
+     - Quote expiry trade-off: 15 minutes keeps prices fresh and limits reservations; too short frustrates slow customers, too long holds limited coupons out of circulation.
+   - **Pitfalls:**
+     - Recomputing prices at payment and charging a different amount.
+     - Check-then-redeem coupon logic without atomic reservation.
+     - Undefined stacking rules, so promotions combine unexpectedly.
+     - No per-line discount allocation, making partial refunds wrong.
+   - **Follow-ups:**
+     - _A price drops after the quote. Do you honour the old or new price?_ A business decision; often re-quote at the lower price on refresh, but never charge more than the quote without showing it.
+     - _How do you test promotion stacking?_ Table-driven tests of combinations, property tests (totals never negative, never exceed list price), and shadow-evaluation of new rules against real carts.
+     - _How do you prevent coupon abuse across accounts?_ Per-customer limits tied to verified identity, device and payment method signals, and velocity checks.
+   - **Example:** A retailer's single-use influencer codes were redeemed 3,000 times in an hour because checks ran before payment without reservation. Reserving the code atomically at quote creation, releasing it after 20 minutes if unpaid, and charging the quote id fixed both double redemption and price mismatches.
+   - **Sources:** [Martin Fowler: Money pattern (allocation)](https://martinfowler.com/eaaCatalog/money.html)
+157. **Search results show products that are out of stock or have the wrong price. How do you keep catalogue search fresh?** [mine · Intermediate · Databases, Caching]
+   - **Trap:** "Reindex the whole catalogue every night." — _Why it fails:_ Prices and stock change minute by minute; a nightly index shows sold-out items and stale prices all day, and full reindexing gets slower as the catalogue grows. — _Probing:_ Incremental indexing via change events, separating fast-changing fields, and verifying at the point of decision. — _Say:_ "Incremental updates from change events for every product change, fast-changing fields like price and stock updated separately or overlaid at query time, periodic full rebuilds as a safety net, and the authoritative check at add-to-cart and checkout."
+   - **Thesis:** Search indexes are derived data and will lag. Keep lag small with event-driven incremental indexing, treat volatile fields like stock and price specially (partial updates or query-time overlays), rebuild periodically for correctness, and always verify against the source of truth at decision points.
+   - **60-second answer:** I'd feed the search index from change events: the catalogue, pricing and inventory services publish changes through an outbox or CDC, and an indexer applies partial updates to the affected documents within seconds. Volatile fields deserve special care: stock can change thousands of times a minute for popular items, and reindexing whole documents for each change is wasteful. Options are partial updates of just those fields, a coarse in-stock flag that changes only when crossing zero, or overlaying live price and stock from a fast store when rendering results. Full rebuilds into a new index with an alias swap run periodically to fix drift. Ranking can demote low-stock items. And crucially, the product page, add-to-cart and checkout check the source of truth, so a stale search result costs a click, not an oversell or a wrong charge. I'd monitor index lag from event time to searchable as an SLO.
+   - **Key points:**
+     1. **Event-driven incremental indexing.** Changes flow via outbox or CDC to an indexer that updates affected documents within seconds.
+     2. **Treat volatile fields specially.** Partial updates, threshold-based flags (in stock or not), or query-time overlays from a fast store.
+     3. **Periodic full rebuilds.** Build a new index and swap the alias to correct drift and apply mapping changes.
+     4. **Verify at decision points.** Product page, cart and checkout read the source of truth for price and availability.
+     5. **Index lag as an SLO.** Measure time from change to searchable and alert when it grows.
+     6. **Handle bursts.** Batch and coalesce updates for the same product to absorb flash-sale churn.
+   - **When to choose what:** Incremental event-driven indexing for all changes, special handling for price and stock, periodic rebuilds, and authoritative checks before money or stock decisions.
+   - **Numbers:**
+     - Coalescing example: a popular product receiving 200 stock changes a minute can be reindexed once every few seconds with the latest value, cutting index writes by over 90%.
+   - **Pitfalls:**
+     - Nightly-only reindexing.
+     - Reindexing whole documents for every stock change, overwhelming the cluster.
+     - Trusting search results for price or availability at checkout.
+     - No visibility into index lag.
+   - **Follow-ups:**
+     - _How do you handle mapping changes that need a full reindex?_ Build a new index in the background from the source of truth, replay changes that happened during the build, then swap the alias.
+     - _Should out-of-stock items disappear from search?_ Usually demote rather than remove, with clear labelling, and optionally hide when stock is zero for a while.
+     - _What if the indexer falls behind during a sale?_ Scale indexers, coalesce updates per product, and prioritise price and stock updates over descriptive changes.
+   - **Example:** A marketplace showed sold-out items in search for hours during sales. CDC from inventory with per-product coalescing every 5 seconds, a binary in-stock field, and live stock overlay on the product page cut stale results to seconds, and checkout continued to verify stock authoritatively.
+   - **Sources:** [Elasticsearch documentation: Aliases](https://www.elastic.co/guide/en/elasticsearch/reference/current/aliases.html); [Debezium: change data capture](https://debezium.io/)
+158. **A marketplace takes payment from buyers and pays out to many sellers, minus fees. How do you design split payments and payouts?** [mine · Advanced · Transactions, Reliability]
+   - **Trap:** "When an order is paid, immediately transfer each seller's share to their bank." — _Why it fails:_ Refunds, cancellations and chargebacks happen after payment, sellers can have negative balances, bank transfers fail, and regulations may restrict holding or moving funds. Instant payouts make recovery hard. — _Probing:_ Ledger-based seller balances, payout schedules and holds, failed payouts, negative balances and compliance. — _Say:_ "Each order posts ledger entries crediting seller balances net of fees; payouts run on a schedule from available balance after a hold period, are idempotent per payout id, handle bank failures, and net refunds and chargebacks against future earnings."
+   - **Thesis:** Marketplace money flows through a ledger: buyer payments credit seller balances minus fees, funds become available after holds, payouts move available balances to sellers on a schedule, and refunds or chargebacks debit balances. This decouples order events from bank transfers and makes recovery possible.
+   - **60-second answer:** When a buyer pays 100 for an order with two sellers, I'd post ledger entries: cash in, seller A's pending balance plus 60 minus their fee, seller B's pending balance plus 30 minus theirs, and platform fee revenue. Pending funds move to available after a hold period, for example after delivery or a few days, which covers most cancellations and refunds. A payout job periodically creates payouts from available balances above a threshold, each with its own id and state machine: created, submitted to the bank or payment provider, paid, or failed with a reason like invalid account. Failed payouts return funds to the balance and notify the seller. Refunds and chargebacks debit the seller's balance, which can go negative; future earnings offset it, or the platform pursues recovery. Using the payment provider's marketplace or connected-accounts product handles a lot of this, including regulatory requirements around holding funds and verifying sellers' identities. Reconciliation ties provider balances, bank statements and the ledger together daily.
+   - **Key points:**
+     1. **Ledger-based seller balances.** Orders, fees, refunds and payouts are ledger entries; balances are derived, auditable and support partial operations.
+     2. **Pending vs available funds.** Hold periods before funds become payable cover cancellations, delivery disputes and early refunds.
+     3. **Scheduled, idempotent payouts.** Payout records with ids and states, created from available balance on a schedule or threshold.
+     4. **Handle failed payouts.** Invalid bank details or rejections return funds to balance and prompt the seller to update details.
+     5. **Negative balances and recovery.** Refunds and chargebacks after payout debit balances; offset against future earnings or recover via policy.
+     6. **Compliance.** Seller identity verification, rules on holding customer funds, and tax reporting; provider marketplace products often cover these.
+     7. **Daily reconciliation.** Match ledger, provider balances and bank movements; investigate breaks.
+   - **When to choose what:** Ledger plus hold periods plus scheduled payouts, ideally on a payment provider's marketplace product. Instant payouts only as a deliberate product feature with risk controls and reserves.
+   - **Numbers:**
+     - Example policy: funds available 7 days after delivery confirmation, weekly payouts above a minimum threshold, 10% rolling reserve for new sellers for 90 days.
+   - **Pitfalls:**
+     - Paying sellers at the moment of buyer payment.
+     - No ledger, just payout records, so balances can't be explained.
+     - Ignoring failed bank transfers.
+     - No plan for refunds after payout.
+   - **Follow-ups:**
+     - _How do you offer instant payouts safely?_ Only for sellers with good history, up to a risk-based limit, possibly for a fee, with reserves covering expected refunds.
+     - _How do you handle multi-currency sellers?_ Seller balances per currency, FX at payout with recorded rates, and FX accounts in the ledger.
+     - _What do sellers need to see?_ A statement of orders, fees, refunds, holds and payouts that ties exactly to the ledger.
+   - **Example:** A marketplace paid sellers instantly and lost money when chargebacks arrived weeks later. Moving to ledger balances with 7-day holds, weekly payouts, reserves for new sellers and offsets for negative balances cut unrecovered losses sharply, and seller statements now reconcile to the cent.
+   - **Sources:** [Stripe documentation: Connect (marketplace payments)](https://docs.stripe.com/connect); [Modern Treasury: Accounting for developers](https://www.moderntreasury.com/journal/accounting-for-developers-part-i)
+159. **Fake listings and fake reviews are hurting trust in your marketplace. How do you design fraud detection?** [mine · Intermediate · Security, Messaging]
+   - **Trap:** "Train an ML model to flag fraudulent listings and reviews and auto-delete them." — _Why it fails:_ Fraudsters adapt quickly, a single model has false positives that harm honest sellers, and without layered signals, human review, feedback loops and friction, enforcement is either too weak or too harsh. — _Probing:_ Layered signals, risk scoring at multiple points, graduated actions, human review and adversarial adaptation. — _Say:_ "Risk scoring at key moments (signup, listing, review, payout) using rules, models and graph signals, graduated actions from friction to holds to removal, human review for uncertain cases, and feedback from outcomes to keep up with adapting fraudsters."
+   - **Thesis:** Marketplace fraud is adversarial and evolves, so defend in layers: score risk at each key action using rules, models and relationship signals, apply graduated responses rather than binary bans, route uncertain cases to humans, and feed outcomes back to adapt.
+   - **60-second answer:** I'd identify the moments that matter: account creation, listing creation, purchase, review submission and payout. At each, compute a risk score from several signal types. Account signals: age, verification, device fingerprint, IP reputation. Behaviour: listing velocity, price far below market, copied photos or descriptions, review bursts. Relationship signals: shared devices, payment methods or addresses across accounts, and graphs of reviewers and sellers who only interact with each other, a classic review-ring pattern. Rules catch known patterns quickly; models generalise; graph analysis finds rings. Actions are graduated: add friction like extra verification, hold a listing for review, delay payouts, down-weight suspicious reviews in ratings, or remove and ban when confident. Uncertain cases go to trust-and-safety reviewers with good tooling, and their decisions train models and tune rules. Payout holds are a powerful lever, since fraud is usually about extracting money. And I'd measure precision and recall, appeals, and time to action.
+   - **Key points:**
+     1. **Score at key moments.** Signup, listing, purchase, review and payout each get risk evaluation suited to the threat.
+     2. **Diverse signals.** Account age and verification, device and IP reputation, behavioural velocity, content similarity, price anomalies.
+     3. **Graph signals.** Shared devices, payment instruments and reviewer-seller networks reveal rings that per-account checks miss.
+     4. **Rules plus models.** Rules for known patterns and fast response; models for generalisation; both monitored for drift.
+     5. **Graduated actions.** Friction, holds, down-weighting, payout delays, then removal and bans, matched to confidence.
+     6. **Human review and feedback.** Analysts handle uncertain cases; decisions feed back to models and rules.
+     7. **Protect the money exit.** Payout holds and verification for new or risky sellers limit losses even when detection lags.
+   - **When to choose what:** Layered risk scoring with graduated responses, human review for the uncertain middle, graph analysis for organised fraud, and payout controls as a backstop.
+   - **Numbers:**
+     - Trade-off example: a model at 95% precision flagging 10,000 listings a day wrongly blocks 500 honest listings daily, which is why low-confidence flags get friction or review rather than removal.
+   - **Pitfalls:**
+     - Binary auto-ban decisions with high false positives.
+     - Looking at accounts in isolation and missing rings.
+     - Static rules that fraudsters learn to evade.
+     - No appeals process for honest sellers.
+   - **Follow-ups:**
+     - _How do you detect fake review rings?_ Graph analysis of reviewer-seller interactions, timing bursts, shared devices or payment methods, and text similarity across reviews.
+     - _How do you avoid fraudsters learning your rules?_ Don't reveal exact reasons for actions, vary thresholds, combine many signals, and delay some actions so cause and effect are less obvious.
+     - _How do you measure success?_ Fraud losses, buyer complaint rates, precision of actions (appeal overturn rates), and time from fraud to detection.
+   - **Example:** A marketplace found that 80% of fraudulent sellers shared devices or bank accounts with previously banned accounts. Adding graph-based linkage checks at signup and payout, with holds instead of instant payouts for linked accounts, reduced fraud losses by 60% with few complaints from legitimate sellers.
+   - **Sources:** [OWASP: Automated threats to web applications](https://owasp.org/www-project-automated-threats-to-web-applications/)
 
 ### Ride-hailing & delivery
+160. **Match riders to drivers (or orders to couriers) in real time, including when demand far exceeds supply.** [mine · Advanced · Scaling, Consistency]
+   - **Trap:** "Assign each request to the nearest available driver immediately." — _Why it fails:_ Greedy nearest-driver matching gives poor global outcomes (a slightly farther driver would have served two requests better), ignores ETA on real roads, and two requests can grab the same driver concurrently. Under shortage it also needs explicit prioritisation. — _Probing:_ Batched matching over short windows, ETA-based costs, preventing double assignment, and shortage handling. — _Say:_ "I'd match in small batches every second or two using road-network ETAs as cost, solve an assignment over candidates from nearby cells, lock drivers atomically when offering, handle declines with re-offers, and under shortage widen radius, queue requests and use pricing to balance."
+   - **Thesis:** Dispatch is an optimisation problem under latency constraints. Gather candidates via geospatial indexes, score by real ETA and other costs, match requests and drivers in short batches to improve global outcomes, guarantee each driver gets one offer at a time, and manage shortages explicitly with queues, wider searches and pricing.
+   - **60-second answer:** For each request I'd find candidate drivers from the geospatial index (nearby cells, expanding if needed), then compute ETAs using a road-network routing service rather than straight-line distance. Instead of assigning immediately, a matcher collects requests and available drivers over a short window, one to two seconds, and solves an assignment problem minimising total ETA or a weighted cost including driver fairness and customer priority. Before offering a trip, the driver is reserved atomically, so concurrent matchers can't offer the same driver twice; offers time out and decline handling re-enters the request into the next batch. The matcher is partitioned geographically, with care at boundaries. Under shortage, I'd widen search radii, queue requests with honest wait estimates, prioritise by rules like waiting time, and use surge pricing to reduce demand and attract supply. I'd monitor match rate, pickup ETA, cancellation rate and driver utilisation per area.
+   - **Key points:**
+     1. **Candidate generation.** Geospatial index lookups (H3 or geohash cells plus neighbours) produce a manageable candidate set.
+     2. **Real ETAs as cost.** Road-network routing gives realistic pickup times; straight-line distance misleads around rivers, highways and one-way streets.
+     3. **Batched matching.** Collect requests over a short window and solve an assignment problem for better global outcomes than greedy nearest.
+     4. **Atomic driver reservation.** Reserve a driver before offering, with timeouts, so no driver gets two simultaneous offers.
+     5. **Declines and timeouts.** Declined or expired offers release the driver and return the request to the next batch.
+     6. **Geographic partitioning.** Matchers per region or cell group for scale, with boundary handling.
+     7. **Shortage handling.** Wider radius, queueing with wait estimates, prioritisation and pricing to rebalance supply and demand.
+   - **When to choose what:** Batched, ETA-based matching with atomic reservations and geographic partitioning; greedy nearest only as a fallback when the matcher is degraded.
+   - **Numbers:**
+     - Batch window trade-off: a 2-second window adds up to 2 seconds of latency but can noticeably reduce average pickup ETA in dense areas by considering requests and drivers together.
+   - **Pitfalls:**
+     - Greedy nearest-driver assignment.
+     - Straight-line distance as the cost.
+     - Concurrent offers to the same driver.
+     - No explicit behaviour under shortage, causing long silent waits and cancellations.
+   - **Follow-ups:**
+     - _How do you scale the matcher city-wide?_ Partition by geographic region with overlapping boundary zones, each matcher owning its drivers and requests, with handoffs at edges.
+     - _What if the routing service is slow?_ Use cached ETA estimates by cell pair, fall back to a simpler distance model, and keep matching within latency budgets.
+     - _How do you include fairness for drivers?_ Add terms to the cost for driver idle time or earnings balance, within limits that don't hurt rider experience too much.
+   - **Example:** A delivery platform moved from nearest-courier assignment to 2-second batch matching using road ETAs. Average pickup time fell 12%, double offers disappeared thanks to atomic reservations, and during evening shortages customers saw honest wait estimates instead of cancelling.
+   - **Sources:** [Uber engineering: H3, Uber's hexagonal hierarchical spatial index](https://www.uber.com/blog/h3/)
+161. **Hundreds of thousands of drivers send GPS updates every few seconds. How do you ingest, store and serve them?** [mine · Intermediate · Scaling, Databases]
+   - **Trap:** "Write every location update to the main database and query it for nearby drivers." — _Why it fails:_ That's over a hundred thousand writes per second of data that's stale within seconds, crushing a transactional database built for durable, consistent writes. — _Probing:_ Separating hot current state from history, in-memory geospatial indexes, streaming ingestion and smoothing noisy GPS. — _Say:_ "Current location goes to a sharded in-memory geospatial index with short TTLs for matching; the full stream goes through Kafka to cheap storage for history and analytics; and noisy GPS is filtered and snapped to roads before use."
+   - **Thesis:** Location updates are high-volume, short-lived data. Keep only the latest position per driver in an in-memory, sharded geospatial index for real-time queries, stream all updates to durable cheap storage for history, and clean noisy GPS before it drives decisions.
+   - **60-second answer:** Each driver app sends its position every few seconds over a persistent connection or lightweight HTTP. An ingestion tier validates and authenticates updates and publishes them to a stream partitioned by driver or region. A location service consumes the stream and maintains each driver's latest position, status and timestamp in an in-memory geospatial index, sharded by region, with entries expiring if a driver stops reporting. Matching and 'drivers near me' queries hit that index. The same stream lands in object storage or a time-series store for trip reconstruction, analytics, disputes and ETA model training, at far lower cost than a transactional database. GPS is noisy, especially in dense cities, so I'd filter outliers, smooth with a Kalman filter or similar, and map-match to roads. Riders watching a car approach get updates pushed through a subscription channel for that trip, not by polling. Clients adapt update frequency, more often when on a trip, less when idle, to save battery and bandwidth.
+   - **Key points:**
+     1. **Separate current state from history.** Latest position in memory for real-time queries; full history in a stream and cheap storage.
+     2. **Streaming ingestion.** Updates published to a partitioned stream decouple ingestion from consumers (matching, ETA, analytics).
+     3. **Sharded in-memory geospatial index.** Region-sharded cells with TTLs so offline drivers disappear automatically.
+     4. **Clean the signal.** Outlier filtering, smoothing and map-matching to roads before using positions for ETAs and billing.
+     5. **Push updates to watchers.** Riders tracking a trip subscribe to that driver's position channel instead of polling.
+     6. **Adaptive frequency.** More frequent updates during trips, less when idle, balancing accuracy with battery and cost.
+     7. **Durable where it matters.** Trip-critical events (pickup, drop-off) recorded transactionally; raw pings are best-effort.
+   - **When to choose what:** In-memory geospatial index for the latest position, a partitioned stream for fan-out, and object or time-series storage for history; never the transactional database for raw pings.
+   - **Numbers:**
+     - 500,000 drivers updating every 4 seconds ≈ 125,000 updates/s; at ~100 bytes each that's ~12.5 MB/s, ~1 TB/day of raw history before compression.
+   - **Pitfalls:**
+     - Raw pings into the main database.
+     - No TTL, so offline drivers appear available.
+     - Using unfiltered GPS for fares and ETAs.
+     - Riders polling for driver location every second.
+   - **Follow-ups:**
+     - _How do you compute the fare distance if GPS is noisy?_ Use map-matched trip paths from the cleaned history, with fallbacks to routing estimates where data is missing.
+     - _What happens when a region's location shard fails?_ Replicas or rapid rebuild from the stream (latest positions arrive within seconds anyway), with matching degraded briefly in that region.
+     - _How do you handle drivers in tunnels or with poor connectivity?_ Dead reckoning from last speed and heading for a short time, and marking positions as estimated.
+   - **Example:** A ride-hailing startup wrote every GPS ping to Postgres; at 40,000 drivers the database saturated. Moving latest positions to Redis GEO sharded by city with 30-second TTLs, and streaming raw pings to Kafka and S3, removed the database load and made history cheap to keep.
+   - **Sources:** [Redis documentation: Geospatial](https://redis.io/docs/latest/develop/data-types/geospatial/); [Newson and Krumm: Hidden Markov map matching through noise and sparseness](https://www.microsoft.com/en-us/research/publication/hidden-markov-map-matching-noise-sparseness/)
+162. **Design surge pricing and ETA estimates. How do you keep them fast, fair and consistent with what the customer is charged?** [mine · Advanced · Scaling, Consistency]
+   - **Trap:** "Compute the surge multiplier per request from current demand and supply in the area." — _Why it fails:_ Per-request computation flickers with noise, is expensive, can be gamed, and may differ between the price shown and the price charged. Customers need a stable, honest quote. — _Probing:_ Aggregating supply and demand per area and time window, smoothing, price quotes with expiry, and ETA accuracy vs latency. — _Say:_ "Supply and demand are aggregated per hexagon every short interval and smoothed into surge levels; the app shows an upfront quote that's locked for a few minutes and honoured at booking; ETAs come from precomputed estimates refined by routing, measured against actuals."
+   - **Thesis:** Dynamic pricing works from aggregated, smoothed supply and demand per area and time window, not per request. Show customers a locked upfront quote that's honoured, compute ETAs with a mix of cached and routed estimates, and measure both against real outcomes.
+   - **60-second answer:** I'd divide the city into cells, for example H3 hexagons, and every 30 to 60 seconds compute demand (open requests, app opens) and supply (available drivers) per cell from the location and request streams. A pricing function turns the ratio into a surge level, smoothed over time and across neighbouring cells so prices don't flicker. When a customer requests a quote, the system combines base fare, estimated distance and time from routing, and the cell's current surge level into an upfront price with a quote id that's valid for a few minutes; booking charges that quote, regardless of surge changes in between. ETAs: pickup ETA from the matching candidates' routed times; trip ETA from a routing engine with traffic data, and for scale, cached estimates between cells refreshed periodically, refined for the final quote. Both prices and ETAs are logged with actual outcomes to monitor accuracy and calibrate models. Business and regulatory guardrails cap multipliers, especially in emergencies.
+   - **Key points:**
+     1. **Aggregate per cell and window.** Demand and supply per hexagon over short windows, computed from streams, not per request.
+     2. **Smooth over time and space.** Avoid flickering prices and sharp borders by smoothing across intervals and neighbouring cells.
+     3. **Locked upfront quotes.** Quote id with price and expiry shown to the customer; booking honours it even if surge changes.
+     4. **ETA layering.** Precomputed cell-to-cell estimates for speed, refined by routing with live traffic for the final quote.
+     5. **Measure against actuals.** Compare predicted ETAs and prices with real trip times and costs; recalibrate continuously.
+     6. **Guardrails.** Caps on multipliers, emergency rules and transparency requirements set by policy and regulation.
+   - **When to choose what:** Periodic, smoothed, cell-level surge computation with locked quotes; layered ETA estimation with accuracy monitoring; policy caps owned by the business.
+   - **Numbers:**
+     - Computation example: a city with 20,000 active hexagons recomputed every 30 seconds is about 670 cell updates per second, cheap compared with computing per request.
+   - **Pitfalls:**
+     - Per-request surge that flickers between refreshes.
+     - Charging a different price from the one shown.
+     - Straight-line ETAs that ignore traffic.
+     - No monitoring of ETA accuracy, so estimates drift.
+   - **Follow-ups:**
+     - _How do you stop drivers or riders gaming surge?_ Smoothing, minimum durations for surge levels, and signals that don't let a few actors (drivers going offline together) dominate.
+     - _What if the actual trip takes much longer than quoted?_ Honour the upfront price within policy, with exceptions for major route changes requested by the rider.
+     - _How do you test a new pricing function?_ Simulation on historical data, then controlled experiments by area and time, with guardrail metrics for completion and cancellation rates.
+   - **Example:** A ride app's surge flickered every few seconds, so riders refreshed repeatedly hoping for lower prices. Moving to 60-second cell-level computation with temporal smoothing and 5-minute locked quotes reduced quote refreshes by half and eliminated complaints about charged prices differing from shown prices.
+   - **Sources:** [Uber engineering: H3, Uber's hexagonal hierarchical spatial index](https://www.uber.com/blog/h3/)
 
 ### Supply chain & logistics
 

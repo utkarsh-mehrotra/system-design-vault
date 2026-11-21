@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Assign each request to the nearest available driver immediately.\"",
+    "why": "Greedy nearest-driver matching gives poor global outcomes (a slightly farther driver would have served two requests better), ignores ETA on real roads, and two requests can grab the same driver concurrently. Under shortage it also needs explicit prioritisation.",
+    "probe": "Batched matching over short windows, ETA-based costs, preventing double assignment, and shortage handling.",
+    "say": "\"I'd match in small batches every second or two using road-network ETAs as cost, solve an assignment over candidates from nearby cells, lock drivers atomically when offering, handle declines with re-offers, and under shortage widen radius, queue requests and use pricing to balance.\""
+  },
+  "thesis": "Dispatch is an optimisation problem under latency constraints. Gather candidates via geospatial indexes, score by real ETA and other costs, match requests and drivers in short batches to improve global outcomes, guarantee each driver gets one offer at a time, and manage shortages explicitly with queues, wider searches and pricing.",
+  "pitch": "For each request I'd find candidate drivers from the geospatial index (nearby cells, expanding if needed), then compute ETAs using a road-network routing service rather than straight-line distance. Instead of assigning immediately, a matcher collects requests and available drivers over a short window, one to two seconds, and solves an assignment problem minimising total ETA or a weighted cost including driver fairness and customer priority. Before offering a trip, the driver is reserved atomically, so concurrent matchers can't offer the same driver twice; offers time out and decline handling re-enters the request into the next batch. The matcher is partitioned geographically, with care at boundaries. Under shortage, I'd widen search radii, queue requests with honest wait estimates, prioritise by rules like waiting time, and use surge pricing to reduce demand and attract supply. I'd monitor match rate, pickup ETA, cancellation rate and driver utilisation per area.",
+  "points": [
+    {
+      "h": "Candidate generation",
+      "d": "Geospatial index lookups (H3 or geohash cells plus neighbours) produce a manageable candidate set."
+    },
+    {
+      "h": "Real ETAs as cost",
+      "d": "Road-network routing gives realistic pickup times; straight-line distance misleads around rivers, highways and one-way streets."
+    },
+    {
+      "h": "Batched matching",
+      "d": "Collect requests over a short window and solve an assignment problem for better global outcomes than greedy nearest."
+    },
+    {
+      "h": "Atomic driver reservation",
+      "d": "Reserve a driver before offering, with timeouts, so no driver gets two simultaneous offers."
+    },
+    {
+      "h": "Declines and timeouts",
+      "d": "Declined or expired offers release the driver and return the request to the next batch."
+    },
+    {
+      "h": "Geographic partitioning",
+      "d": "Matchers per region or cell group for scale, with boundary handling."
+    },
+    {
+      "h": "Shortage handling",
+      "d": "Wider radius, queueing with wait estimates, prioritisation and pricing to rebalance supply and demand."
+    }
+  ],
+  "decision": "Batched, ETA-based matching with atomic reservations and geographic partitioning; greedy nearest only as a fallback when the matcher is degraded.",
+  "numbers": [
+    "Batch window trade-off: a 2-second window adds up to 2 seconds of latency but can noticeably reduce average pickup ETA in dense areas by considering requests and drivers together."
+  ],
+  "pitfalls": [
+    "Greedy nearest-driver assignment.",
+    "Straight-line distance as the cost.",
+    "Concurrent offers to the same driver.",
+    "No explicit behaviour under shortage, causing long silent waits and cancellations."
+  ],
+  "followups": [
+    {
+      "q": "How do you scale the matcher city-wide?",
+      "a": "Partition by geographic region with overlapping boundary zones, each matcher owning its drivers and requests, with handoffs at edges."
+    },
+    {
+      "q": "What if the routing service is slow?",
+      "a": "Use cached ETA estimates by cell pair, fall back to a simpler distance model, and keep matching within latency budgets."
+    },
+    {
+      "q": "How do you include fairness for drivers?",
+      "a": "Add terms to the cost for driver idle time or earnings balance, within limits that don't hurt rider experience too much."
+    }
+  ],
+  "example": "A delivery platform moved from nearest-courier assignment to 2-second batch matching using road ETAs. Average pickup time fell 12%, double offers disappeared thanks to atomic reservations, and during evening shortages customers saw honest wait estimates instead of cancelling.",
+  "related": [
+    "geospatial-nearby-queries",
+    "driver-location-updates-scale",
+    "surge-pricing-eta",
+    "distributed-locks-fencing"
+  ],
+  "sources": [
+    {
+      "title": "Uber engineering: H3, Uber's hexagonal hierarchical spatial index",
+      "url": "https://www.uber.com/blog/h3/"
+    }
+  ]
+}

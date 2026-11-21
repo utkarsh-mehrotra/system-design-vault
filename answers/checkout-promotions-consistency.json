@@ -1,0 +1,73 @@
+{
+  "trap": {
+    "wrong": "\"Recalculate the price from the current catalogue and promotions at payment time.\"",
+    "why": "Prices and promotions change between cart and payment, so customers get charged amounts they never saw. Without reservations, limited coupons can be redeemed concurrently beyond their limits.",
+    "probe": "Price quotes, promotion evaluation order, atomic redemption and consistency between displayed and charged totals.",
+    "say": "\"Checkout creates a priced quote with a short expiry, showing exactly what will be charged; payment charges that quote; limited promotions are reserved atomically at quote time and confirmed on payment or released on expiry.\""
+  },
+  "thesis": "Checkout must charge exactly what the customer agreed to. Freeze a priced quote (items, prices, discounts, tax, shipping) with an expiry, evaluate promotions with deterministic rules, reserve limited redemptions atomically, and confirm or release them with the order.",
+  "pitch": "The cart is a live view; checkout needs a commitment. When the customer starts checkout, I'd compute a quote: line prices from the catalogue at that moment, promotions applied by a deterministic engine with explicit stacking and priority rules, tax and shipping, and a total. The quote has an id and an expiry, maybe 15 to 30 minutes, and payment charges that quote, not a recalculation. If the quote expires or inputs change, like the address or items, a new quote is shown before charging. Limited promotions, such as single-use codes or the first 1,000 redemptions, are reserved atomically when the quote is created, with a conditional update or token pool, confirmed when the order is paid, and released on expiry or failure, exactly like inventory holds. Prices and discount allocations per line are stored on the order for refunds and accounting. And the promotion engine's rules are versioned and testable, because stacking bugs are expensive.",
+  "points": [
+    {
+      "h": "Priced quotes with expiry",
+      "d": "Freeze the total and its components when checkout starts; charge the quote id, not a recalculation."
+    },
+    {
+      "h": "Re-quote on change",
+      "d": "Address, items or expiry changes produce a new quote shown to the customer before payment."
+    },
+    {
+      "h": "Deterministic promotion engine",
+      "d": "Explicit eligibility, stacking, priority and exclusivity rules, versioned and unit-tested."
+    },
+    {
+      "h": "Atomic redemption reservations",
+      "d": "Limited coupons reserved with conditional updates at quote time; confirmed on payment, released on expiry."
+    },
+    {
+      "h": "Store allocations per line",
+      "d": "Discounts allocated to lines and stored on the order, so partial refunds return the right amounts."
+    },
+    {
+      "h": "Idempotent order creation",
+      "d": "Payment and order creation keyed by quote id so retries don't create duplicate orders."
+    }
+  ],
+  "decision": "Quote-then-charge for every checkout, with redemption reservations for limited promotions and allocations stored per line. Displayed totals and charged totals come from the same quote.",
+  "numbers": [
+    "Quote expiry trade-off: 15 minutes keeps prices fresh and limits reservations; too short frustrates slow customers, too long holds limited coupons out of circulation."
+  ],
+  "pitfalls": [
+    "Recomputing prices at payment and charging a different amount.",
+    "Check-then-redeem coupon logic without atomic reservation.",
+    "Undefined stacking rules, so promotions combine unexpectedly.",
+    "No per-line discount allocation, making partial refunds wrong."
+  ],
+  "followups": [
+    {
+      "q": "A price drops after the quote. Do you honour the old or new price?",
+      "a": "A business decision; often re-quote at the lower price on refresh, but never charge more than the quote without showing it."
+    },
+    {
+      "q": "How do you test promotion stacking?",
+      "a": "Table-driven tests of combinations, property tests (totals never negative, never exceed list price), and shadow-evaluation of new rules against real carts."
+    },
+    {
+      "q": "How do you prevent coupon abuse across accounts?",
+      "a": "Per-customer limits tied to verified identity, device and payment method signals, and velocity checks."
+    }
+  ],
+  "example": "A retailer's single-use influencer codes were redeemed 3,000 times in an hour because checks ran before payment without reservation. Reserving the code atomically at quote creation, releasing it after 20 minutes if unpaid, and charging the quote id fixed both double redemption and price mismatches.",
+  "related": [
+    "flash-sale-never-oversell",
+    "build-idempotency-write-api-clients",
+    "money-rounding-currency",
+    "chargebacks-refunds-reversals"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Money pattern (allocation)",
+      "url": "https://martinfowler.com/eaaCatalog/money.html"
+    }
+  ]
+}

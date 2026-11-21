@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Reindex the whole catalogue every night.\"",
+    "why": "Prices and stock change minute by minute; a nightly index shows sold-out items and stale prices all day, and full reindexing gets slower as the catalogue grows.",
+    "probe": "Incremental indexing via change events, separating fast-changing fields, and verifying at the point of decision.",
+    "say": "\"Incremental updates from change events for every product change, fast-changing fields like price and stock updated separately or overlaid at query time, periodic full rebuilds as a safety net, and the authoritative check at add-to-cart and checkout.\""
+  },
+  "thesis": "Search indexes are derived data and will lag. Keep lag small with event-driven incremental indexing, treat volatile fields like stock and price specially (partial updates or query-time overlays), rebuild periodically for correctness, and always verify against the source of truth at decision points.",
+  "pitch": "I'd feed the search index from change events: the catalogue, pricing and inventory services publish changes through an outbox or CDC, and an indexer applies partial updates to the affected documents within seconds. Volatile fields deserve special care: stock can change thousands of times a minute for popular items, and reindexing whole documents for each change is wasteful. Options are partial updates of just those fields, a coarse in-stock flag that changes only when crossing zero, or overlaying live price and stock from a fast store when rendering results. Full rebuilds into a new index with an alias swap run periodically to fix drift. Ranking can demote low-stock items. And crucially, the product page, add-to-cart and checkout check the source of truth, so a stale search result costs a click, not an oversell or a wrong charge. I'd monitor index lag from event time to searchable as an SLO.",
+  "points": [
+    {
+      "h": "Event-driven incremental indexing",
+      "d": "Changes flow via outbox or CDC to an indexer that updates affected documents within seconds."
+    },
+    {
+      "h": "Treat volatile fields specially",
+      "d": "Partial updates, threshold-based flags (in stock or not), or query-time overlays from a fast store."
+    },
+    {
+      "h": "Periodic full rebuilds",
+      "d": "Build a new index and swap the alias to correct drift and apply mapping changes."
+    },
+    {
+      "h": "Verify at decision points",
+      "d": "Product page, cart and checkout read the source of truth for price and availability."
+    },
+    {
+      "h": "Index lag as an SLO",
+      "d": "Measure time from change to searchable and alert when it grows."
+    },
+    {
+      "h": "Handle bursts",
+      "d": "Batch and coalesce updates for the same product to absorb flash-sale churn."
+    }
+  ],
+  "decision": "Incremental event-driven indexing for all changes, special handling for price and stock, periodic rebuilds, and authoritative checks before money or stock decisions.",
+  "numbers": [
+    "Coalescing example: a popular product receiving 200 stock changes a minute can be reindexed once every few seconds with the latest value, cutting index writes by over 90%."
+  ],
+  "pitfalls": [
+    "Nightly-only reindexing.",
+    "Reindexing whole documents for every stock change, overwhelming the cluster.",
+    "Trusting search results for price or availability at checkout.",
+    "No visibility into index lag."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle mapping changes that need a full reindex?",
+      "a": "Build a new index in the background from the source of truth, replay changes that happened during the build, then swap the alias."
+    },
+    {
+      "q": "Should out-of-stock items disappear from search?",
+      "a": "Usually demote rather than remove, with clear labelling, and optionally hide when stock is zero for a while."
+    },
+    {
+      "q": "What if the indexer falls behind during a sale?",
+      "a": "Scale indexers, coalesce updates per product, and prioritise price and stock updates over descriptive changes."
+    }
+  ],
+  "example": "A marketplace showed sold-out items in search for hours during sales. CDC from inventory with per-product coalescing every 5 seconds, a binary in-stock field, and live stock overlay on the product page cut stale results to seconds, and checkout continued to verify stock authoritatively.",
+  "related": [
+    "decide-between-sql-nosql-search",
+    "design-outbox-inbox-pattern-reliable",
+    "design-cache-invalidation-rules-not",
+    "stale-prices-external-inventory"
+  ],
+  "sources": [
+    {
+      "title": "Elasticsearch documentation: Aliases",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/aliases.html"
+    },
+    {
+      "title": "Debezium: change data capture",
+      "url": "https://debezium.io/"
+    }
+  ]
+}

@@ -3178,6 +3178,125 @@
         "Databases"
       ],
       "legacy": []
+    },
+    {
+      "id": "checkout-promotions-consistency",
+      "cat": "domains",
+      "topic": "E-commerce & marketplaces",
+      "level": "advanced",
+      "source": "mine",
+      "q": "The cart showed one price, checkout charged another, and a single-use coupon was used twice. How do you design checkout and promotions?",
+      "also": [],
+      "a": [
+        "Checkout must charge exactly what the customer agreed to. Freeze a priced quote (items, prices, discounts, tax, shipping) with an expiry, evaluate promotions with deterministic rules, reserve limited redemptions atomically, and confirm or release them with the order."
+      ],
+      "tags": [
+        "Consistency",
+        "APIs"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "catalog-search-freshness",
+      "cat": "domains",
+      "topic": "E-commerce & marketplaces",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Search results show products that are out of stock or have the wrong price. How do you keep catalogue search fresh?",
+      "also": [],
+      "a": [
+        "Search indexes are derived data and will lag. Keep lag small with event-driven incremental indexing, treat volatile fields like stock and price specially (partial updates or query-time overlays), rebuild periodically for correctness, and always verify against the source of truth at decision points."
+      ],
+      "tags": [
+        "Databases",
+        "Caching"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "marketplace-split-payouts",
+      "cat": "domains",
+      "topic": "E-commerce & marketplaces",
+      "level": "advanced",
+      "source": "mine",
+      "q": "A marketplace takes payment from buyers and pays out to many sellers, minus fees. How do you design split payments and payouts?",
+      "also": [],
+      "a": [
+        "Marketplace money flows through a ledger: buyer payments credit seller balances minus fees, funds become available after holds, payouts move available balances to sellers on a schedule, and refunds or chargebacks debit balances. This decouples order events from bank transfers and makes recovery possible."
+      ],
+      "tags": [
+        "Transactions",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "listing-review-fraud",
+      "cat": "domains",
+      "topic": "E-commerce & marketplaces",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Fake listings and fake reviews are hurting trust in your marketplace. How do you design fraud detection?",
+      "also": [],
+      "a": [
+        "Marketplace fraud is adversarial and evolves, so defend in layers: score risk at each key action using rules, models and relationship signals, apply graduated responses rather than binary bans, route uncertain cases to humans, and feed outcomes back to adapt."
+      ],
+      "tags": [
+        "Security",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "dispatch-matching-shortage",
+      "cat": "domains",
+      "topic": "Ride-hailing & delivery",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Match riders to drivers (or orders to couriers) in real time, including when demand far exceeds supply.",
+      "also": [],
+      "a": [
+        "Dispatch is an optimisation problem under latency constraints. Gather candidates via geospatial indexes, score by real ETA and other costs, match requests and drivers in short batches to improve global outcomes, guarantee each driver gets one offer at a time, and manage shortages explicitly with queues, wider searches and pricing."
+      ],
+      "tags": [
+        "Scaling",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "driver-location-updates-scale",
+      "cat": "domains",
+      "topic": "Ride-hailing & delivery",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Hundreds of thousands of drivers send GPS updates every few seconds. How do you ingest, store and serve them?",
+      "also": [],
+      "a": [
+        "Location updates are high-volume, short-lived data. Keep only the latest position per driver in an in-memory, sharded geospatial index for real-time queries, stream all updates to durable cheap storage for history, and clean noisy GPS before it drives decisions."
+      ],
+      "tags": [
+        "Scaling",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "surge-pricing-eta",
+      "cat": "domains",
+      "topic": "Ride-hailing & delivery",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design surge pricing and ETA estimates. How do you keep them fast, fair and consistent with what the customer is charged?",
+      "also": [],
+      "a": [
+        "Dynamic pricing works from aggregated, smoothed supply and demand per area and time window, not per request. Show customers a locked upfront quote that's honoured, compute ETAs with a mix of cached and routed estimates, and measure both against real outcomes."
+      ],
+      "tags": [
+        "Scaling",
+        "Consistency"
+      ],
+      "legacy": []
     }
   ]
 }
