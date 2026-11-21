@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Shard the database\" or \"move to microservices\" as the first move.",
+    "why": "Sharding is the most expensive and least reversible step, and reads usually scale far more cheaply with caching and replicas. Changing architecture or APIs mid-growth multiplies risk.",
+    "probe": "Do you measure before acting, know the cheap-to-expensive order, and protect contracts other teams depend on?",
+    "say": "\"I'd load test to find the first bottleneck, then cache, add replicas, and scale stateless tiers, in that order, while keeping the API and data model frozen.\""
+  },
   "thesis": "Measure where the first bottleneck will be, then add read capacity in order of cost: caching, read replicas, then partitioning. Hold the API contract and the data model steady so clients and other teams don't have to change with you.",
   "pitch": "First I'd find out what breaks first at 10x, with load tests and the current saturation of each tier, rather than guess. For read growth the usual order is: cache hot, read-mostly data, at the edge for public content and in a shared cache for computed results, which can absorb most of the growth if the hit ratio is high; add read replicas for the database, with read-your-writes handled for users who just wrote; make the service tier stateless and autoscaled; and only then partition data if a single primary or dataset is the limit. What I'd refuse to change is the public API contract and the core data model, because changing those forces every client and team to move at once; I'd also refuse a rewrite under deadline pressure. The goal is to scale behind stable interfaces.",
   "points": [

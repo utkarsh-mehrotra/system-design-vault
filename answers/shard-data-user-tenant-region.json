@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Shard by region.\"",
+    "why": "Regions are wildly uneven, so the biggest market becomes one giant shard. Region is usually a residency or routing constraint, not a load-spreading key.",
+    "probe": "Do you choose the key most queries carry and that spreads evenly, and plan rebalancing?",
+    "say": "\"Route by region where residency requires it, then shard by user or tenant within it, over many logical shards with a directory for exceptions.\""
+  },
   "thesis": "Shard on the dimension that most queries filter by and that spreads load evenly, then add a second dimension where compliance or locality demands it. Plan rebalancing and cross-shard queries before the first shard fills.",
   "pitch": "I'd pick the shard key by asking which value nearly every request carries and whether it distributes well. For consumer apps that's usually user id: requests are per user and users are numerous. For B2B SaaS it's usually tenant id, which also gives isolation and makes tenant export and deletion easy, but tenant sizes are skewed, so large tenants need special handling. Region is rarely the primary key for load, but it's often a top-level constraint for data residency and latency: first route to a region, then shard within it. Whatever the key, I'd use a directory or consistent hashing over many logical shards so rebalancing is moving shards, not rewriting keys, and I'd keep cross-shard queries out of hot paths by maintaining projections.",
   "points": [

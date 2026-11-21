@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Version the topic whenever the schema changes.\"",
+    "why": "Most changes can be additive with no new version. Versioning every change multiplies topics and migrations. The sneakiest breaks are changes in meaning that no schema check catches.",
+    "probe": "A schema registry with a compatibility mode, tolerant readers, and a consumer inventory.",
+    "say": "\"Additive changes under backward or full compatibility enforced in CI; a new event type only for true breaks, with dual-publishing and a dated deprecation; and never change a field's meaning in place.\""
+  },
   "thesis": "Treat event schemas as public contracts: register them, enforce a compatibility rule in CI and at publish time, make additive changes by default, and write consumers as tolerant readers. Breaking changes get a new event type or topic with a deprecation window, informed by a list of who consumes what.",
   "pitch": "Events outlive the code that produced them, and producers often don't know all consumers. So I'd use a schema registry with Avro, Protobuf or JSON Schema and a compatibility mode, usually backward or full, checked in CI and enforced when producers register a schema. Safe changes: adding optional fields with defaults, adding new event types. Unsafe changes: removing or renaming fields, changing types, or changing meaning. Consumers ignore unknown fields and handle missing optional ones. When a breaking change is truly needed, I'd publish a new version as a new event type or topic, dual-publish for a period, track which consumers have migrated, and retire the old one on a date. Semantic changes are the sneaky ones: same field, different meaning, such as amount switching from pounds to pence, which no schema check catches, so they also need a new field name.",
   "points": [

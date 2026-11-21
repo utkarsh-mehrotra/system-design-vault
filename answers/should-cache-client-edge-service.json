@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Put Redis in front of the database.\"",
+    "why": "It ignores the layers that save the most latency (client, CDN) and the trade-off between proximity and invalidation control.",
+    "probe": "Whether you match each layer to how widely data is shared and how stale it can be.",
+    "say": "\"As close to the user as staleness allows: versioned assets at client and edge, public pages at the edge with short TTLs, computed data in a service cache.\""
+  },
   "thesis": "Cache as close to the user as the data's sharing and freshness allow. The closer the cache, the bigger the latency win and the weaker your control over invalidation, so match each layer to how volatile and how shared the data is.",
   "pitch": "I'd walk the layers. The client, meaning the browser or app, is best for per-user data and static assets with long cache lifetimes and versioned file names; it removes requests entirely but you can't invalidate it, so you rely on short TTLs or versioning. The edge or CDN is best for public or per-region content shared by many users, like images, scripts and catalogue pages, with TTLs, purge APIs and stale-while-revalidate. The service-side cache, Redis or Memcached, is best for computed results and hot objects shared across instances, where you control invalidation precisely. In-process caches are the fastest but per instance, fine for small, slow-changing reference data. The database's own buffer cache already holds hot pages; a cache in front helps when queries are expensive, not just when rows are hot. So the choice is driven by who shares the data, how stale it can be, and whether you need to invalidate it on demand.",
   "points": [

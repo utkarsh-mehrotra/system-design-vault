@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Merge everything into a monolith\" or \"remove the components that seem unnecessary.\"",
+    "why": "Without writing the guarantees down, you can remove a component that silently protected an invariant, or lose isolation that protected availability.",
+    "probe": "Listing guarantees, mapping components to them, incremental change, proving the invariants.",
+    "say": "\"I write the guarantees down, map each component to the one it protects, remove or merge only what protects nothing, and prove the invariants with tests and fault injection.\""
+  },
   "thesis": "List the guarantees that must hold, map each component to the guarantee it protects, remove components that protect none, merge components that always change together, and prove the invariants still hold, ideally with tests or fault injection rather than argument.",
   "pitch": "I'd start by writing down the guarantees explicitly: for example, no payment is applied twice, every application gets a decision within 30 seconds, customer data stays in-region, and the service survives a zone loss. Then for each component and mechanism, I'd ask which guarantee it serves. Components that serve none are candidates for removal; often they're leftovers from old requirements or speculative flexibility. Components that serve the same guarantee in overlapping ways, like two layers of retries or two caches, can often be collapsed. Services that always change and deploy together can be merged. Then I'd check that simpler mechanisms still provide each guarantee: maybe a database transaction replaces a saga if the data can live in one place, or a managed service replaces a self-run cluster. Finally, prove it: tests for the invariants, fault injection for the availability guarantees, and a staged rollout. Simplicity is valuable precisely because it makes guarantees easier to verify.",
   "points": [

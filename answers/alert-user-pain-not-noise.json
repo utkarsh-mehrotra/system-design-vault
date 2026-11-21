@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Alert when CPU goes above 80% or a pod restarts.\"",
+    "why": "Cause-based thresholds page on things users never feel and train on-call to ignore pages.",
+    "probe": "Symptom-based paging tied to SLOs, burn rates, a runbook per alert, deleting noise.",
+    "say": "\"Page only on fast SLO burn for user journeys, ticket on causes, link every alert to a runbook, and delete alerts nobody acts on.\""
+  },
   "thesis": "Page a human only for symptoms users feel, measured against SLOs, and only when someone needs to act now. Causes such as high CPU or a full disk become tickets or dashboard signals unless they're about to cause user pain. Every page has an owner and a runbook, and alerts that never lead to action get deleted.",
   "pitch": "Noise comes from paging on causes: CPU above 80%, a pod restart, a queue above a number. Most of those don't hurt users, and the ones that do will show up as symptoms. So I'd page on symptoms tied to SLOs: error rate and latency for key user journeys, ideally as error-budget burn rate, which naturally ignores short blips and catches slow burns. Cause-based alerts that predict imminent pain, like a disk filling within four hours or a certificate expiring in seven days, are fine as tickets or business-hours alerts. Every alert must answer: who owns it, what does the responder do, and why now? Each links to a runbook. Then hygiene: track alert volume per on-call shift and the fraction that led to action; review regularly; delete or downgrade alerts that are routinely acknowledged and ignored; group and deduplicate related alerts so one incident means one page.",
   "points": [

@@ -138,6 +138,32 @@ details.deep>ol{margin:0;padding:0 16px 12px 36px}
 .rel a,.src a{color:var(--accent);text-underline-offset:3px}
 .note{font:500 12px var(--display);color:var(--muted);margin:0 0 12px}
 .meta .deep-tag{color:var(--accent)}
+/* trap callout */
+.trap{border:1px solid var(--a);border-left-width:4px;border-radius:4px;padding:12px 14px;margin:0 0 18px;background:color-mix(in srgb,var(--a) 6%,transparent)}
+.trap .lbl{color:var(--a)}
+.trap p{margin:0 0 8px}
+.trap p:last-child{margin:0}
+.trap b{font-weight:600}
+.trap .say{padding-top:8px;border-top:1px dashed color-mix(in srgb,var(--a) 40%,transparent)}
+/* trap drill */
+dialog#drill{width:min(760px,calc(100vw - 24px));max-height:calc(100vh - 24px);border:1px solid var(--rule);border-radius:8px;padding:0;background:var(--surface);color:var(--ink)}
+dialog#drill::backdrop{background:rgba(0,0,0,.45)}
+.dr-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--rule)}
+.dr-head h2{font:700 14px var(--display);margin:0;letter-spacing:.04em;text-transform:uppercase}
+.dr-stats{font:500 12px var(--display);color:var(--muted);font-variant-numeric:tabular-nums}
+.dr-kinds{display:flex;flex-wrap:wrap;gap:6px;padding:10px 18px 0}
+.dr-body{padding:16px 18px 18px;overflow:auto}
+.dr-body:focus{outline:none}
+.dr-kind{font:700 11px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--a)}
+.dr-on{font-size:13px;color:var(--muted);margin:6px 0 0}
+.dr-q{font:600 20px/1.35 var(--body);margin:8px 0 10px;text-wrap:pretty}
+.dr-ask{color:var(--muted);margin:0 0 14px}
+.dr-ans{margin:14px 0 0}
+.dr-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px}
+.dr-acts .btn{font-size:13px;padding:9px 14px}
+.btn.miss{border-color:var(--a);color:var(--a)}
+.btn.shaky{border-color:var(--i);color:var(--i)}
+.btn.got{border-color:var(--f);color:var(--f)}
 /* side-by-side layout (wide screens) */
 .split{display:block}
 #pane{display:none}
@@ -188,7 +214,8 @@ body.is-split #pane{display:block;position:sticky;top:64px;max-height:calc(100vh
   <div class="toolbar">
     <div class="count" id="count" aria-live="polite"></div>
     <div class="tools">
-      <button class="btn primary" type="button" id="random">Random unreviewed</button>
+      <button class="btn primary" type="button" id="drillbtn">Trap drill</button>
+      <button class="btn" type="button" id="random">Random unreviewed</button>
       <button class="btn" type="button" id="layout" hidden></button>
       <button class="btn" type="button" id="depth"></button>
       <button class="btn" type="button" id="expand">Expand all</button>
@@ -208,6 +235,11 @@ body.is-split #pane{display:block;position:sticky;top:64px;max-height:calc(100vh
   </div>
 </div></footer>
 
+<dialog id="drill" aria-labelledby="dr-title">
+  <div class="dr-head"><h2 id="dr-title">Trap drill</h2><span class="dr-stats" id="dr-stats"></span><button class="btn" type="button" id="dr-close">Close</button></div>
+  <div class="dr-kinds" id="dr-kinds" role="group" aria-label="Prompt types"></div>
+  <div class="dr-body" id="dr-body" tabindex="-1"></div>
+</dialog>
 <script src="data.js"></script>
 <script>
 (function(){
@@ -225,7 +257,7 @@ var items=V.questions.map(function(q,i){q.num=i+1;return q});
 var byId={};items.forEach(function(q){byId[q.id]=q});
 items.forEach(function(q){
   var A=q.answer,parts=[q.q,q.topic,q.also.join(" "),q.a.join(" "),q.tags.join(" ")];
-  if(A)parts.push(A.thesis,A.pitch,A.decision,A.example||"",A.points.map(function(p){return p.h+" "+p.d}).join(" "),(A.numbers||[]).join(" "),A.pitfalls.join(" "),A.followups.map(function(f){return f.q+" "+f.a}).join(" "));
+  if(A)parts.push(A.trap?A.trap.wrong+" "+A.trap.why+" "+A.trap.probe+" "+A.trap.say:"",A.thesis,A.pitch,A.decision,A.example||"",A.points.map(function(p){return p.h+" "+p.d}).join(" "),(A.numbers||[]).join(" "),A.pitfalls.join(" "),A.followups.map(function(f){return f.q+" "+f.a}).join(" "));
   q.hay=parts.join(" ").toLowerCase();
 });
 var tagCount={};items.forEach(function(q){q.tags.forEach(function(t){tagCount[t]=(tagCount[t]||0)+1})});
@@ -330,9 +362,13 @@ var depthMode="full";
 function depth(){return depthMode}
 function sec(t,h){return '<div class="sec"><p class="lbl">'+t+'</p>'+h+'</div>'}
 function ul(a){return '<ul>'+a.map(function(t){return"<li>"+hl(t)+"</li>"}).join("")+'</ul>'}
+function trapHTML(t){
+  if(!t)return"";
+  return '<div class="trap"><p class="lbl">The trap</p><p><b>Tempting answer:</b> '+hl(t.wrong)+'</p><p><b>Why it fails:</b> '+hl(t.why)+'</p><p><b>What they are probing:</b> '+hl(t.probe)+'</p><p class="say"><b>Say instead:</b> '+hl(t.say)+'</p></div>';
+}
 function ansHTML(x){
   var A=x.answer,quick=depth()==="quick";
-  var h='<p class="thesis">'+hl(A.thesis)+'</p>'+sec("Say it in 60 seconds","<p>"+hl(A.pitch)+"</p>")+
+  var h=trapHTML(A.trap)+'<p class="thesis">'+hl(A.thesis)+'</p>'+sec("Say it in 60 seconds","<p>"+hl(A.pitch)+"</p>")+
     sec("Key points",'<ol class="pts">'+A.points.map(function(p){return"<li><b>"+hl(p.h)+"</b>"+(quick?"":"<span>"+hl(p.d)+"</span>")+"</li>"}).join("")+"</ol>");
   if(quick)return h+'<p class="note">Quick view. Switch Depth to Full for decision rules, numbers, pitfalls and follow-ups.</p>';
   h+=sec("When to choose what","<p>"+hl(A.decision)+"</p>");
@@ -498,10 +534,101 @@ function fromHash(){
 }
 window.addEventListener("hashchange",fromHash);
 
+/* ---------- trap drill ---------- */
+var DKEY="sdv-drill-v1",drill={};
+try{drill=JSON.parse(store(DKEY)||"{}")||{}}catch(e){drill={}}
+function saveDrill(){store(DKEY,JSON.stringify(drill))}
+var dKinds={trap:true,fu:true},dRecent=[],dCur=null,dRevealed=false,dAnyway=false;
+var DAY=864e5;
+function drillItems(){
+  var out=[];
+  items.forEach(function(x){
+    if(!x.answer||!match(x))return;
+    if(dKinds.trap&&x.answer.trap)out.push({id:x.id+"#trap",x:x,kind:"trap"});
+    if(dKinds.fu)x.answer.followups.forEach(function(f,i){out.push({id:x.id+"#f"+i,x:x,kind:"fu",f:f})});
+  });
+  return out;
+}
+function drillStats(pool){
+  var now=Date.now(),due=0,fresh=0,mastered=0;
+  pool.forEach(function(it){var s=drill[it.id];if(!s)fresh++;else{if(s.due<=now)due++;if(s.r==="got"&&s.streak>=2)mastered++}});
+  return{due:due,fresh:fresh,mastered:mastered,total:pool.length};
+}
+function pickNext(pool){
+  var now=Date.now(),avoid=function(it){return dRecent.indexOf(it.id)<0||pool.length<=dRecent.length};
+  var due=pool.filter(function(it){var s=drill[it.id];return s&&s.due<=now&&avoid(it)}).sort(function(a,b){return drill[a.id].due-drill[b.id].due});
+  if(due.length)return due[0];
+  var fresh=pool.filter(function(it){return !drill[it.id]&&avoid(it)});
+  if(fresh.length)return fresh[Math.floor(Math.random()*fresh.length)];
+  if(dAnyway){var any=pool.filter(avoid);if(any.length)return any[Math.floor(Math.random()*any.length)]}
+  return null;
+}
+function fmtWait(ms){var h=ms/36e5;return h<1?Math.max(1,Math.round(ms/6e4))+" min":h<48?Math.round(h)+" h":Math.round(h/24)+" days"}
+function drawKinds(){
+  var k=$("dr-kinds");k.innerHTML="";
+  [["trap","Traps"],["fu","Follow-ups"]].forEach(function(p){k.appendChild(chip(p[1],dKinds[p[0]],function(){dKinds[p[0]]=!dKinds[p[0]];if(!dKinds.trap&&!dKinds.fu)dKinds[p[0]]=true;drawKinds();nextDrill()}))});
+  var n=activeCount()+(st.q?1:0)+(st.cat?1:0);
+  var note=document.createElement("span");note.className="dr-stats";note.textContent=n?"Using your current filters":"All categories";k.appendChild(note);
+}
+function renderDrill(){
+  var pool=drillItems(),s=drillStats(pool);
+  $("dr-stats").textContent=s.due+" due · "+s.fresh+" new · "+s.mastered+" mastered · "+s.total+" in pool";
+  var b=$("dr-body");
+  if(!dCur){
+    var now=Date.now(),next=pool.map(function(it){return drill[it.id]&&drill[it.id].due}).filter(Boolean).sort()[0];
+    b.innerHTML='<p class="dr-q">'+(pool.length?"All caught up.":"No prompts match your filters.")+'</p>'+
+      (pool.length?'<p class="dr-ask">'+(next?"Next prompt due in "+fmtWait(next-now)+".":"")+' You can keep practising anyway.</p><div class="dr-acts"><button class="btn primary" type="button" data-dr="anyway">Keep practising</button></div>':'<p class="dr-ask">Clear some filters and reopen the drill.</p>');
+    return;
+  }
+  var it=dCur,x=it.x,h="";
+  if(it.kind==="trap"){
+    h+='<div class="dr-kind">Trap</div><p class="dr-q">'+esc(x.q)+'</p><p class="dr-ask">What is the tempting wrong answer here, and what do you say instead? Answer out loud first.</p>';
+    if(dRevealed)h+='<div class="dr-ans">'+trapHTML(x.answer.trap).replace(/<mark>|<\/mark>/g,"")+'</div>';
+  }else{
+    h+='<div class="dr-kind">Follow-up</div><p class="dr-on">On: '+esc(x.q)+'</p><p class="dr-q">'+esc(it.f.q)+'</p><p class="dr-ask">Answer out loud first, then reveal.</p>';
+    if(dRevealed)h+='<div class="dr-ans sec"><p class="lbl">Answer</p><p>'+esc(it.f.a)+'</p></div>';
+  }
+  if(!dRevealed)h+='<div class="dr-acts"><button class="btn primary" type="button" data-dr="reveal">Reveal <span class="hint">(space)</span></button><button class="btn" type="button" data-dr="skip">Skip</button></div>';
+  else h+='<div class="dr-acts"><span class="dr-stats">How did you do?</span><button class="btn miss" type="button" data-dr="missed">Missed (1)</button><button class="btn shaky" type="button" data-dr="shaky">Shaky (2)</button><button class="btn got" type="button" data-dr="got">Got it (3)</button><button class="link" type="button" data-dr="open">Open full card</button></div>';
+  b.innerHTML=h;
+  var pb=b.querySelector(".btn.primary");if(pb)pb.focus();else b.focus();
+}
+function nextDrill(){
+  var pool=drillItems();dCur=pickNext(pool);dRevealed=false;
+  if(dCur){dRecent.push(dCur.id);if(dRecent.length>3)dRecent.shift()}
+  renderDrill();
+}
+function rate(r){
+  if(!dCur)return;
+  var s=drill[dCur.id]||{streak:0,seen:0},now=Date.now();
+  s.seen++;s.r=r;s.last=now;
+  if(r==="missed"){s.streak=0;s.due=now+60e3}
+  else if(r==="shaky"){s.streak=0;s.due=now+DAY}
+  else{s.streak++;s.due=now+Math.min(60,3*Math.pow(2,s.streak-1))*DAY}
+  drill[dCur.id]=s;saveDrill();nextDrill();
+}
+$("drillbtn").onclick=function(){dAnyway=false;$("drill").showModal();drawKinds();nextDrill()};
+$("dr-close").onclick=function(){$("drill").close()};
+$("drill").addEventListener("click",function(e){
+  if(e.target===$("drill")){$("drill").close();return}
+  var b=e.target.closest("[data-dr]");if(!b)return;var a=b.dataset.dr;
+  if(a==="reveal"){dRevealed=true;renderDrill()}
+  else if(a==="skip")nextDrill();
+  else if(a==="anyway"){dAnyway=true;nextDrill()}
+  else if(a==="open"){var id=dCur.x.id;$("drill").close();focusQ(id,true)}
+  else rate(a);
+});
+$("drill").addEventListener("keydown",function(e){
+  if(e.target.tagName==="BUTTON"&&(e.key===" "||e.key==="Enter")&&!e.target.dataset.dr)return;
+  if(!dCur)return;
+  if(e.key===" "&&!dRevealed){e.preventDefault();dRevealed=true;renderDrill()}
+  else if(dRevealed&&(e.key==="1"||e.key==="2"||e.key==="3")){e.preventDefault();rate(e.key==="1"?"missed":e.key==="2"?"shaky":"got")}
+});
+
 /* ---------- export / import ---------- */
 function msg(t){$("msg").textContent=t;setTimeout(function(){$("msg").textContent=""},3000)}
 $("export").onclick=function(){
-  var blob=new Blob([JSON.stringify({app:"staff-design-vault",version:2,exported:new Date().toISOString(),done:Object.keys(done)},null,2)],{type:"application/json"});
+  var blob=new Blob([JSON.stringify({app:"staff-design-vault",version:2,exported:new Date().toISOString(),done:Object.keys(done),drill:drill},null,2)],{type:"application/json"});
   var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="design-vault-progress.json";document.body.appendChild(a);a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},0);
 };
@@ -511,6 +638,7 @@ $("file").onchange=function(e){
   f.text().then(function(t){
     var j=JSON.parse(t),ids=Array.isArray(j.done)?j.done:Object.keys(j.done||{}),n=0;
     ids.forEach(function(id){if(byId[id]&&!done[id]){done[id]=1;n++}});
+    if(j.drill&&typeof j.drill==="object")Object.keys(j.drill).forEach(function(k){var a=drill[k],b=j.drill[k];if(b&&(!a||(b.last||0)>(a.last||0)))drill[k]=b});saveDrill();
     save();render();msg("Imported "+n+" new reviewed question"+(n===1?"":"s")+".");
   }).catch(function(){msg("That file could not be read.")});
   e.target.value="";

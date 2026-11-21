@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"The hit ratio is 95%, so it's working.\"",
+    "why": "A high hit ratio on reads that were already fast saves almost nothing. Value is latency or origin load saved per unit of cost and complexity.",
+    "probe": "Do you measure outcomes, not just the cache's own metrics?",
+    "say": "\"Expected latency is hit ratio × hit latency plus miss ratio × miss latency, compared with no cache, plus origin load saved. A bypass experiment gives the true counterfactual.\""
+  },
   "thesis": "A cache helps if it reduces user latency or origin cost enough to justify its cost and complexity. Measure hit ratio by key class, latency with and without hits, origin load saved, evictions, and cost per hit. A high hit ratio on cheap reads can still be pointless.",
   "pitch": "I'd measure outcomes, not just hit ratio. Per key class, record hit ratio and the latency of hits versus misses, which tells you the latency saved per hit. Compare origin load, database queries or CPU, against what it would be without the cache, which you can estimate from misses plus hits that would have gone through. Track eviction rate and memory usage: high evictions with a low hit ratio means the cache is too small or the access pattern has a long tail. Then cost: cache cluster cost versus database capacity saved. And complexity cost: staleness bugs and invalidation code. Sometimes the answer is that the cache isn't helping: the query was already fast, or the keys are too diverse to ever hit. A clean experiment is to bypass the cache for a small percentage of traffic and compare latency and origin load directly.",
   "points": [

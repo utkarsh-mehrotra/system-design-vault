@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Use auto-increment\" or \"UUIDv4 everywhere.\"",
+    "why": "Auto-increment needs a central counter (a round trip and a single point of failure). Random UUIDv4 scatters inserts across the B-tree and hurts write performance at scale.",
+    "probe": "Time-ordered, locally generated ids and how to handle clock skew.",
+    "say": "\"UUIDv7 by default: no coordination, time-prefixed for index locality. Snowflake-style if I need 64-bit integers, with leased worker ids.\""
+  },
   "thesis": "Generate IDs locally from time plus node identity plus randomness or a sequence, so no request waits on a central counter. Choose the format for the properties you need: sortability, index locality, size, and how much clock skew you can tolerate.",
   "pitch": "A central counter is a single point of failure and a cross-region round trip on every insert. Instead, each node generates IDs locally. The common choices are Snowflake-style 64-bit IDs (timestamp, worker id, per-millisecond sequence), which are compact and time-ordered but need unique worker ids and care with clock skew; ULID or UUIDv7, 128 bits with a timestamp prefix plus randomness, which need no coordination and are roughly time-ordered, so they index well; and random UUIDv4, which needs no coordination but scatters inserts across a B-tree. For most systems today I'd pick UUIDv7: no worker-id management, good index locality, and a standard. I'd choose Snowflake-style when 64 bits matter for storage or a downstream system requires integers.",
   "points": [

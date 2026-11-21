@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Use a longer TTL.\"",
+    "why": "A longer TTL delays the stampede but doesn't prevent it. When the hot key finally expires, the herd still hits the database.",
+    "probe": "Request coalescing, leases, stale-while-revalidate and jitter.",
+    "say": "\"Only one caller rebuilds (single-flight or a lease), everyone else gets stale data meanwhile, and TTLs are jittered so keys don't expire together.\""
+  },
   "thesis": "A stampede happens when a hot entry expires and many requests rebuild it at once. Make sure only one caller rebuilds (request coalescing or a lease), let others use stale data while it does (stale-while-revalidate), and avoid synchronised expiry (jitter, early refresh).",
   "pitch": "When a popular key expires, every concurrent request misses and goes to the database at the same moment, which can take the database down and keep the cache empty. I'd layer defences. Request coalescing: within a process, concurrent misses for a key wait on one in-flight load, often called single-flight. Across processes, a short lease or lock in the cache, as described in Facebook's memcache paper, where the first misser gets the right to rebuild and others wait briefly or get the stale value. Stale-while-revalidate: keep the old value past its soft TTL and serve it while one caller refreshes in the background. Probabilistic early refresh: as an entry nears expiry, a small and increasing fraction of requests refresh it early, so it rarely expires under load. And jitter on TTLs so a batch of keys doesn't expire together. For extreme hot keys, pre-warm or refresh them on a schedule.",
   "points": [

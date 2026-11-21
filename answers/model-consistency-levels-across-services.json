@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "One consistency level for the whole system.",
+    "why": "Different data has different invariants. A single setting is wrong for half of it and couples services unnecessarily.",
+    "probe": "Classifying data, one owner per strong invariant, and documenting guarantees at boundaries.",
+    "say": "\"Per data class: strong for money and uniqueness inside one owner, session guarantees for user-facing state, eventual with a stated lag for projections.\""
+  },
   "thesis": "Assign a consistency level to each kind of data, not to the whole system, and publish it as part of every service's contract. Strong for money and inventory, session guarantees for user-facing state, eventual for derived views.",
   "pitch": "I'd classify data rather than services. Money, inventory counts and uniqueness constraints get strong consistency inside one owning service. User-facing state like profiles and settings gets session guarantees, read-your-writes and monotonic reads, which is what users actually notice. Derived data, such as search, feeds, recommendations and analytics, is eventual with a stated lag. Then I'd make the guarantee explicit at every boundary: an API that serves from a cache says so, an event stream states its ordering and delivery guarantees. Across services you generally can't have strong consistency without coupling, so cross-service flows use sagas and reconciliation, and each service owns the strong guarantees for its own data.",
   "points": [

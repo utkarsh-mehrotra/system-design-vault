@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Partition by tenant_id\" (or by timestamp) and stop there.",
+    "why": "Tenant sizes are skewed, so the largest tenant becomes a hot partition; time keys send every write to the newest partition. The question explicitly asks how it fails.",
+    "probe": "Can you place invariants inside one partition and name failure modes like hot accounts, cross-partition transfers and tenant-wide queries?",
+    "say": "\"(tenant, account), because balance invariants are per account. Then: split hot accounts, use sagas for cross-partition transfers, projections for reports, and dedicated capacity for giant tenants.\""
+  },
   "thesis": "For a multi-tenant ledger, partition by account (scoped by tenant), because every invariant, balance checks and posting order, lives at the account level. Then show where it breaks: giant tenants, hot accounts, and cross-account queries, and how you'd handle each.",
   "pitch": "The candidates are tenant, account and time. Time is wrong for a ledger: all writes go to the newest partition. Tenant alone is attractive for isolation but one large tenant becomes a hot partition and some tenants outgrow a partition. Account, as in (tenant_id, account_id), is my choice because the ledger's invariants, balance never negative and postings ordered, are per account, so a single-partition transaction can enforce them. Then the failure modes. A hot account, like a merchant settlement account receiving thousands of credits per second, overwhelms its partition; I'd split it into sub-accounts or buffer credits and post them in batches. Transfers between accounts on different partitions need a saga or two-step posting rather than one transaction. Tenant-wide queries like monthly statements scatter across partitions, so they go to a read model or the warehouse. And the plan needs a way to move a large tenant to dedicated capacity.",
   "points": [

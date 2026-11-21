@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Horizontal is always better because it scales infinitely.\"",
+    "why": "Horizontal scaling requires statelessness or partitioning and brings coordination, consistency and network failure costs. Vertical scaling keeps databases simple and goes much further than people assume.",
+    "probe": "Whether you can match the strategy to the tier rather than reciting a slogan.",
+    "say": "\"Stateless tiers scale out early for redundancy; stateful stores scale up with replicas until the ceiling, cost or failure domain forces partitioning.\""
+  },
   "thesis": "Vertical scaling is simple and keeps everything on one machine, but it has a ceiling, a cost curve that steepens, and a single point of failure. Horizontal scaling removes the ceiling and adds redundancy, but requires statelessness or partitioning and adds coordination. Most systems scale stateless tiers horizontally early and data tiers vertically for as long as practical.",
   "pitch": "Vertical scaling means a bigger machine: more cores, memory, faster disks. It needs no code changes, keeps transactions and joins local and simple, and modern hardware goes very far. The costs: there's a ceiling, the largest instances cost disproportionately more, resizing often means a restart or failover, and one big machine is still one failure domain. Horizontal scaling means more machines: it scales further and gives redundancy, but the workload must be stateless or partitioned, and you inherit load balancing, data distribution, consistency and more network failure modes. In practice I'd scale application servers horizontally from the start because they're stateless and it gives redundancy, and scale the database vertically plus replicas until a single primary genuinely can't keep up, then partition.",
   "points": [

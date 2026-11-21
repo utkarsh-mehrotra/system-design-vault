@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Finance reviews the cloud bill monthly and asks teams to cut costs.\"",
+    "why": "Without attribution, nobody owns the spend; looking at totals punishes growth rather than inefficiency.",
+    "probe": "Tagging enforced by policy, allocating shared costs, unit costs, anomaly alerts.",
+    "say": "\"Enforced tags, shared costs allocated by usage, cost per request or per customer next to latency on dashboards, and anomaly alerts per service.\""
+  },
   "thesis": "You can only optimise what you can attribute. Tag every resource by team, service and environment from day one, expose unit costs (per request, per tenant, per transaction), set budgets and anomaly alerts, and review top spenders on a schedule. Make cost a metric engineers see next to latency.",
   "pitch": "I'd start with attribution: every cloud resource tagged with owner team, service, environment and cost centre, enforced by policy so untagged resources can't be created, plus allocation rules for shared costs like Kubernetes clusters, data transfer and observability. Then unit economics: cost per request, per active customer, per loan originated, per tenant, because absolute spend rising is fine if units grow faster. Put these on dashboards next to performance metrics and include cost estimates in design docs. Then guardrails: budgets per team with alerts, anomaly detection for sudden jumps, which are often a misconfiguration like a debug log level or runaway autoscaling, and lifecycle policies for storage and logs. Then a rhythm: monthly reviews of the top cost drivers with owners, and simple, safe wins first: rightsizing, committed-use discounts for steady load, deleting idle resources, and tiering storage.",
   "points": [

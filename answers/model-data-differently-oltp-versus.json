@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Copy the production schema into the warehouse as-is.\"",
+    "why": "Normalised OLTP schemas make analysts write many-way joins, and overwriting attributes destroys history, so last year's reports silently change.",
+    "probe": "Do you know dimensional modelling and slowly changing dimensions?",
+    "say": "\"OLTP stays normalised for integrity; OLAP gets fact and dimension tables, type-2 dimensions for history, partitioned by date.\""
+  },
   "thesis": "Model OLTP for correct, fast writes and point reads: normalised tables, narrow transactions, indexes for known lookups. Model OLAP for fast scans and simple queries over history: denormalised fact and dimension tables in columnar storage, loaded from OLTP.",
   "pitch": "In OLTP the goal is integrity under concurrent writes, so I'd normalise: each fact stored once, constraints in the database, short transactions, and indexes for the access paths the application uses. Denormalise only where a hot read path justifies it. In OLAP the goal is answering broad questions quickly, so I'd use a dimensional model: fact tables recording events like payments or loan disbursals with numeric measures and foreign keys, and dimension tables like customer, product and date, which may be wide and denormalised. Changing attributes are handled with slowly changing dimensions so history is preserved: a customer's region at the time of the payment, not today's. Data flows from OLTP by CDC or batch, is cleaned and conformed, and partitioned by date for pruning.",
   "points": [

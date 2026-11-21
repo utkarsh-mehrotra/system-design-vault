@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Health checks detect the failure and automatically promote the other region.\"",
+    "why": "With two regions, a broken link looks exactly like a dead peer, so both sides promote and you get split brain. Without fencing, the old primary keeps writing.",
+    "probe": "A third-party witness or a manual decision, epochs and fencing, stated RPO and RTO.",
+    "say": "\"One writer per partition, ownership changed only through a quorum with a witness or by an operator, epoch fencing at the storage layer, and RPO roughly equal to replication lag.\""
+  },
   "thesis": "Split brain happens when both regions believe they own the same data. Prevent it structurally: one writer per data partition at any time, ownership decided by a quorum or an explicit operator action, and fencing tokens so a deposed writer's late writes are rejected. State the data-loss window (RPO) and recovery time (RTO) up front.",
   "pitch": "With two regions, the hard part isn't moving traffic, it's making sure only one region accepts writes for a given piece of data. I'd assign each data partition a single writer region. Failover changes that ownership through something that can't itself split: either a consensus service with a tiebreaker in a third location, or a deliberate operator decision, because two regions alone can't distinguish 'the other is dead' from 'the link is down'. Every ownership change increments an epoch, and storage rejects writes with an old epoch, which is fencing. With asynchronous replication, failover loses whatever hadn't replicated, so the RPO is roughly the replication lag; synchronous replication removes that loss but adds cross-region latency to every write. Then traffic shifting, health checks and, most importantly, regular failover drills.",
   "points": [

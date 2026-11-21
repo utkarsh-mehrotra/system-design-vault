@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "One service per noun: customer service, loan service, payment service.",
+    "why": "Entity boundaries force most features to change several services at once, and a shared 'loan' that everyone writes has no clear owner.",
+    "probe": "Boundaries by data ownership and change rate, one owner for the loan's state machine at each stage.",
+    "say": "\"I'd cut by decisions and ownership: origination, underwriting, servicing (which owns the loan after disbursal), collections, and a separate ledger, with events for what others need.\""
+  },
   "thesis": "Draw boundaries around data ownership and rate of change, not around nouns. Origination, underwriting, servicing and collections are good candidates because each owns distinct data and decisions and changes for different reasons, but the loan itself has one owner for its state machine, and everyone else reacts to its events.",
   "pitch": "I'd map each area to the decisions it makes and the data it must own. Origination owns the application journey: applicant data, documents, consent, offers. Underwriting owns the credit decision: bureau data, models, policy rules, and the decision record, which must be auditable and reproducible. Servicing owns the active loan: the repayment schedule, balances, payments and the loan's lifecycle state machine. Collections owns arrears handling: contact strategies, promises to pay, hardship plans. The critical question is where the loan's state lives: I'd put it in servicing from disbursal onward, with origination owning it before that, so there's one writer at each stage. Other services consume events like LoanDisbursed, PaymentMissed and LoanSettled and keep their own read models. Some data is copied by event, such as collections holding a local view of balances; some is queried live, like the current payoff amount at the moment a customer pays. And I'd keep the ledger, the money truth, as its own component.",
   "points": [

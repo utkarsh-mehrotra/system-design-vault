@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Invalidate the cache whenever the data changes,\" with no TTLs.",
+    "why": "Invalidations get missed (derived keys, lost events), and without a TTL a miss means stale data forever.",
+    "probe": "TTL as a staleness contract, event-driven invalidation only where needed, versioned keys.",
+    "say": "\"Every entry has a TTL with jitter that encodes acceptable staleness; events invalidate only fast-changing data; versioned keys avoid delete-and-refill races.\""
+  },
   "thesis": "Make staleness a decision, not an accident: give every cached item a TTL with jitter that states how stale it may be, add event-driven invalidation only for data that must change faster than the TTL, prefer versioned keys over deletes, and build keys in one place.",
   "pitch": "Invalidation gets nightmarish when it's ad hoc: every code path that writes data has to remember every cache key derived from it. I'd simplify with four rules. First, every entry has a TTL that encodes acceptable staleness for that data, with jitter so entries don't expire together. Second, for data that must update quickly, like prices or permissions, invalidate on change via events, so the service that owns the data publishes a change event and cache owners react, rather than writers calling caches directly. Third, where possible use versioned keys: include a version or updated-at in the key so a change creates a new key and old entries simply age out, which avoids races between delete and refill. Fourth, centralise key construction in one module so the mapping from data to keys is in one place. And I'd accept bounded staleness explicitly in product requirements.",
   "points": [

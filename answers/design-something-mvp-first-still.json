@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Build it properly from day one with microservices and Kubernetes so we don't have to rewrite.\"",
+    "why": "That spends the startup's scarcest resource on scale it may never need, while the expensive-to-change parts (ids, APIs, data ownership) are what actually matter.",
+    "probe": "Simplicity plus the specific seams worth investing in early.",
+    "say": "\"Boring single deployable on managed services, but stable ids, module-owned data, versionable APIs and observability from day one, plus a written list of limits and triggers.\""
+  },
   "thesis": "Build the cheapest thing that meets today's load, but invest early in the few seams that are expensive to retrofit: identifiers, data ownership and boundaries, API contracts, and observability. Everything else can be replaced later because those stay stable.",
   "pitch": "For an MVP I'd pick boring, managed components: one deployable, one relational database, a managed queue if needed, and no custom infrastructure. The time saved goes into four things that are painful to change later. Identifiers: globally unique, non-sequential ids from day one, because renumbering is miserable. Data ownership: clear modules that own their tables, even inside a monolith, so later splits follow existing lines. API contracts: versionable, additive-friendly public APIs with consistent error formats, because external clients are the hardest thing to migrate. Observability: structured logs, basic metrics and tracing hooks, because you can't scale what you can't see. I'd also keep the infrastructure as code from the start. Then I'd write down the known scaling limits and the trigger for each, like 'move search out of Postgres when queries exceed X', so growth is planned rather than an emergency.",
   "points": [

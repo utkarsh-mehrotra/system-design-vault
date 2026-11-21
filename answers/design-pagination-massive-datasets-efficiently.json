@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"LIMIT and OFFSET with page numbers.\"",
+    "why": "OFFSET reads and discards every row before the page, so deep pages get slow, and concurrent inserts shift rows between pages.",
+    "probe": "Keyset pagination, stable sort with a tiebreaker, opaque cursors.",
+    "say": "\"Keyset pagination on (sort_key, id) with an opaque cursor. Every page costs the same, and there are no duplicates as data changes.\""
+  },
   "thesis": "Use keyset (cursor) pagination: sort by a stable, indexed key with a unique tiebreaker and fetch rows after the last one seen. Offset pagination gets slower with every page and shifts when data changes. Bound page size and decide how results behave as data changes underneath.",
   "pitch": "Offset pagination, LIMIT 50 OFFSET 100000, makes the database read and discard a hundred thousand rows to return fifty, so deep pages get slow, and if rows are inserted or deleted while a user pages, they see duplicates or miss items. Keyset pagination fixes both: order by an indexed column plus a unique tiebreaker, like (created_at, id), and ask for rows where (created_at, id) is less than the last row of the previous page, limit 50. Each page is an index range scan of fifty rows regardless of depth. I'd return an opaque cursor encoding the last key and the sort, so clients can't construct arbitrary positions and the server can change the encoding. Page size is capped. The trade-offs: no jumping to page 237, and total counts are expensive, so show approximate counts or 'more results' instead. For search engines, use their search-after or scroll mechanisms rather than deep from/size.",
   "points": [

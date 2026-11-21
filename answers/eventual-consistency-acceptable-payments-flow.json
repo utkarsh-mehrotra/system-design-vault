@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Payments need strong consistency everywhere\" or \"we're eventually consistent.\"",
+    "why": "Blanket answers ignore that only the money decision and ledger posting need strong guarantees, while notifications and feeds can lag. Strong consistency everywhere hurts availability for no gain.",
+    "probe": "Do you start from invariants and spot the dangerous middle: decisions made from stale reads?",
+    "say": "\"Strong where money is decided and posted; eventual for projections, with the rule that no money decision ever reads a lagging view.\""
+  },
   "thesis": "Start from the invariants, not the components. Anything that can create or lose money (balances, ledger postings, the authorisation decision) needs strong consistency; everything derived from those facts can lag.",
   "pitch": "In a payments flow I'd first write down the invariants: a ledger entry is never lost or duplicated, debits equal credits, and a balance never goes below its limit because of a race. The ledger write and the balance check that guards it must be strongly consistent, usually a single transactional store with the check and the posting in one transaction. The decision returned to the merchant has to reflect that committed state. Everything downstream (notifications, the customer's transaction list, search, analytics, fraud features, the statement) is derived from the ledger and can be eventually consistent, as long as it converges and is idempotent. The rule is: pick the weakest consistency that still protects the invariant, and make the boundary explicit so nobody reads a derived view to make a money decision.",
   "points": [

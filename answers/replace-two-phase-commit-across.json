@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Use a saga\" with nothing else, or \"publish an event after committing.\"",
+    "why": "Publishing after commit is a dual write that loses events on a crash. Naming sagas without compensations, idempotency and the loss of isolation misses the hard parts.",
+    "probe": "Outbox, idempotent consumers, compensations, putting irreversible steps last, and the isolation cost.",
+    "say": "\"Local transactions with an outbox, idempotent steps, a compensation per step, irreversible steps last, explicit pending states, and an orchestrator once there are three or more steps.\""
+  },
   "thesis": "Replace 2PC with a saga: a sequence of local transactions, each publishing its outcome reliably through an outbox, with a compensating action for every step that can be undone. You give up isolation, so design for visible intermediate states.",
   "pitch": "Two-phase commit across three services couples their availability: any participant or the coordinator being slow blocks everyone holding locks. I'd replace it with a saga. Each service does a local transaction and records an event in an outbox table in the same transaction, so state change and event can't diverge. The next step consumes that event idempotently. For each step I define a compensation, like releasing reserved stock or refunding a charge, that runs if a later step fails. I'd use orchestration, with one coordinator holding the saga's state machine, when there are more than two or three steps, because it makes progress and failures visible. The honest cost is isolation: other readers can see the order as 'pending' between steps, so the domain needs explicit pending states, and some steps, like sending an email, can't be compensated and should go last.",
   "points": [

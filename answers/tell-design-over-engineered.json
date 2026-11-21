@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"When it has too many services\" or \"when it's complex.\"",
+    "why": "Complexity isn't the issue; unjustified complexity is. Some complexity (idempotency, backups) protects against known risks.",
+    "probe": "Tying each component to a current requirement or measured risk.",
+    "say": "\"If I can't name the current requirement or measured risk a component addresses, or the team can't operate everything it owns, it's over-engineered.\""
+  },
   "thesis": "A design is over-engineered when it carries complexity with no current requirement or measured risk behind it: abstractions with one user, flexibility nobody has asked for, more moving parts than people to run them, and components whose need you can't explain in a sentence.",
   "pitch": "I'd test every component against a simple question: what requirement or risk does this address today, and what happens if we remove it? If the answer is 'we might need it later' with no evidence, that's a warning sign. Concrete signals: abstractions or plugin systems with exactly one implementation; configuration for options nobody has requested; multiple services for a team of four, so every feature crosses network boundaries; distributed infrastructure, like Kafka, Kubernetes or a service mesh, for load a single database and a couple of servers would handle; and custom frameworks where a library exists. Another signal is operational: more systems than the team can realistically monitor, patch and be on call for. Over-engineering isn't free insurance; it slows every change, adds failure modes and costs money. The fix is to delete what isn't needed and keep the seams that make future change cheap.",
   "points": [

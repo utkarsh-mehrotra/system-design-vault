@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"A fixed limit of N requests per minute per IP.\"",
+    "why": "Fixed windows punish bursty but well-behaved clients and allow double the limit around window boundaries; IPs don't map to tenants.",
+    "probe": "Token bucket with burst, per-tenant keys, local approximation, clear 429s, a global safety layer.",
+    "say": "\"A token bucket per tenant (sustained rate plus burst) backed by a shared store with local approximation, 429 with Retry-After, and global load shedding underneath.\""
+  },
   "thesis": "Use token buckets per tenant: a sustained rate plus a burst allowance, so short spikes from good clients pass while sustained abuse is limited. Keep counters in a fast shared store with local approximation to avoid a round trip per request, return clear 429s with Retry-After, and tier quotas by plan.",
   "pitch": "Fixed-window limits punish bursty clients: a client that sends 100 requests in one second and nothing for the rest of the minute looks abusive. A token bucket fits better: tokens refill at the sustained rate, the bucket holds a burst capacity, and each request takes a token. Good clients with occasional bursts never notice; a client sending at a sustained high rate drains the bucket and gets limited. I'd key buckets by tenant and optionally by endpoint class, since writes or expensive endpoints get tighter limits. For a distributed fleet, the state lives in Redis or similar, updated atomically with a script, but calling Redis on every request adds latency, so I'd have each instance hold a local share of the tenant's budget and sync periodically, accepting small overshoot. Responses include 429 with Retry-After and rate-limit headers showing remaining quota. Limits come from the tenant's plan, and I'd add a global concurrency or load-shedding layer above it, because per-tenant limits don't protect you if every tenant bursts at once.",
   "points": [

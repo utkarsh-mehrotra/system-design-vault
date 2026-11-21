@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Walking through the diagram and arguing why your design is best.",
+    "why": "Skeptics aren't moved by boxes, and ignoring their preferred option makes them stop listening. Hiding the downside lets them find it for you.",
+    "probe": "Agreeing the constraints, steelmanning alternatives, naming costs, and stating what would change your mind.",
+    "say": "\"Here are the constraints; here's the decision in one sentence; here's why your option loses on these constraints; here's what we give up; and here's the metric that would make me reverse it.\""
+  },
   "thesis": "Lead with the constraint, not the design. A skeptic is persuaded by seeing that you considered their option, priced your own downside honestly, and know what evidence would change your mind.",
   "pitch": "I'd spend the first minute restating the requirement and the one or two constraints that drive the decision, for example p99 under 100 ms and a team of four, and check we agree on them. Then the decision in one sentence. Then the alternatives I rejected, including the one the architect probably prefers, each with the specific reason it lost against those constraints. Then what we're giving up, said plainly before they have to point it out. I'd close with the trigger that would make me reverse the decision and how cheaply we'll detect it: a metric, a load test, a date. If they still disagree, I'd ask which constraint they weigh differently, because that's usually where the real disagreement is.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Every query includes WHERE tenant_id = ?, so we're isolated.\"",
+    "why": "One forgotten filter leaks data. Isolation that depends on every developer remembering is not enforcement.",
+    "probe": "Enforcement in the data layer, tenant id from the authenticated context, and testing for cross-tenant access.",
+    "say": "\"Tenant id comes from authentication and is enforced with row-level security or a mandatory repository filter, with tests that attempt cross-tenant reads on every endpoint.\""
+  },
   "thesis": "Pick an isolation model per tier, not one for everyone: shared tables with a tenant id for most tenants, and schema- or database-per-tenant for those who need stronger isolation or have outgrown the pool. Enforce tenant scoping in the data layer, not in each query, and design noisy-neighbour controls and tenant export from the start.",
   "pitch": "There are three models. Pooled: shared tables with tenant_id on every row; cheapest and easiest to operate, weakest isolation. Schema-per-tenant: separate schemas in a shared database; better logical isolation, but migrations run per schema and catalogues grow. Database- or cluster-per-tenant: strongest isolation and per-tenant backup, restore and residency, at much higher cost and operational load. I'd usually run pooled for most tenants and offer dedicated databases for large or regulated tenants. In the pooled model, the key is enforcement: tenant id must come from the authenticated context, never from request parameters, and be applied automatically, through row-level security in Postgres or a mandatory tenant filter in the data access layer, with tests that try cross-tenant access. Then per-tenant quotas and rate limits for noisy neighbours, per-tenant encryption keys if required, and tooling for tenant export, deletion and moving a tenant between models.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Exponential backoff\" as the complete answer.",
+    "why": "Backoff without jitter synchronises clients, and retries at every layer still multiply load (3 attempts across 5 layers is 243 calls). Backoff alone doesn't stop the amplification.",
+    "probe": "Retrying at one layer, jitter, retry budgets, deadlines and idempotency.",
+    "say": "\"One retry layer, capped backoff with full jitter, a retry budget around 10%, deadline propagation, and retries only for idempotent operations.\""
+  },
   "thesis": "Retries help with transient blips and hurt in overload. Make them safe by retrying at one layer only, with capped exponential backoff and jitter, a retry budget that limits retries to a small fraction of traffic, deadlines propagated end to end, and only for idempotent operations.",
   "pitch": "Retries amplify outages because they multiply load exactly when a dependency is struggling. If five layers each retry three times, one user request can become 243 calls at the bottom. I'd fix it in layers. Retry at one place only, usually the edge closest to the failing call, and have everyone else fail fast. Use capped exponential backoff with jitter so retries spread out instead of arriving in synchronised waves. Add a retry budget, for example retries may be at most 10% of requests, so retries stop automatically when failures are widespread. Propagate a deadline so nobody retries work whose caller has already given up. Only retry idempotent operations or those with idempotency keys, and honour Retry-After and 429 or 503 signals. Finally, a kill switch to disable retries during an incident.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Write-back, because it's fastest.\"",
+    "why": "Write-back acknowledges before the data is durable, so a cache node failure loses writes, which is unacceptable for orders or money.",
+    "probe": "Durability trade-offs, and knowing the common default is cache-aside with delete-on-write.",
+    "say": "\"Cache-aside with delete-on-write for most data; write-back only for loss-tolerant aggregates like view counts.\""
+  },
   "thesis": "Write-through updates cache and store together, keeping them aligned at the cost of write latency. Write-back acknowledges after updating the cache and writes the store later: fast, but risks loss. Write-around writes only to the store and lets reads populate the cache, avoiding pollution with rarely read data. Most application caches use cache-aside with write-around plus invalidation.",
   "pitch": "The question is what happens on a write. Write-through: write to the store and the cache synchronously, so reads right after a write hit a fresh cache; writes are slower and you may cache data nobody reads. Write-back, or write-behind: write to the cache, acknowledge, and flush to the store asynchronously, which is great for write-heavy, loss-tolerant workloads like counters and metrics but dangerous for anything you can't lose, because a cache failure loses unflushed writes. Write-around: write only to the store, and the next read misses and loads it; best when written data is often not read soon, avoiding cache churn. In practice, for most services I'd use cache-aside: read from cache, on miss load from the database and populate; on write, update the database and delete the cache key, so the next read loads fresh data.",
   "points": [

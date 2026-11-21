@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Announce it in the changelog and remove it on the date.\"",
+    "why": "Many callers never read changelogs. Without telemetry and brownouts, removal day becomes an outage for someone important.",
+    "probe": "Finding real callers, in-band headers (Deprecation, Sunset), brownouts, chasing stragglers.",
+    "say": "\"Find callers from logs, announce a date, add Deprecation and Sunset headers, run brownouts, chase the long tail, then return 410 with a pointer.\""
+  },
   "thesis": "Deprecation is a process driven by data: find every real caller from logs, announce with a date, signal in-band with Deprecation and Sunset headers, run brownouts to flush out stragglers, and remove only when traffic is gone or the date has passed with everyone informed.",
   "pitch": "I'd start with telemetry: who actually calls this endpoint, how often, and from which client versions, from access logs keyed by API key or client id. Then announce: docs, changelog, and direct contact with known callers, with a sunset date and a migration guide. In-band signals help automated clients notice: a Deprecation header and a Sunset header with the date, defined in RFC 8594, plus warnings in SDKs. Then brownouts: scheduled short windows where the endpoint returns an error, first in staging, then briefly in production, which reveals callers who ignored the emails. Track traffic weekly; chase the remaining callers individually. Remove after the date if traffic is at or near zero; if a critical caller remains, negotiate an extension rather than break them, but keep the pressure on. Afterwards, return a clear 410 Gone with a pointer to the replacement rather than a confusing 404.",
   "points": [

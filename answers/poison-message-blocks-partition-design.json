@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Retry until it succeeds\" or \"skip it and move on.\"",
+    "why": "Infinite retries stall the whole partition. Silently skipping loses business events and can break per-key ordering.",
+    "probe": "Telling transient from permanent failures, retry topics, a DLQ with context, replay, and ordering implications.",
+    "say": "\"Bounded retries for transient errors, retry topics with delay, a DLQ carrying full context, an alert and replay tooling, and per-key parking where order matters.\""
+  },
   "thesis": "A poison message is one that fails every time. Don't let it block everything behind it: retry a bounded number of times, then move it aside to a retry or dead-letter topic with full context, keep the partition moving, alert on it, and provide a safe way to replay once fixed.",
   "pitch": "In an ordered partition, a consumer that keeps failing on one message stops all progress for that partition, and lag climbs. I'd first separate transient from permanent failures: a timeout to a dependency is worth retrying; a deserialisation error or validation failure isn't. Transient failures get a few in-place retries with backoff, then move to a delayed retry topic, so the main partition continues. Permanent failures, or messages that exhaust retries, go to a dead-letter topic with the original payload, headers, error, stack trace, attempt count and source offset. The consumer commits past it and keeps going. I'd alert on DLQ arrivals, provide tooling to inspect, fix and replay messages from the DLQ back into the main flow, and decide whether skipping is acceptable: for strictly ordered entities, later messages for the same key may need to wait or be parked too.",
   "points": [

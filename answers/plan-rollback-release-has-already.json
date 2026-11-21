@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Just redeploy the previous version.\"",
+    "why": "The old code may not be able to read data the new code wrote, so rollback itself breaks things.",
+    "probe": "N and N-1 compatibility, expand and contract, flags for new write formats, and a rule for rolling back versus fixing forward.",
+    "say": "\"Every release must be readable by the previous version: schema changes separate from behaviour, new formats behind a flag, and a repair script for records written in the bad window.\""
+  },
   "thesis": "Once new code has written data, rolling back the code isn't enough: the old version must still read what the new version wrote. Design releases so the schema and data formats are backward and forward compatible across adjacent versions, and decide in advance when you roll back versus fix forward.",
   "pitch": "The rule I'd follow is that any release must be safe to run alongside, and roll back to, the previous version. That means separating schema changes from behaviour changes: expand the schema first in a release that doesn't use it yet, then ship code that writes the new shape while still writing or tolerating the old one, and only contract after the new code has been stable for a full cycle. New data formats are introduced behind a feature flag, so turning the flag off stops new writes without a deploy. Old code must ignore unknown fields and tolerate new enum values. If something goes wrong after data was written, I'd decide using a pre-agreed rule: roll back if the new data is readable by the old code and the issue is user-facing; fix forward if rollback would orphan or misread data. And keep a script ready to repair or translate the records written during the bad window.",
   "points": [

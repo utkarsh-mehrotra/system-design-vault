@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Async is more scalable, so make everything event-driven.\"",
+    "why": "Async adds pending states, after-the-fact failure handling, duplicates and harder debugging. When the user needs an answer now, async just hides latency behind a spinner.",
+    "probe": "Can you draw the line between the synchronous decision and asynchronous side effects?",
+    "say": "\"Synchronous for whatever the caller needs to proceed; asynchronous for side effects and slow work, with idempotent consumers.\""
+  },
   "thesis": "Use synchronous calls when the caller needs the answer to continue and the work is fast and bounded. Use asynchronous messaging to decouple availability, absorb bursts, fan out to many consumers, or run slow work. Asynchrony costs you immediate answers and simple error handling, so pay it only where you gain something.",
   "pitch": "My rule: if the user or caller can't proceed without the result, and it can be produced within the latency budget, call synchronously, as with checking a price, authorising a payment, or reading a profile. If the work is slow, can be done later, or other systems just need to know something happened, make it asynchronous: emit an event or enqueue a job, return quickly, and process in the background. Async gives decoupling, since the producer stays up when consumers are down; buffering, which absorbs spikes; and fan-out, where many consumers react without the producer knowing them. Its costs are real: results arrive later, so the UI needs pending states; errors happen after the request returned, so you need retries, dead-letter handling and notifications; and duplicates and ordering need design. Most systems mix both: a synchronous core decision, then asynchronous side effects.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Our best engineer owns it and is always available.\"",
+    "why": "A hero is a single point of failure and a sign the system isn't operable by the team.",
+    "probe": "Clear ownership, runbooks, shared on-call, boring technology, removing hero dependencies.",
+    "say": "\"One owning team, runbooks and decision records, a shared sustainable rotation, and I track who gets pulled into incidents so we can spread that knowledge.\""
+  },
   "thesis": "A system is team-owned when anyone on the rotation can understand, operate and change it: clear ownership boundaries, documented runbooks and design records, shared on-call, boring technology, and no component that only one person can fix. Hero dependence is a design flaw, not a staffing detail.",
   "pitch": "I'd start with ownership: every service, job and data store has one owning team, recorded in a catalogue used for alerts and reviews, with boundaries matching team boundaries so a team can change its system without coordinating with five others. Then make knowledge transferable: runbooks for every alert, design docs and decision records for the why, and onboarding that includes doing real operational tasks. On-call is shared by the whole team on a sustainable rotation, which spreads knowledge and makes pain visible to everyone, motivating fixes. Technology choices favour things many people already know. And I'd actively look for heroes: if one person is always pulled into incidents for a component, that's a risk to fix with pairing, documentation and simplification, not a person to praise and rely on. Measure it: can someone new to the team handle a typical incident with the runbook alone?",
   "points": [

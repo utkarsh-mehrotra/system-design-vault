@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Twenty comments of equal weight, mostly about how you'd have done it.",
+    "why": "Preference-driven, unlabelled comments bury the real risks and make every comment feel blocking.",
+    "probe": "Reviewing against goals, probing failure and operations, labelling blocking versus suggestion, offering alternatives.",
+    "say": "\"I review against the stated goals, ask about failure, capacity and rollback, mark only correctness, security and operability issues as blocking, and pair every objection with an alternative.\""
+  },
   "thesis": "Review the design against its goals, not your preferences. Understand the problem first, ask questions that expose assumptions about failure and scale, separate blocking concerns from suggestions, offer an alternative whenever you object, and say what's good. Depth and kindness aren't in tension; vagueness and point-scoring are the problems.",
   "pitch": "I'd start by reading the goals, non-goals and constraints, and if they're missing, that's my first comment, because I can't judge a design without knowing what it's for. Then I'd probe the places designs usually break: what happens when each dependency is slow or down, what the capacity numbers are, how data stays consistent, how it's deployed and rolled back, and who operates it. I'd phrase concerns as questions where I'm unsure, like 'what happens if the queue consumer falls an hour behind?', and as clear statements where I'm confident. I'd label each comment: blocking, meaning it must be resolved because of a correctness, security or operational risk; or suggestion, a preference the author can take or leave. When I object, I offer an alternative or at least the criteria a solution must meet. And I'd call out strong decisions explicitly. For big disagreements I'd talk in person rather than in a comment thread.",
   "points": [

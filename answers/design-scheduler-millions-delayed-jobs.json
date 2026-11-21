@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"A cron job that runs SELECT * FROM jobs WHERE due_time <= now() every minute.\"",
+    "why": "It slows as the table grows, multiple pollers grab the same jobs, and there's no story for crashed workers, clock skew or catching up after an outage.",
+    "probe": "Time-bucketed sharded storage, leases, at-least-once with idempotent jobs, and catch-up policy.",
+    "say": "\"Jobs bucketed by shard and due minute, one lease-holding poller per shard, idempotent jobs because leases can expire, one time source, and rate-limited catch-up with expiry rules.\""
+  },
   "thesis": "Store jobs by due time in time-bucketed, sharded storage; have workers claim due jobs with leases; execute at least once and make jobs idempotent; and design explicitly for clock skew and catching up after an outage.",
   "pitch": "Millions of delayed jobs a day is tens to hundreds per second on average, with peaks, so throughput isn't the hard part; correctness and recovery are. I'd store each job with its due time, partitioned by shard and time bucket, say per minute, so finding due jobs is a cheap range scan rather than scanning everything. A poller per shard, with one active owner per shard enforced by a lease, moves due jobs into a ready queue, or workers claim them directly by atomically setting a lease with an expiry. Workers execute and mark done; if a worker dies, the lease expires and the job is reclaimed, so execution is at least once and jobs must be idempotent. Clocks: use the database's or coordinator's time, not each worker's, and tolerate small skew. After an outage there's a backlog of overdue jobs, so catch-up must be rate-limited and prioritised, with a policy for jobs that are now too late to matter.",
   "points": [

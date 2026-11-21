@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"NoSQL because it scales\" or \"use Elasticsearch as the database.\"",
+    "why": "Relational databases scale far for most workloads, and NoSQL makes you rebuild joins and transactions. Search engines are derived indexes, not systems of record.",
+    "probe": "Do you choose from access patterns and invariants, and count operational cost?",
+    "say": "\"Relational by default, key-value for known-key scale, and search as an index fed by CDC that can be rebuilt from the source of truth.\""
+  },
   "thesis": "Choose from access patterns and consistency needs, not fashion. A relational database is the default for transactional data and flexible queries; key-value or wide-column stores fit very high-scale access by known keys; search engines are derived indexes for text and faceting, never the source of truth.",
   "pitch": "I'd list the queries and invariants first. If the data has relationships, needs transactions, and the queries aren't all known up front, a relational database is the right default, and modern Postgres or MySQL scale further than people assume with indexing, replicas and partitioning. If access is overwhelmingly by known key at very high throughput with simple consistency needs, like sessions, user feeds or IoT time series, a key-value or wide-column store like DynamoDB or Cassandra gives predictable latency and horizontal scale, at the cost of designing your tables around your queries and losing ad hoc joins. Full-text search, relevance ranking, fuzzy matching and faceted filters belong in a search engine like Elasticsearch or OpenSearch, fed from the source of truth via CDC, because search indexes aren't designed to be your system of record. Often the answer is all three, each doing what it's good at.",
   "points": [

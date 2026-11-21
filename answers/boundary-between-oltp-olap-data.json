@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Have the application write to both the database and the warehouse.\"",
+    "why": "Dual writes diverge on partial failures and miss changes from scripts and migrations. The reliable path is change data capture from the database log.",
+    "probe": "Do you know about CDC, freshness SLOs, schema drift and propagating deletes?",
+    "say": "\"CDC from the transaction log into the warehouse, snapshot plus stream, with a stated freshness target and erasure flowing through.\""
+  },
   "thesis": "OLTP serves many small, latency-sensitive transactions on current state; OLAP serves few large scans over history. Keep them in separate stores and move data across with change data capture, never with application dual writes, and treat lag, backfills and schema drift as first-class concerns.",
   "pitch": "The boundary is about access pattern. The transactional database handles point reads and short writes with strict latency and correctness; analytics wants to scan billions of rows, aggregate across history and join widely, which would wreck OLTP latency if run there. So analytics lives in a columnar warehouse or lakehouse. Data crosses via change data capture from the database's log into a stream, then into the warehouse, which is reliable because it reads committed changes in order, unlike the application writing to both places. I'd also plan for an initial snapshot plus streaming, monitoring of lag, handling of schema changes through a registry or contract, and deletes, including legal erasure, flowing through to the analytical side.",
   "points": [

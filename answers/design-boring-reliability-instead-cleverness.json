@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Use the newest technology because it's more advanced.\"",
+    "why": "Novel technology has unknown failure modes and few people who can operate it. Reliability comes from well-understood systems.",
+    "probe": "An innovation budget, fewer moving parts, simple failure modes.",
+    "say": "\"Proven technology by default, novelty only where it differentiates, as few critical-path components as possible, and failure modes simple enough that anyone on call can handle them.\""
+  },
   "thesis": "Choose proven components, minimise moving parts, prefer designs whose failure modes are simple and well understood, and spend your limited 'innovation budget' only where it creates real advantage. Reliability comes from boring systems that many people can operate, not clever ones only their author can.",
   "pitch": "Clever designs often work beautifully until something unusual happens, and then only one person can debug them. Boring designs use well-known technology with mature tooling, documented failure modes and a large community. I'd apply a few rules. Default to technologies the team already runs well, like a relational database, a mainstream queue and a standard deploy pipeline, and treat each new technology as a cost to justify. Minimise components on the critical path, because every component is a failure mode. Prefer simple failure behaviour: fail fast with clear errors rather than complex self-healing that can misbehave. Make operations predictable: the same deployment, monitoring and runbook patterns everywhere. And reserve novelty for the parts that actually differentiate the product. Dan McKinley's idea of innovation tokens captures this: you only get a few, so spend them where they matter.",
   "points": [

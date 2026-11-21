@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Retry 3 times, then send to the DLQ\" with nothing after that.",
+    "why": "A DLQ with no alert, owner or replay path is where business events go to die. Retrying non-retryable errors wastes capacity.",
+    "probe": "Classifying errors, delayed retries, enriched DLQ messages, ownership and replay.",
+    "say": "\"Retry only transient errors with jittered delays, dead-letter with full context, alert on arrivals, a named owner, and a rate-limited replay into idempotent consumers.\""
+  },
   "thesis": "A retry policy decides which failures are worth trying again, how often and for how long; a dead-letter queue catches what's left so it isn't lost or blocking. Both need owners, alerts and a replay path, or they become a place where business events go to die.",
   "pitch": "I'd define per consumer: which errors are retryable, the backoff schedule with jitter, the maximum attempts or total time, and what happens after, which is a move to a dead-letter queue. Retries should be delayed rather than immediate, using the broker's visibility timeout or delay features or separate retry queues, so a failing dependency gets breathing room. The DLQ message keeps the original payload plus metadata: error, attempts, first and last failure times, and source. Then operations: an alert when anything lands in the DLQ or when depth grows, a dashboard, a named owner, and a replay tool that sends messages back through the normal consumer after a fix. I'd also set DLQ retention long enough to investigate, and make consumers idempotent because replay means reprocessing.",
   "points": [

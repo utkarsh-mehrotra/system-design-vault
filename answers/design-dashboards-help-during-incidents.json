@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"A big dashboard with every metric we have.\"",
+    "why": "During an incident, fifty panels slow you down. Responders need to find impact, location and recent changes in minutes.",
+    "probe": "A top-level health view, a standard per-service template, dependencies, change annotations.",
+    "say": "\"A journey health view first, then identical service dashboards with traffic, errors, latency, saturation and dependencies, with deploy and config annotations on every graph.\""
+  },
   "thesis": "Incident dashboards answer three questions fast: are users hurting, where, and what changed? Start with one top-level health view of symptoms, drill down by service and dependency, show deploys and config changes on every graph, and keep the layout identical across services so responders aren't learning a new screen at 3 a.m.",
   "pitch": "I'd design a hierarchy. The top-level dashboard shows user-facing health for key journeys: success rate, latency percentiles against SLOs, and business throughput, by region. If something is red, it links to the service dashboard, which follows a standard template for every service: RED metrics per endpoint, then saturation of its resources, then each dependency's error rate and latency, then recent deploys, config changes and feature-flag flips as annotations. From there, links go to traces filtered to the time window and logs with the same filters. I'd remove vanity panels, keep time ranges and axes consistent, and show 'same time last week' as a comparison line. And test dashboards in game days: if responders can't find the cause using them, change them.",
   "points": [

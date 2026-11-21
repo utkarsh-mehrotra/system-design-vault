@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Sample 1% of traces at the start of each request.\"",
+    "why": "Random head sampling throws away most of the rare failed and slow traces you actually need.",
+    "probe": "Context propagation everywhere, including queues, tail-based sampling, attribute discipline, budgets.",
+    "say": "\"W3C context through every hop including message headers, and tail sampling that keeps all errors and slow traces plus a small baseline, with per-team budgets.\""
+  },
   "thesis": "Propagate trace context everywhere with a standard (W3C Trace Context via OpenTelemetry), keep the traces that matter with tail-based sampling (errors and slow requests at 100%, a small sample of normal ones), make span attributes queryable, and give teams a budget. You want every interesting trace, not every trace.",
   "pitch": "First, propagation: every service, queue and async hop must carry trace context, or traces break into fragments. I'd standardise on OpenTelemetry SDKs and W3C traceparent headers, including in message headers for Kafka or SQS. Second, sampling: head-based sampling decides at the start and is cheap, but randomly drops the rare slow or failed requests you most need. Tail-based sampling buffers spans in collectors and decides after the trace completes: keep all errors, all traces above a latency threshold, and maybe 1% of the rest. That keeps costs proportional to interesting traffic. Third, useful spans: consistent naming, attributes like tenant, endpoint and result that you can filter on, and links from metrics exemplars and logs to traces. Fourth, cost governance: per-team volume budgets, limits on attribute cardinality and span counts, and dropping noisy internal spans.",
   "points": [

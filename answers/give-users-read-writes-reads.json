@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Send all reads to the primary.\"",
+    "why": "That throws away the replicas to solve a problem that only affects the user who just wrote.",
+    "probe": "Scoping the guarantee to the session: a sticky window or replication position tokens.",
+    "say": "\"Only the writer needs it, so either route their reads to the primary for a window above p99 lag, or carry a log position and read only from replicas that have caught up.\""
+  },
   "thesis": "Read-your-writes is a per-session guarantee, so solve it per session: either route a user's reads to the primary for a short window after they write, or carry a replication position with the session and only read from replicas that have caught up to it.",
   "pitch": "With replicas, a user can write, refresh, and not see their own change, which feels like data loss. I wouldn't make all reads go to the primary; the guarantee only matters for the writer. The simple option is sticky-to-primary: after a write, mark the session and route that user's reads to the primary for a window a bit longer than typical replication lag. The precise option is a position token: the write returns the primary's log position, the client or session carries it, and a read is served only by a replica at or past that position, otherwise it waits briefly or falls back to the primary. For a single page you can also just render the value you wrote. I'd pick sticky-to-primary first and move to tokens if primary read load becomes a problem.",
   "points": [

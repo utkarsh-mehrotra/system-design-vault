@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Spawn a worker per item and count completions in memory.\"",
+    "why": "An in-memory counter dies with the coordinator, non-idempotent tasks double-count on retry, and unbounded fan-out overwhelms shared databases.",
+    "probe": "Idempotent keyed results, a durable completion barrier, stragglers, concurrency caps.",
+    "say": "\"Idempotent tasks writing results keyed by task id, a durable counter whose conditional transition triggers fan-in exactly once, timeouts for stragglers, and capped concurrency.\""
+  },
   "thesis": "Split the work into independent, idempotent tasks; track completion with a durable counter or barrier; handle stragglers and partial failure explicitly; and cap concurrency so the fan-out doesn't overwhelm shared resources.",
   "pitch": "For a heavy computation, say scoring a million loans, I'd fan out by splitting into tasks of a sensible size, for example 1,000 loans each, and writing a parent job record with the total task count. Tasks go onto a queue; workers process them idempotently, writing results keyed by task id, so retries don't double-count. Fan-in happens when all tasks complete: each task atomically records completion, through a counter decremented in the database or a set of completed task ids, and whoever completes the last task triggers aggregation. I'd plan for stragglers, a few tasks taking much longer, with timeouts, retries and possibly speculative duplicates, and for failures, deciding whether the job fails if one task fails or completes with partial results. And I'd limit concurrency, since a thousand workers hitting the same database at once is a self-inflicted outage.",
   "points": [

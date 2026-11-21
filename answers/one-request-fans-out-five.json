@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Return a 500\" or \"wait for all five, then respond.\"",
+    "why": "Failing everything because an optional widget failed is a bad experience, and waiting on every call lets the slowest optional service set the latency.",
+    "probe": "Required versus optional, per-call timeouts, degraded responses with markers, and partial writes.",
+    "say": "\"Classify required versus optional up front, call in parallel with per-call timeouts, return a degraded response with markers for optional failures, and fail clearly only when required data is missing.\""
+  },
   "thesis": "Classify each call as required or optional before you build the endpoint. If a required call fails, fail the request clearly (or compensate if it wrote something); if optional calls fail, return a degraded response with markers saying what's missing. Per-call timeouts make sure the slowest optional call never holds the response hostage.",
   "pitch": "I'd decide in advance which of the five calls the response can't exist without and which are enrichments. Say a product page needs product details and price (required) and adds reviews, recommendations and stock badges (optional). Calls run in parallel with individual timeouts inside the overall deadline. If an optional call fails or times out, I return the response without that section and mark it, for example a field saying reviews are unavailable, so clients render a placeholder instead of guessing. If a required call fails, the request fails with a clear error, but only after retrying idempotent reads within budget, maybe serving a cached copy if that's acceptable. If the fan-out includes writes, a partial failure leaves some steps done, so the operation needs compensation or should be a saga with an idempotency key so the client can retry safely. And I'd measure degraded responses as a metric, because a feature silently degraded for a week is an incident nobody noticed.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Jumping to \"about 50 servers\" or \"use autoscaling\" without deriving anything.",
+    "why": "The interviewer wants the arithmetic: CPU per request, concurrency from Little's law, a latency budget across hops, headroom for losing a zone. An unexplained number can't be defended.",
+    "probe": "Can you do back-of-envelope sizing out loud, and do you know what happens when the deadline is about to be missed?",
+    "say": "\"50k req/s × 4 ms CPU is 200 busy cores; at 60% utilisation that's about 330 cores, plus a zone's worth of headroom. In-flight requests = 50k × latency, which sizes the pools.\""
+  },
   "thesis": "Work it out per request, then multiply: CPU time, memory and network per request give instance counts; the 100 ms deadline gives a latency budget split across hops; headroom of 30–40% covers spikes and failures. Then say what you drop when the deadline is about to be missed.",
   "pitch": "I'd do back-of-envelope sizing in four steps. Per-request cost: measure or estimate CPU time, say 4 ms per request; at 50,000 requests per second that's 200 CPU-seconds per second, so 200 cores busy, and at a target of 60% utilisation about 340 cores, or roughly 22 sixteen-core instances, plus enough to survive losing a zone. Concurrency by Little's law: 50,000 per second × 0.05 s average latency is 2,500 requests in flight, which sizes thread pools and connections. Latency budget: of 100 ms, give perhaps 10 to network, 20 to the service, 40 to dependencies called in parallel with their own timeouts, and keep 30 in reserve. Dependencies: if each request makes three downstream calls, those services see 150,000 calls per second. And I'd decide in advance what we drop near the deadline: optional calls, then lower-priority requests, so the core response stays within 100 ms.",
   "points": [

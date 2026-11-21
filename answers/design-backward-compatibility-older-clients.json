@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Force everyone to upgrade.\"",
+    "why": "Forced upgrades frustrate users and aren't possible for many partners or devices. It should be a last resort for security.",
+    "probe": "A support window, client version telemetry, capability negotiation, shims.",
+    "say": "\"Clients send version and capabilities; the server only sends what they can handle; shims cover the oldest supported versions; forced upgrade only for security.\""
+  },
   "thesis": "Older clients will keep calling for longer than you expect, so build compatibility into the server: a published support window, telemetry on client versions, capability negotiation so clients and servers agree on features, and server-side shims for the oldest supported versions. Know the conditions under which you can finally drop one.",
   "pitch": "Mobile apps, embedded devices and partner integrations upgrade slowly or never. I'd first set a support policy: which client versions are supported and for how long. Clients send their version and capabilities on every request, which feeds telemetry on how many users are on each version and lets the server tailor responses. Instead of forking endpoints, the server negotiates features: a client that doesn't support a new card type gets a fallback rendering; a client that doesn't know a new payment method doesn't see it offered. For the oldest supported versions, small server-side shims translate responses into shapes they understand. And I'd keep a minimum-supported-version mechanism, a forced upgrade prompt, for security-critical cases, used sparingly. A version can be retired when its usage is below an agreed threshold and the support window has passed.",
   "points": [

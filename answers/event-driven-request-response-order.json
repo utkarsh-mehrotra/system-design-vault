@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Picking one side: \"fully event-driven\" or \"fully synchronous.\"",
+    "why": "Fully async leaves the customer unsure whether the order exists; fully sync chains fulfilment and email into checkout and makes it fragile.",
+    "probe": "Splitting the synchronous decision from asynchronous side effects, published reliably.",
+    "say": "\"The order decision is synchronous and commits with an outbox event; fulfilment, email and loyalty consume that event idempotently.\""
+  },
   "thesis": "Both. The customer needs an answer now, so placing the order is a synchronous request that commits the order and returns its status. Everything that follows (fulfilment, notifications, loyalty points, analytics) reacts to an OrderPlaced event published reliably from that commit.",
   "pitch": "I'd make the order write synchronous: validate the cart, check price and stock, authorise payment if that's part of placement, commit the order, and return an order id and status in one request. The customer gets a definite answer, and errors like out-of-stock or a declined card show immediately. In the same transaction I'd write an OrderPlaced event to an outbox, and everything downstream consumes it: warehouse fulfilment, confirmation email, loyalty, fraud review, analytics. That keeps the user-facing path short and dependent on only the services needed for the decision, while downstream consumers can be slow, fail or be added later without touching checkout. Where something downstream can still change the order, like fraud review cancelling it, the order has explicit states and the customer is notified when it changes.",
   "points": [

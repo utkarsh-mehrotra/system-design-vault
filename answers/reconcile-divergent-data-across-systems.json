@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"With proper event-driven design they won't diverge.\"",
+    "why": "Bugs, missed webhooks and partial failures guarantee drift. Pretending otherwise means discovering it from customers.",
+    "probe": "A source of truth per field, matching on stable ids, classifying differences and measuring drift.",
+    "say": "\"I'd assume drift: define the source of truth per field, reconcile on shared ids with a grace window, auto-repair the safe classes, and alert on drift rate.\""
+  },
   "thesis": "Divergence is inevitable between systems that share facts, so plan for it: pick a source of truth per field, compare systematically, classify differences, auto-repair the safe classes, and route the rest to people. Track drift as a metric, not a surprise.",
   "pitch": "Whenever two systems hold the same fact, such as our ledger and the bank, the order service and the warehouse, or a database and its search index, they will drift because of bugs, missed events and partial failures. I'd first decide, per field, which system is the source of truth. Then run reconciliation jobs that compare the two on a schedule, matching on stable ids, and classify each difference: missing on one side, value mismatch, timing difference that will resolve itself, or genuinely unexplained. Safe classes, like a projection missing a record, are repaired automatically by replaying from the source of truth. Money-affecting or ambiguous ones go to a review queue with context. And I'd publish drift counts as a metric with an alert, because a sudden rise is often the first sign of a broken pipeline.",
   "points": [

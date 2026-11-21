@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Coordinate a cutover day with all clients.\"",
+    "why": "Big-bang switches across independent clients fail on the slowest one and leave no rollback.",
+    "probe": "Parallel running, migration tooling, usage tracking, gradual cutover with rollback.",
+    "say": "\"Ship new alongside old, make migration cheap, track who's still on the old path, move cohorts gradually, and keep a switch back.\""
+  },
   "thesis": "When a breaking change is unavoidable, run old and new side by side, migrate clients with tooling and dates, measure who still uses the old path, and keep a rollback during cutover. The disruption comes from surprises, so remove them.",
   "pitch": "I'd first confirm the change really must break, because often an additive alternative exists. If it must, I'd ship the new behaviour alongside the old: a new endpoint, version or field, with the old one unchanged. Then make migration easy: a guide with before-and-after examples, updated SDKs, maybe a compatibility mode or automated codemod for SDK users. Communicate the timeline with dates. Track usage of the old path per client, and contact heavy users directly. During cutover, move traffic gradually, for example by client cohort or behind a flag, and keep the ability to switch back quickly. Only remove the old path when usage is near zero and the date has passed. For internal breaking changes, the same applies but faster: change consumers first if possible, or expand-and-contract so both shapes work during the transition.",
   "points": [

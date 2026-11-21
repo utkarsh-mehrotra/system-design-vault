@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Presenting the full architecture diagram component by component, then asking \"any questions?\"",
+    "why": "A wall of boxes without reasons doesn't stick, and \"any questions?\" never reveals what didn't land.",
+    "probe": "Problem first, one concrete request, components introduced when needed, checking with predictions.",
+    "say": "\"I start from the problem, walk one real request and add each component when the story needs it, then ask them to predict what happens when something fails.\""
+  },
   "thesis": "Start from the problem and walk one real request through the system, adding each component only when the story needs it. Use one diagram, connect new ideas to things they already know, and check understanding by asking them to predict what happens when something fails.",
   "pitch": "I'd begin with why the system exists: the user problem and the one or two constraints that shape everything, such as 'payments must never double-charge'. Then I'd trace a single concrete request end to end, say a user submitting a loan application, and introduce each component at the moment it's needed: the load balancer because we have several servers, the queue because document checks are slow, the outbox because we can't lose events. Each component arrives with the reason it exists, which makes it memorable. I'd draw one diagram as we go rather than presenting a finished wall of boxes, and connect ideas to familiar ones, for example a queue as a to-do list workers pick from. Then I'd check understanding by asking them to predict: 'what happens if the payment provider times out here?' Their answer shows what landed. Finally, I'd give them a small change to make in that flow, because explaining isn't the same as understanding.",
   "points": [

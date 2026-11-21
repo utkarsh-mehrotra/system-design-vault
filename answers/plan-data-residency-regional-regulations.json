@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Put the EU database in an EU region.\"",
+    "why": "Personal data also leaks through backups, replicas, logs, traces, analytics, support tools and vendors. Residency covers the whole data flow.",
+    "probe": "A data inventory, regional cells, a minimal global directory, controlling side paths.",
+    "say": "\"Regional cells with a global directory holding only routing data, and every side path (backups, logs, analytics, vendors) kept in-region or pseudonymised.\""
+  },
   "thesis": "Classify data by jurisdiction and sensitivity, pin storage and processing to the right regions, control every path data can leak out (replication, backups, logs, analytics, support tools, vendors), and implement access and deletion rights per region. Residency is a property of the whole data flow, not just the primary database.",
   "pitch": "I'd start with a data inventory: which data is personal or regulated, which jurisdictions' rules apply, and what each requires, whether storage in-country, processing restrictions, transfer mechanisms or retention. Then architecture: deploy regional cells, so EU customers' data lives and is processed in the EU, with a global directory that routes each customer to their home region and contains only minimal non-sensitive data. The hard part is all the side paths: cross-region replication and backups, logs and traces that contain personal data, analytics pipelines, support and admin tools, and third-party processors. Each must respect the region or carry only pseudonymised data. I'd implement data-subject rights per region, such as access, deletion and export, and keep audit evidence. And I'd involve legal early, since requirements differ by country and change over time.",
   "points": [

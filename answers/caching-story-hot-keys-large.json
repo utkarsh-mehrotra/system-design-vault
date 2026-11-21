@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Consistent hashing spreads the load.\"",
+    "why": "Consistent hashing spreads keys, not traffic to a single key. One hot key still saturates one shard.",
+    "probe": "Near-caches, replicating hot keys, size caps and keeping blobs out of the cache.",
+    "say": "\"A short-TTL near-cache in each instance for hot keys, replicas of extreme keys across shards, and capped, compressed or split large values.\""
+  },
   "thesis": "Hot keys concentrate load on one cache shard; large objects waste memory, bandwidth and latency. Spread hot keys (local near-caches, replicas of the key) and break up or shrink large values (split, compress, cap size), and watch per-shard load so one key can't saturate one node.",
   "pitch": "In a sharded cache, each key lives on one node, so a very hot key, like a celebrity profile or a flash-sale product, can saturate that node's CPU or network while the rest idle. I'd first add a small in-process near-cache with a short TTL in each service instance, which absorbs most reads for the hottest keys. For extreme cases, replicate the key: store it under N suffixed keys on different shards and read a random one, accepting slightly more work on updates. For large objects, the problems are memory pressure, eviction of many small useful keys, slow network transfer and serialisation, and blocking on single-threaded caches like Redis. So I'd cap object size, compress, split large values into chunks or store only the frequently used parts, and keep really large blobs in object storage with the cache holding metadata or a pointer. And monitor per-shard ops and bandwidth plus a top-keys report.",
   "points": [

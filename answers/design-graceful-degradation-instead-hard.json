@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Add fallbacks for everything.\"",
+    "why": "Fallbacks that are rarely exercised are often broken, and fallbacks that call other dependencies fail the same way. Without a ranking, you don't know what to sacrifice.",
+    "probe": "Ranking features, decoupling the critical path, and testing degraded modes.",
+    "say": "\"Rank features with product, keep the critical path free of optional calls, prefer always-on fallbacks like serving from cache, and test the degraded modes.\""
+  },
   "thesis": "Rank features by importance, decide in advance what each one does when its dependency fails, and test those degraded modes. Graceful degradation is a product decision implemented in code, not an emergent property.",
   "pitch": "I'd start with a ranked list: what must work, like checkout and login, what's valuable but optional, like recommendations and reviews, and what's decoration. For every dependency of the critical path, define a fallback: a cached or default value, hiding the feature, a simplified version, or queueing the action to complete later. The core path must not depend on optional features at all, so recommendations timing out never blocks checkout. Implement it with tight timeouts on optional calls, circuit breakers, and feature flags that operators can flip to shed optional work under load. Then test the degraded modes deliberately, because a fallback that's never run tends to be broken when you need it.",
   "points": [

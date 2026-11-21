@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"The gateway aggregates calls and shapes responses for each client.\"",
+    "why": "Business logic in a shared gateway makes every product change a gateway change and one team a bottleneck for everyone.",
+    "probe": "A thin gateway for cross-cutting concerns, declarative team-owned routes, BFFs for aggregation.",
+    "say": "\"The gateway does TLS, auth, rate limits, routing and observability only; aggregation goes in backends-for-frontend owned by client teams.\""
+  },
   "thesis": "Keep the gateway thin and generic: routing, authentication, rate limits, request validation at the edge, and observability, all driven by configuration. No business logic, no knowledge of service internals. Then services and the gateway can change on their own schedules.",
   "pitch": "A gateway becomes a bottleneck when it accumulates business logic: aggregation for one client, special-case transforms, feature rules. Then every product change needs a gateway change, and one team owns everyone's roadmap. I'd limit it to cross-cutting concerns: TLS termination, authentication and token validation, coarse authorisation, rate limiting and quotas, routing by path and version, request size limits, and consistent logging, metrics and tracing. Routes are declarative configuration, reviewed and deployed independently of gateway code, ideally owned by the service teams for their own paths. Canary and traffic-splitting support lets services roll out new versions behind stable public paths. If clients need aggregation, I'd use a backend-for-frontend owned by the client team rather than putting it in the shared gateway. And the gateway needs its own SLO and failure budget, because it's in front of everything.",
   "points": [

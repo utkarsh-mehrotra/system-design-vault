@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Listing the hops (DNS, load balancer, server, database) and stopping there, or saying the database is always the slow part.",
+    "why": "A list of boxes shows no sense of where time actually goes. For distant users, connection setup and TLS round trips often cost more than the query, and the tail comes from queueing and fan-out, not the median hop.",
+    "probe": "Whether you can put rough numbers on each hop and tell p50 causes apart from p99 causes.",
+    "say": "\"At p50 this is dominated by round trips, so edge termination and connection reuse matter most; at p99 it's queueing, cache misses and the slowest downstream call.\""
+  },
   "thesis": "Name every hop, give each a latency budget, and say which hops dominate the tail. For most web requests the network round trips (DNS, connection setup, TLS) and the slowest dependency call dominate, not the application code.",
   "pitch": "A browser request goes: DNS resolution, usually cached but potentially tens of milliseconds on a miss; TCP and TLS setup, one to two round trips to the edge, which is why terminating TLS at a nearby CDN or edge point matters; the edge either serves from cache or forwards over a warm connection to the origin's load balancer; the load balancer picks a healthy instance; the service authenticates, maybe checks a cache, then queries the database over a pooled connection; the database finds rows via an index, from memory if hot, from disk if not; and the response returns the same way, possibly compressed. I'd put rough numbers on each and point out that p50 is dominated by network distance while p99 is dominated by queueing, cache misses, garbage collection and the slowest downstream call. That tells you where to optimise: move the edge closer, reuse connections, cache, and cut the slowest dependency.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"When it can't scale to 10x.\"",
+    "why": "Scale is rarely the dangerous gap. The dangerous gaps are no answer for dependency failure, no rollback, untested backups, single points of failure and a bus factor of one.",
+    "probe": "Whether you check for foreseeable failures and operability.",
+    "say": "\"It's dangerous when there's no answer for failures we can already name: dependency outage, bad deploy, data loss, a single point of failure, or one person who understands it.\""
+  },
   "thesis": "A design is dangerously under-engineered when it has no answer for failures you can already name: no plan for a dependency outage, no capacity numbers, no way to roll back or recover data, a single point of failure on a critical path, or only one person who understands it.",
   "pitch": "The test is whether the design has an answer for foreseeable problems, not exotic ones. I'd ask: what happens when each dependency is down or slow; is there a timeout, a fallback, or at least a clear failure mode? What are the expected and peak loads, and has anyone checked the design handles them with headroom? How do we roll back a bad deploy, and how do we recover if data is corrupted; are there tested backups? Is there a single component whose failure takes down a critical path with no redundancy? Can we tell it's broken before customers tell us, meaning monitoring and alerts? Who owns it and who else understands it? And for money or personal data: are there idempotency, audit and access controls? A missing answer to any of these on a critical system is a real risk, not a nice-to-have. The fix is targeted: add the specific safeguard, not a platform.",
   "points": [

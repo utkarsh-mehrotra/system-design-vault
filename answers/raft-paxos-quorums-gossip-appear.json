@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Explaining how Raft elects a leader in detail, or proposing to implement consensus.",
+    "why": "The question asks where these protocols sit in a real system. Reimplementing consensus is a red flag; placement and costs are what matter.",
+    "probe": "Consensus for small critical metadata, quorums for data, gossip for membership, fencing for locks.",
+    "say": "\"I'd use etcd or ZooKeeper for leader election and config, with fencing tokens on leases; quorum or single-leader replication for data; gossip only for membership.\""
+  },
   "thesis": "You use these protocols, you don't implement them. Consensus (Raft, Paxos) sits under coordination and metadata, such as leader election, configuration and locks. Quorum replication sits in data stores to tune consistency against latency. Gossip spreads membership and failure detection where eventual agreement is enough.",
   "pitch": "In a system I'd actually build, consensus shows up inside the coordination layer: etcd or ZooKeeper for leader election, configuration and service discovery, or inside a database that uses Raft per data range, like CockroachDB or TiKV. It gives a linearizable log with a majority, so it survives a minority of failures but needs a majority to make progress, and every write costs a round trip to a majority. Quorum replication, where W plus R exceeds N, appears in Dynamo-style stores like Cassandra, letting you trade consistency for latency per operation. Gossip appears in membership and failure detection, for example in Cassandra or Consul, where nodes converge on who is alive without a central authority. My point in an interview is placement: consensus for small, critical metadata; quorums or single-leader replication for bulk data; gossip for membership.",
   "points": [

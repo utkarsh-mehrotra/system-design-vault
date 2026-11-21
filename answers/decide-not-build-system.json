@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Build everything in the requirements list to be safe.\"",
+    "why": "Every feature carries ongoing costs in maintenance, testing, support and failure modes. Unjustified features slow everything else.",
+    "probe": "A requirement-or-risk test, a reversibility test, written non-goals.",
+    "say": "\"Build what the core use case and known risks require, keep cheap seams for likely needs, and write explicit non-goals with triggers for revisiting them.\""
+  },
   "thesis": "Tie every feature and component to a present requirement or a measured risk, defer what's cheap to add later, and write the non-goals down so the decision survives the next planning meeting. Saying no is a design activity, not an absence of one.",
   "pitch": "I'd sort candidate features into three groups. Must have now: needed for the core use case, legal or safety requirements, or protection against a known, costly risk. Cheap to add later: features whose absence doesn't lock in anything, like extra reports, more configuration, or another integration; these are deferred without guilt. Expensive to add later: things that shape data models, public APIs or security boundaries; these deserve discussion now, even if the decision is to keep a seam rather than build the feature. Then I'd write explicit non-goals in the design doc, such as 'we won't support multi-currency in v1' and 'we won't build our own notification system', so scope creep has to argue against a written decision. I'd also look at the cost side: every feature adds code to maintain, test surface, documentation, support load and failure modes, so 'nice to have' needs to be worth that ongoing cost.",
   "points": [

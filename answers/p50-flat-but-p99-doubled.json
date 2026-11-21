@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Scale up\" or \"add caching.\"",
+    "why": "A flat median means most requests are fine; extra capacity won't fix a minority hitting a slow path. You need to find who that minority is.",
+    "probe": "Slicing by dimension, queueing near saturation, GC, retries, fan-out, exemplars to traces.",
+    "say": "\"First what changed, then p99 sliced by instance, endpoint, tenant and dependency, then exemplar traces to see which span grew. Hedging is a mitigation, not the fix.\""
+  },
   "thesis": "A flat median with a rising tail means most requests are fine and a minority are hitting something slow. Narrow down who that minority is (which instance, endpoint, tenant, dependency or shard) by comparing percentiles across dimensions, then jump from the metric to example traces to find the slow span.",
   "pitch": "I'd start by asking what changed when p99 moved: a deploy, config change, traffic shift, or new tenant. Then slice: p99 by instance, zone, endpoint, tenant, client version and downstream dependency. If one instance is slow, think noisy neighbour, a bad host, or garbage collection on that JVM. If one endpoint, think a new query or a payload-size change. If one tenant, think a large account hitting a slow path. If one dependency, think its own tail or a hot shard behind it. Common tail causes: queueing when utilisation creeps up, since latency rises sharply as utilisation approaches saturation; GC pauses; lock contention; retries, where a timed-out first attempt plus a retry lands in the tail; cache misses for a subset of keys; and fan-out, where waiting on many calls makes the slowest one dominate. Exemplars on the latency histogram link straight to slow traces; I'd look at several and see which span grew.",
   "points": [

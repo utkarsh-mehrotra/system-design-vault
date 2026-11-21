@@ -1,6 +1,6 @@
 # System Design Vault
 
-Staff-level system design question index: 93 questions in 10 categories, each with the points a strong answer covers.
+Staff-level system design **trap-question** prep: 93 questions in 10 categories. Each card has the trap (tempting wrong answer and what to say instead), a 60-second answer, key points, numbers, pitfalls and follow-ups. **Trap drill** mode quizzes traps and follow-ups with spaced repetition.
 
 ## Files
 

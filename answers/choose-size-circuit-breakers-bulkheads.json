@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Add a circuit breaker\" with default settings and a 30-second timeout.",
+    "why": "Without data-driven timeouts and per-dependency pools, a slow dependency still exhausts shared capacity before the breaker trips.",
+    "probe": "Sizing from p99 and Little's law, minimum call counts, half-open probing.",
+    "say": "\"Timeout just above the dependency's healthy p99 and below my deadline, a bulkhead sized by throughput × latency, and a breaker on the failure or slow-call rate with a minimum volume.\""
+  },
   "thesis": "Timeouts bound how long you wait, bulkheads bound how much of your capacity one dependency can consume, and circuit breakers stop calling a dependency that's clearly failing. Size each from measured behaviour, not defaults.",
   "pitch": "I'd set timeouts first, because without them nothing else works. Each call's timeout sits a little above that dependency's healthy p99 and always below the caller's own remaining deadline. Then bulkheads: a separate connection or concurrency pool per dependency, sized by Little's law from its normal throughput and latency plus headroom, so a slow recommendation service can only exhaust its own slots, not the threads checkout needs. Then circuit breakers: open when the error or slow-call rate over a rolling window crosses a threshold with a minimum request count, fail fast while open, and after a cool-down let a few probe requests through in half-open state. When open, return the fallback. I'd validate the numbers with load tests and fault injection.",
   "points": [

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Add a deleted_at column, and that handles deletion requests.\"",
+    "why": "Soft delete keeps the data, which fails legal erasure. Copies in logs, the warehouse, search and backups remain, and retention rules can conflict with erasure.",
+    "probe": "Do you separate undo, retention and erasure, define precedence, and cover every copy?",
+    "say": "\"Three different clocks: soft delete for undo, retention for policy, erasure for law, with written precedence, propagation to every store, and crypto-shredding for backups.\""
+  },
   "thesis": "Soft delete, retention and legal erasure run on different clocks for different reasons: undo, policy and law. Model them separately, decide which wins when they conflict (usually a legal hold or regulatory retention beats an erasure request, and erasure beats ordinary retention), and make sure each one reaches backups, logs and derived stores.",
   "pitch": "I'd separate the three. Soft delete is a product feature: a deleted_at marker so users can undo, with queries filtering it out, and a purge after, say, 30 days. Retention is policy: how long each data class is kept, like logs for 90 days or transaction records for years if regulation requires it, enforced by automated purges, ideally partition drops. Erasure is a legal right in many jurisdictions: delete or anonymise a person's personal data on request, within a deadline. They conflict, for example when someone asks for erasure but financial regulation requires keeping their loan records, so I'd write the precedence down: legal holds and regulatory retention win, but only for the data they cover, and the rest is erased. Then the hard part is coverage: replicas, caches, search indexes, the warehouse, logs, and backups. For backups, crypto-shredding helps: encrypt each person's data with their own key and delete the key.",
   "points": [

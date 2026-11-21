@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"A script that loops with OFFSET and LIMIT and updates rows.\"",
+    "why": "OFFSET gets slower and skips or repeats rows as data changes. A non-idempotent, unthrottled script can overwrite live writes and flood replication.",
+    "probe": "Idempotency, checkpoints, adaptive throttling and not clobbering newer data.",
+    "say": "\"Keyset ranges with checkpoints, conditional upserts that never overwrite newer values, throttling on replica lag, and a kill switch.\""
+  },
   "thesis": "A safe backfill is idempotent, resumable, throttled against live load, verifiable and stoppable. Treat it as a production service with metrics and a kill switch, not a one-off script.",
   "pitch": "I'd write the backfill so running it twice is harmless: compute values deterministically and upsert, or skip rows already processed, and never overwrite newer data written by live traffic. It processes data in key ranges with a persistent checkpoint, so it can stop and resume anywhere. Its rate adapts to the database's health: back off when replication lag, CPU or p99 latency rise, and run harder off-peak. It emits progress, error counts and throughput, and has a kill switch. Before the full run I'd test it on a production snapshot and then on a small slice of production, and afterwards verify with counts, checksums or sampled comparisons. And I'd decide in advance what happens with rows that fail: skip and log them for a retry pass, not abort the whole job.",
   "points": [

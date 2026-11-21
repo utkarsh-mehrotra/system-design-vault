@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"When the codebase gets big\" or \"microservices scale better\".",
+    "why": "Size alone isn't a reason. The real drivers are teams blocking each other, divergent deploy cadence and divergent runtime needs, and the costs (network failures, distributed data, operations) are significant.",
+    "probe": "Do you weigh organisational and operational costs, and do you know the modular-monolith option?",
+    "say": "\"Split when independent deployability for a specific team or component is worth the network and data costs; otherwise enforce module boundaries inside one deployable first.\""
+  },
   "thesis": "Splitting pays when team coordination, deploy coupling or very different scaling needs cost more than the network failures, distributed data and operational load you take on. A well-structured modular monolith is often the better answer, and a prerequisite for a clean split anyway.",
   "pitch": "I'd look for three signals. Organisational: many teams blocking each other in one codebase and deploy pipeline, so release coordination and merge conflicts dominate. Change rate: some parts change daily and others rarely, but everything ships together and carries the same risk. Scaling and runtime profile: one component needs very different resources, like GPU inference, a high-throughput ingest path, or stricter isolation for compliance. Against that I'd price the costs: every call becomes a network call that can fail and be slow, data must be split with clear ownership and eventual consistency between services, and you need service discovery, tracing, versioned contracts and more on-call. If the signals are weak, I'd invest in a modular monolith: enforce module boundaries and data ownership inside one deployable. When a module clearly needs independence, extract that one, along a boundary already proven in the code.",
   "points": [

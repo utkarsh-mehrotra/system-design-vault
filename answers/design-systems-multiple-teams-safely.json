@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"A central architecture team reviews every change.\"",
+    "why": "Gatekeeping doesn't scale and becomes the bottleneck. Safety should come from design, not approvals.",
+    "probe": "Explicit versioned extension points, isolation, ownership, contract tests, a paved path.",
+    "say": "\"Versioned extension points, per-extension timeouts and breakers so failures stay local, an ownership registry, and contract tests in CI instead of approval queues.\""
+  },
   "thesis": "Make extension safe by design: clear, versioned extension points with stable contracts, isolation so one team's extension can't take down the core or other extensions, documented ownership per component, and guardrails (tests, limits, review) that scale without a central bottleneck.",
   "pitch": "When many teams extend one system, the risks are breaking each other, coupling to internals, and one team's bug taking down everything. I'd define explicit extension points: plugin interfaces, events to subscribe to, configuration schemas, APIs, each versioned and documented like a public API, so teams don't reach into internals. Isolation: extensions run with resource limits, timeouts and failure containment, in separate processes or sandboxes where the risk justifies it, so a slow plugin degrades only its own feature. Ownership: every component and extension has an owning team in a registry, used for routing alerts and reviews. Guardrails: contract tests that every extension must pass, automated checks in CI, and staged rollouts with feature flags. The core team sets standards and builds the paved path, but doesn't approve every change; the aim is autonomy within safe boundaries.",
   "points": [

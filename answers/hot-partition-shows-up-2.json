@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Add more nodes\" or \"scale up the cluster.\"",
+    "why": "A hot key always maps to one partition, so more nodes don't spread it. You have to target the key.",
+    "probe": "Do you confirm skew with per-partition metrics, separate mitigation from the fix, and re-key online?",
+    "say": "\"First prove it's skew and find the key, then mitigate on that key (cache, rate limit, split), then fix the key design with dual writes and a backfill.\""
+  },
   "thesis": "Prove it's skew and find the key, buy time with the cheapest mitigation aimed at that key, then fix the key design online. Don't start by adding capacity: a hot key stays on one partition however many nodes you add.",
   "pitch": "At 2 a.m. I'm mitigating, not redesigning. First I confirm from per-partition metrics that one partition is saturated while the rest are mostly idle; that rules out general overload. Then I find the hot key from top-key sampling or access logs and work out why it's hot: one huge tenant, a client stuck in a retry loop, a viral item, or a monotonically increasing key piling writes onto the newest range. The mitigation targets that key: rate-limit or block the offending client, put a short-TTL cache in front of hot reads, or split the range if the store supports it. Once things are stable, the real fix is the key design (a composite key, salting only the heavy keys, or moving a giant tenant to dedicated partitions), rolled out with dual writes and an online backfill. I call it fixed when the per-partition load distribution has flattened, not just when errors stop.",
   "points": [

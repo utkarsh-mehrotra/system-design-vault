@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"We have backups and replication.\"",
+    "why": "Replication copies corruption and deletions instantly. Backups in the same account can be deleted with the same credentials. Untested backups may not restore at all.",
+    "probe": "Isolated immutable backups, restore drills, infrastructure as code, and the bootstrap order.",
+    "say": "\"Backups in an isolated account with retention locks, quarterly restore drills, everything in infrastructure as code, and a rehearsed bootstrap order with a measured RTO.\""
+  },
   "thesis": "Rebuilding from nothing requires three things to exist outside the failed environment: the definition of the infrastructure (as code), the data (as tested, isolated backups or a durable log), and the knowledge of order (a documented, rehearsed bootstrap). If any one is missing, the rebuild is a guess.",
   "pitch": "I'd make everything reproducible from a small set of durable artefacts. Infrastructure and configuration as code in version control, so a new account or region can be provisioned by running pipelines, not by memory. Data backed up to an isolated location, in a different account with deletion protection, so ransomware or a compromised admin can't delete production and backups together, with restore tests on a schedule because untested backups are hopes. Where possible, an event log or ledger as the source of truth, so derived stores can be rebuilt by replay. Secrets and keys escrowed separately. Then a written bootstrap order, covering identity, networking, secrets, data stores, core services and edge, rehearsed in game days with a measured recovery time. The goal is that a different team could rebuild it from the runbook.",
   "points": [

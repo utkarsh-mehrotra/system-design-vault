@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Deploy across multiple zones and we're covered.\"",
+    "why": "Being in several zones doesn't help if each runs too hot to absorb a lost zone, if failover depends on control-plane actions, or if hidden dependencies sit in one region.",
+    "probe": "N+1 capacity, static stability, tiered regional strategies, finding hidden dependencies.",
+    "say": "\"Each zone runs at most at (N−1)/N of capacity so losing one needs no scaling; regional strategy is tiered by business impact; and drills hunt for hidden single-region dependencies.\""
+  },
   "thesis": "Design for the loss of a whole site by spreading across failure domains (zones first, then regions), keeping enough capacity to survive the loss without scaling up, replicating data with a stated loss window, and proving it with regular drills.",
   "pitch": "I'd treat it as a sequence of failure domains: instance, zone, region. Zone loss is common enough that the system should survive it with no human action: run in at least three zones, keep enough capacity that losing one leaves the rest under their limits, replicate data synchronously within the region, and avoid depending on control planes during the failure, which AWS calls static stability. Region loss is rarer and more expensive to handle; there I'd choose a strategy per service tier, from backup-and-restore for internal tools to warm standby or active-active for revenue-critical paths, each with a stated RPO and RTO. Then I'd look hard for hidden single points of failure, like DNS, identity, secrets, CI/CD and third-party SaaS, and run drills to measure real recovery times.",
   "points": [

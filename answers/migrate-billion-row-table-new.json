@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Run ALTER TABLE in a maintenance window\" or \"copy the table and switch over.\"",
+    "why": "At a billion rows, that means long locks, replication lag, hours of downtime and no rollback. The question asks for zero downtime.",
+    "probe": "Do you know expand and contract, throttled resumable backfills, verification and shadow reads?",
+    "say": "\"Expand, dual write, a throttled backfill with checkpoints, checksum verification, shadow reads, a gradual read cutover, and contract only after a full cycle.\""
+  },
   "thesis": "Migrate in phases that are each reversible: expand the schema, dual-write, backfill in throttled and resumable chunks, verify, shadow-read, cut over reads, then contract. At a billion rows the dangers are locks, replication lag and correctness drift, so every phase is observable and stoppable.",
   "pitch": "I'd never do this as one big ALTER or copy. Phase one, expand: create the new table or columns without touching existing reads. Phase two, dual-write: the application writes both old and new shapes, ideally in one transaction, or via CDC from the old table, so new data lands in both. Phase three, backfill: copy existing rows in primary-key ranges with a throttle tied to replication lag and database load, idempotent and resumable from a checkpoint. Phase four, verify: row counts and checksums per key range, plus sampled deep comparisons. Phase five, shadow reads: read from both, serve the old, log mismatches. Phase six, cut over reads behind a flag, ramping gradually. Phase seven, stop writing the old shape and drop it only after a full cycle without rollback. At a billion rows the backfill might take days, which is fine as long as it's safe.",
   "points": [

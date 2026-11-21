@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Run Chaos Monkey in production.\"",
+    "why": "Randomly killing things without a hypothesis, monitoring or stop condition is just causing outages, and it skips testing people and runbooks.",
+    "probe": "A hypothesis, controlled blast radius, abort conditions, game days, fixing findings.",
+    "say": "\"Each experiment has a hypothesis in user metrics, a small blast radius and an automatic abort. Start in staging, expand gradually, and run game days that test runbooks and people.\""
+  },
   "thesis": "Run failure deliberately, with a hypothesis and a stop condition: inject dependency faults, kill instances and zones, restore from backup, and run game days where people practise the response. Start in staging, move to production in small, controlled steps, and fix what you find.",
   "pitch": "I'd treat failure rehearsal as experiments. Each one starts with a hypothesis, like 'if the recommendation service returns errors, checkout success stays above 99.5%', a blast radius such as one zone or 1% of traffic, and a stop condition such as an SLO burn threshold, with a one-click abort. Types: dependency fault injection, adding latency or errors to calls; infrastructure failure, killing instances, failing a zone, failing over a database; data drills, restoring a backup to a clean environment and verifying it; and game days, where a team responds to a simulated incident using real dashboards and runbooks, testing people and process as well as systems. I'd start in staging, then run small production experiments during business hours with the owning team present, and expand as confidence grows. Every finding becomes a tracked fix, and successful experiments can be automated to run continuously.",
   "points": [

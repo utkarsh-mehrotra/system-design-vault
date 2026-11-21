@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Round robin\" (or \"least connections\") for everything, without distinguishing per-request from per-connection balancing.",
+    "why": "With long-lived connections or gRPC over HTTP/2, an L4 balancer balances connections, not requests, so load drifts out of balance after every scale-out and new instances sit idle.",
+    "probe": "Whether you know that long-lived connections need rebalancing, slow start and draining.",
+    "say": "\"Short RPCs: least outstanding requests or power of two choices at L7. Long-lived streams: least connections plus bounded connection lifetimes, slow start and draining.\""
+  },
   "thesis": "Short RPCs balance well per request with least-outstanding-requests or power-of-two-choices. Long-lived connections balance per connection, so the risk is imbalance over time; counter it with connection-aware placement, periodic rebalancing, slow start for new instances and graceful draining.",
   "pitch": "For short RPCs, per-request balancing works: round robin is fine when instances and requests are uniform, but least outstanding requests or power of two choices, which picks two random backends and sends to the less loaded one, handles uneven request costs and slow instances much better with little coordination. For long-lived connections like WebSockets, gRPC streams or database connections, the load balancer only decides once per connection, so after a deploy or scale-out the new instances get few connections while old ones stay overloaded. There I'd use least-connections placement, slow start so new instances aren't flooded, connection lifetimes or server-initiated reconnects to rebalance gradually, and draining on scale-in, telling clients to reconnect elsewhere before the instance stops. If connections carry sticky state, consistent hashing limits how many move when the pool changes.",
   "points": [

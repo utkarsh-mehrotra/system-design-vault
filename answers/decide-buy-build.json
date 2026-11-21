@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Build it so we control it\" or \"always buy, it's cheaper.\"",
+    "why": "Building commodity capabilities wastes engineers on undifferentiated work; buying core differentiators gives away control. Comparing build cost to licence price ignores the cost of running what you build.",
+    "probe": "The differentiation test, total cost of ownership including operations, lock-in and exit.",
+    "say": "\"Build what makes customers choose us or what regulation forces us to control; buy commodity. Compare three-to-five-year cost including running it, and price the exit.\""
+  },
   "thesis": "Build what differentiates you or what you must control deeply; buy what's commodity. Decide on total cost over several years: integration, lock-in, data portability, compliance, and the people cost of running either option.",
   "pitch": "I'd ask first: does this capability make customers choose us, or does it just need to work? Underwriting models for a lender differentiate; email delivery, observability, authentication and payroll don't. For commodity capabilities, buying usually wins: vendors spread the cost across many customers and keep up with security and features. Then I'd compare total cost over three to five years: licence or usage fees against engineering time to build and, more importantly, to run, maintain, secure and support it. I'd weigh lock-in, meaning how hard it is to leave, including data export formats and proprietary APIs; compliance and data residency; vendor risk; and integration effort. For things we must control, like core data models, regulatory logic and latency-critical paths, building can be justified even if a vendor exists. And keep a thin abstraction around bought services where switching is plausible, not everywhere.",
   "points": [

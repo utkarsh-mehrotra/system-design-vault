@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Use a single partition to guarantee order.\"",
+    "why": "That serialises everything and kills throughput. You almost never need a global order, only order per entity.",
+    "probe": "Partitioning by the ordering key, key-level concurrency, and retries and rebalances that don't reorder.",
+    "say": "\"Order per entity: key by account id, process each key sequentially, run keys in parallel, and never let a later message overtake a failed one for the same key.\""
+  },
   "thesis": "You rarely need a global order, only order per entity. Partition by the key whose order matters, process each key sequentially, and run many keys in parallel. Size partitions for peak parallelism, and protect order during retries and rebalances.",
   "pitch": "The trick is to find the scope of ordering. For an account, deposits and withdrawals must apply in order, but two different accounts are independent. So I'd key messages by account id: Kafka guarantees order within a partition, so all of an account's events go to one partition and are consumed in order, while different partitions are consumed in parallel. Partition count caps parallelism, so I'd choose it for peak consumer count with room to grow, because changing it later remaps keys. Inside a consumer I can go further: process different keys from the same partition concurrently while keeping each key sequential, with per-key queues, as Confluent's parallel consumer does. Then the edge cases: a retry must not let a later message for the same key overtake the failed one; during a rebalance, a partition's in-flight work must finish or be abandoned before the new owner starts; and sequence numbers per key let consumers detect gaps and duplicates.",
   "points": [

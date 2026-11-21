@@ -37,6 +37,7 @@ for (const f of existsSync(ansDir) ? readdirSync(ansDir).filter((f) => f.endsWit
   let a;
   try { a = JSON.parse(readFileSync(join(ansDir, f), "utf8")); } catch (e) { errors.push(`answers/${f}: ${e.message}`); continue; }
   const e = (m) => errors.push(`answers/${f}: ${m}`);
+  if (!a.trap || !["wrong", "why", "probe", "say"].every((k) => isStr(a.trap[k]))) e("trap: {wrong, why, probe, say} required");
   if (!isStr(a.thesis)) e("thesis required");
   if (!isStr(a.pitch)) e("pitch required");
   if (!Array.isArray(a.points) || a.points.length < 3 || a.points.some((p) => !isStr(p.h) || !isStr(p.d))) e("points: at least 3 {h, d}");
@@ -78,6 +79,7 @@ for (const c of data.categories) {
       md += `${++n}. **${q.q}** [${src[q.source]} · ${cap(q.level)} · ${q.tags.join(", ")}]\n`;
       if (q.answer) {
         const A = q.answer;
+        md += `   - **Trap:** ${A.trap.wrong} — _Why it fails:_ ${A.trap.why} — _Probing:_ ${A.trap.probe} — _Say:_ ${A.trap.say}\n`;
         md += `   - **Thesis:** ${A.thesis}\n   - **60-second answer:** ${A.pitch}\n   - **Key points:**\n`;
         A.points.forEach((p, i) => (md += `     ${i + 1}. **${p.h}.** ${p.d}\n`));
         md += `   - **When to choose what:** ${A.decision}\n`;

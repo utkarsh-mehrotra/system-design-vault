@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "SLOs on CPU or uptime, aiming for 99.99% (or 100%), and alerting when errors cross a threshold.",
+    "why": "Users don't feel CPU. 100% leaves no room for change. Static thresholds page on blips and miss slow burns.",
+    "probe": "User-journey SLIs, error budgets, multi-window burn-rate alerts, and a policy that changes behaviour.",
+    "say": "\"SLIs on submission, decision time and disbursal; 99.9% over 28 days; page on a 14.4x burn over 1 hour and 5 minutes; a release freeze when the budget is gone.\""
+  },
   "thesis": "Pick a few indicators that reflect what borrowers and partners experience, set targets from user need and cost, and alert on how fast the error budget is burning rather than on raw thresholds. Tie budget exhaustion to a release policy so the SLO changes behaviour.",
   "pitch": "For a lending platform I'd choose user-journey SLIs: application submission success rate and latency, time to credit decision for instant products, disbursal success within the promised window, repayment processing success, and availability of the account API for partners. Each SLI is measured close to the user, at the load balancer or from client telemetry. Targets come from user expectations and cost, for example 99.9% of applications submitted successfully over 28 days. The error budget is the allowed failure, 0.1%. Alerts use multi-window burn rates: page when the budget is burning fast enough to be exhausted in about two days, measured over both one hour and five minutes so alerts are fast and reset quickly; open a ticket for slow burns. And the policy: when the budget is spent, feature releases pause and reliability work takes priority until it recovers.",
   "points": [

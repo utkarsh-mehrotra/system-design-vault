@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "A detailed doc with class diagrams and implementation specifics.",
+    "why": "Implementation details go stale fast and the code already shows them. What future readers need is why.",
+    "probe": "Context, constraints, alternatives considered, non-goals, decision records.",
+    "say": "\"Context and constraints, goals and non-goals, alternatives with honest trade-offs, and the decision with reasons, plus ADRs linked as things change. Reasons age better than diagrams.\""
+  },
   "thesis": "Write down what will still matter when the code has changed: the context and constraints, the goals and non-goals, the alternatives considered, and the decisions with their reasons. Reasons age well; diagrams and implementation details don't. Date it, keep it short, and link decisions to follow-up records as things change.",
   "pitch": "In three years, nobody will need the class diagram, because the code shows that. They'll need to know why: what problem we were solving, which constraints we had, such as team size, deadline, regulation or traffic, which options we considered and why we rejected them, and what we explicitly chose not to do. So I'd structure the doc as context, goals and non-goals, the proposed design at the level of components and data flows, alternatives considered with honest trade-offs, risks and open questions, and a decision record. I'd keep diagrams simple and high-level so they stay true longer. The doc gets a date, an author and a status. When decisions change later, I'd add short architecture decision records that link back, rather than silently editing history, so the trail of reasoning survives. And I'd store it next to the code or in a searchable place people actually look.",
   "points": [

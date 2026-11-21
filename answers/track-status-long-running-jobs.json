@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Keep the HTTP request open until it's done\" or \"check whether the message is still in the queue.\"",
+    "why": "Long requests time out and tie up resources; queue state isn't status, because it changes on redelivery and holds no results.",
+    "probe": "202 with a job id, a durable job record as source of truth, heartbeats.",
+    "say": "\"Return 202 with a job id; a job record holds state, progress, result and error; workers heartbeat; clients poll with backoff or subscribe.\""
+  },
   "thesis": "Return a job id immediately and make a durable job record the source of truth for its state, progress, result and error. Clients poll or subscribe for updates. The queue only carries work; it never answers 'what's the status?'.",
   "pitch": "When a request kicks off work that takes seconds to hours, like an export, a report, or video processing, I'd create a job record first, with id, owner, state, progress, timestamps, result location and error, and return 202 Accepted with the job id and a status URL. Workers update the record as they go: queued, running with a percentage or step, succeeded with a result link, failed with a reason, or cancelled. Clients poll the status endpoint with sensible intervals, or subscribe via WebSocket, server-sent events or a webhook for completion. The record is the source of truth, not the queue, so status survives worker restarts and queue redeliveries. I'd add heartbeats so stuck jobs are detected, make job steps resumable for long work, and support cancellation by having workers check a cancel flag between steps.",
   "points": [

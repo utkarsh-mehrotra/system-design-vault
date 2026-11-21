@@ -124,7 +124,11 @@ A worked example of 800–1,500 words, shown behind a "Deep dive" toggle:
 14. Where consensus actually sits: etcd/ZooKeeper vs quorum stores vs gossip
 15. Partial failure with fan-out: required vs optional calls, a degraded-response design
 
-### Phase 4 — Practice mode (1 session, can run in parallel with Phase 2)
+### Trap focus (added 2026-11-21) ✅ done
+
+The vault's main job is trap questions (full design prep happens elsewhere). Every card now has a `trap` block (tempting wrong answer, why it fails, what's probed, what to say) shown first, and a **Trap drill** mode drills 93 traps + 281 follow-ups with Missed/Shaky/Got-it ratings: missed returns in a minute, shaky in a day, got-it after 3, 6, 12… days (max 60). Drill state is included in export/import.
+
+### Phase 4 — Practice mode (superseded by Trap drill above)
 
 - "Practice" toggle: the right-hand pane shows only the question and an empty notes box. **Reveal** shows the answer.
 - After revealing, rate yourself: *Got it / Shaky / Missed*. This replaces the plain "reviewed" checkbox, and old "reviewed" ticks become *Got it*.

@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Average latency, CPU and memory dashboards.\"",
+    "why": "Averages hide the tail, and resource metrics don't tell you whether users are succeeding. Silent functional bugs show no errors at all.",
+    "probe": "RED plus USE, histograms, per-dependency metrics, business metrics, cardinality control.",
+    "say": "\"RED for every endpoint with histograms, USE for every resource with saturation, per-dependency client metrics, and a few business metrics that catch silent breakage.\""
+  },
   "thesis": "Measure each service the way users experience it (rate, errors, duration) and each resource by how close it is to its limit (utilisation, saturation, errors), with histograms rather than averages, broken down by dependency, and alongside a few business metrics. Health is 'users succeed quickly and nothing is near its limit'.",
   "pitch": "I'd combine two well-known methods. For every service and endpoint, the RED method: request rate, error rate, and duration as a histogram so you can read p50, p95 and p99. For every resource, like CPU, memory, connection pools, thread pools, queues and disks, the USE method: utilisation, saturation such as queue length or waiting, and errors. Saturation is the early warning that averages hide. Then per-dependency metrics: rate, errors and latency for every outbound call, so you can see which dependency is slow without guessing. Then business metrics, such as applications submitted, payments completed and sign-ups, because they catch problems that technical metrics miss, like a broken button that produces no errors at all. I'd keep label cardinality under control and put deploy markers on every graph.",
   "points": [

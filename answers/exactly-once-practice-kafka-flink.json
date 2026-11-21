@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Kafka supports exactly-once, so we're covered end to end.\"",
+    "why": "Exactly-once covers Kafka topics and Flink state. Database writes, API calls and emails are repeated on replay unless they're idempotent.",
+    "probe": "Processing vs delivery, transactions with read_committed, two-phase-commit sinks, and what you still own.",
+    "say": "\"Exactly-once processing inside Kafka and Flink; any external sink needs deterministic idempotency keys because replay will repeat it.\""
+  },
   "thesis": "Kafka and Flink give exactly-once processing within their boundary: idempotent producers, transactions and checkpointed state make each record's effect on Kafka topics and Flink state happen once. Side effects outside that boundary (databases, APIs, emails) are still your job: make them idempotent or transactional with the checkpoint.",
   "pitch": "Delivery over a network is at least once; what systems provide is exactly-once effect. Kafka's idempotent producer removes duplicates from producer retries per partition. Kafka transactions let a consume-transform-produce application atomically write output records and commit its consumer offsets, so downstream consumers reading with read_committed isolation see each result once. Flink checkpoints its state and source offsets consistently; on failure it rewinds to the last checkpoint and reprocesses, and its two-phase-commit sinks, including the Kafka sink, commit output only when a checkpoint completes. What you still own: any sink that isn't transactional with Flink or Kafka, such as a database write, an HTTP call to a partner, or an email. On replay after failure those happen again, so they need idempotency keys or upserts keyed by a deterministic id. Also, consumers reading with read_uncommitted see aborted data, and exactly-once adds latency, because output becomes visible only at transaction or checkpoint commit.",
   "points": [

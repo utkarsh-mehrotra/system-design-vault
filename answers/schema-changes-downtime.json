@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Rename the column and deploy the code that uses the new name.\"",
+    "why": "During a rolling deploy, old code still uses the old name and breaks, and rollback breaks too. Some DDL also takes locks that block all traffic.",
+    "probe": "Do you know that N and N-1 must coexist, how to use lock timeouts, and online DDL tools?",
+    "say": "\"Expand and contract across releases: add the new column, write both, backfill, switch reads, drop later, with a short lock timeout on every migration.\""
+  },
   "thesis": "Zero-downtime schema changes come from two habits: never make a change that breaks the currently running code, and avoid operations that take long locks or rewrite large tables. Expand and contract across several deploys, using online DDL or shadow-table tools for the heavy steps.",
   "pitch": "The application and the schema change at different times, so every schema change must work with both the old and new code. Adding is safe if it's nullable or has a default the database can apply without a rewrite. Renaming or changing a type is done as add new, write both, backfill, switch reads, then drop old, spread across releases. Then the lock problem: some DDL takes an exclusive lock or rewrites the table, and even a brief lock can queue behind a long-running transaction and block all traffic. So I'd set a short lock timeout and retry, build indexes concurrently, and for heavy changes use online tools like gh-ost for MySQL or the database's own online DDL. I'd test each migration against a production-sized copy and run it with monitoring and a way to abort.",
   "points": [

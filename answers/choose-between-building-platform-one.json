@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Build the platform up front so every team can reuse it.\"",
+    "why": "A platform built before the use cases are understood encodes the wrong abstractions, and teams work around it.",
+    "probe": "The rule of three, a stable interface, a team that owns it as a product, adoption by pull.",
+    "say": "\"Build it once, adapt it the second time, extract a platform the third time, owned by a team that treats it as a product.\""
+  },
   "thesis": "Build a platform when several teams need the same capability, the interface has stabilised, and the cost of everyone building it separately is clear. Otherwise ship the one-off and extract a platform later from real, repeated usage.",
   "pitch": "Platforms are tempting because they promise reuse, but a platform built before you understand the use cases encodes the wrong abstractions and then every team works around it. My rule of thumb: the first time, build it for the one use case; the second time, copy and adapt and notice what changed; the third time, you understand the variation well enough to extract a platform. I'd also check that the interface has stabilised, that there's a team willing to own it as a product with support, documentation and roadmap, and that the cost of duplication, such as divergent security, operational load and inconsistent behaviour, is real. When building a platform, start from the existing implementations, keep the first version narrow, make the easy path the default, and measure adoption and satisfaction rather than mandating it.",
   "points": [

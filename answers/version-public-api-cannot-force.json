@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Bump to /v2 whenever anything changes.\"",
+    "why": "Most changes can be additive with no version at all. Frequent versions multiply what you support forever.",
+    "probe": "Additive by default, a clear definition of breaking, per-version telemetry, translation at the edge.",
+    "say": "\"Additive changes need no version; a breaking change gets a new version translated at the edge, with a dated support policy and usage telemetry per client.\""
+  },
   "thesis": "Make additive change the default so most changes need no new version at all, reserve explicit versions for genuinely breaking changes, and back every version with a published support policy, per-version usage telemetry and contract tests. You can't force clients, so make staying compatible cheap and moving forward easy.",
   "pitch": "Most API evolution should be additive: new optional fields, new endpoints, new optional parameters, with clients required to ignore unknown fields, so nothing breaks and nothing needs a version bump. For breaking changes, like removing or renaming fields, changing types or semantics, or changing error behaviour, I'd introduce an explicit version, either in the path like /v2 or in a header or dated version like Stripe's, and keep the old one working. Each version has a published support policy with dates. I'd measure usage per version and per client, so deprecation decisions are data-driven and I can contact the clients still on old versions. Contract tests, from consumer-driven contracts or recorded real traffic, catch accidental breaks before release. Internally, translating old versions into the current model at the edge keeps the core code from forking per version.",
   "points": [

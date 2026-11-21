@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Autoscale\" or \"add a queue to absorb the spike.\"",
+    "why": "Autoscaling takes minutes and the spike lasts seconds; an unbounded queue just turns overload into huge latency for everyone. Without rejection, goodput collapses.",
+    "probe": "Do you understand goodput, priority-based shedding and per-tenant isolation?",
+    "say": "\"I'd reject excess cheaply and early: per-tenant quotas, priority shedding, an adaptive concurrency limit and bounded queues, with 429 and Retry-After. Autoscaling is the second line of defence.\""
+  },
   "thesis": "Under a 20x spike you cannot serve everyone, so decide who gets served. Admission control rejects excess work early and cheaply, by priority and by tenant, keeps every queue bounded, and adapts concurrency limits to measured latency so the work you accept still completes on time.",
   "pitch": "The goal is to keep goodput up: serve as many requests successfully as capacity allows rather than accepting everything and timing out everyone. I'd put admission control at the edge of the service. First, per-tenant and per-client quotas, so one client's spike doesn't consume everyone's capacity. Second, priority classes: interactive and revenue-critical requests over background and batch work, with lower classes shed first. Third, an adaptive concurrency limit that measures latency and lowers the number of in-flight requests when latency rises, like TCP congestion control. Fourth, bounded queues with short timeouts, rejecting rather than queueing when full, and preferring to drop requests that have waited long, since their clients have probably given up. Rejections are fast and explicit, 429 or 503 with Retry-After, so well-behaved clients back off. Autoscaling helps over minutes, but admission control protects you in the seconds before it does.",
   "points": [

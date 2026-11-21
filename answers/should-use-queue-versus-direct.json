@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "Putting a queue on a synchronous user path \"for reliability\", then polling for the result.",
+    "why": "That adds latency and failure modes and still makes the user wait. Queues help only when the work can complete later.",
+    "probe": "Do you know what queues actually buy (buffering, retries, fan-out, decoupling) and what they cost?",
+    "say": "\"If the caller needs the answer within the deadline, it's RPC with a timeout. If the work can finish later or must survive consumer outages, it's a queue with a DLQ.\""
+  },
   "thesis": "Use a queue when work can wait and you want buffering, retries, independent consumer speed or fan-out. Use direct RPC when the caller needs a response within a tight deadline. A queue in a path that needs a synchronous answer adds latency and failure modes without the benefits.",
   "pitch": "I'd ask: does the caller need the result to respond? If yes, and the work is fast, RPC is simpler: one hop, immediate errors, easy tracing. If the work can complete later, a queue gives me durable buffering through spikes and consumer outages, built-in retries with dead-lettering, consumers scaled independently of producers, and the ability to add consumers without touching the producer. Queues also smooth load onto a fragile downstream such as a legacy system or rate-limited partner API. The costs: an extra component to run, at-least-once delivery so consumers must be idempotent, ordering only within a partition or group, and results that come back later. Request-reply over a queue exists, but if you need the answer in 100 ms, a direct call with a timeout and fallback is almost always better.",
   "points": [

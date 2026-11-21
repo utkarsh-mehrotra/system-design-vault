@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Add indexes for every query so reads are fast.\"",
+    "why": "On a write-heavy table every index is maintained on every write, multiplying I/O, log volume and replication lag.",
+    "probe": "Do you understand write amplification and where else reads can be served?",
+    "say": "\"Only the few indexes hot reads need, covering where possible, append-friendly keys, time partitions, and everything ad hoc moved to a replica or warehouse.\""
+  },
   "thesis": "On a write-heavy table every index is a tax on every write, so keep only indexes that serve real, frequent queries, make those covering where it pays, and push ad hoc or analytical reads to a replica, search index or warehouse. Consider an LSM-based engine if writes dominate at scale.",
   "pitch": "With 90% writes, each secondary index multiplies write work: every insert updates every index, causing more I/O, more WAL or redo, more lock and latch contention, and more replication volume. So I'd start from the read queries that actually matter, by frequency and latency requirement, and give each the minimum index that serves it, ideally covering so the read doesn't touch the table. I'd drop unused or duplicate indexes, which databases can report. Primary key choice matters: an append-friendly, time-ordered key keeps inserts at the end of the B-tree instead of scattering them. Reads that don't need to be on the primary, such as reporting, search and exploration, move to a replica with extra indexes or to a different store. And if write volume is huge and mostly appends, an LSM-tree engine handles it better than a B-tree.",
   "points": [

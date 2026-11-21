@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Log the full request and response for debugging.\"",
+    "why": "Full payloads capture tokens, card numbers and personal data, a security and compliance incident waiting to happen, and they're expensive.",
+    "probe": "Structured logs with correlation ids, what each layer logs, enforced redaction, volume control.",
+    "say": "\"Structured logs with a trace id at every layer, decisions and failures logged richly, successes sampled, and secrets and personal data blocked by allow-lists and redaction.\""
+  },
   "thesis": "Every layer emits structured logs carrying a shared request or trace id, recording what a responder needs: what was requested, what was decided, what failed, with enough context to act. Never log secrets, credentials, full card numbers or unnecessary personal data. Control volume with levels and sampling, and retain by sensitivity.",
   "pitch": "I'd standardise structured JSON logs with common fields: timestamp, service, environment, version, trace and request id, tenant, and a stable event name. Per layer: the edge logs request line, status, latency, client identity and bytes; the gateway logs authentication outcomes and rate-limit decisions; services log business decisions and their reasons, like 'loan declined, policy rule X', calls to dependencies with latency and outcome, and errors with stack traces and relevant identifiers; data access logs slow queries and errors, not every query. What must never be logged: passwords, tokens, API keys, session cookies, full card numbers and CVVs, national ids, and free-text personal data you don't need. I'd enforce that with allow-lists of fields, redaction in the logging library, and scanning in the pipeline. Volume is controlled by log levels, sampling of high-volume success logs, and moving high-cardinality analytics to metrics or traces. Retention depends on sensitivity and regulation, with access controlled because logs are data.",
   "points": [

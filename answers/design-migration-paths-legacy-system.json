@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Rewrite it from scratch and switch over when it's ready.\"",
+    "why": "Big-bang rewrites push all the risk to one day, deliver nothing for years, and usually miss undocumented behaviour.",
+    "probe": "Strangler pattern, routing in front, slice by capability, data ownership during overlap, exit criteria.",
+    "say": "\"A routing layer in front, then migrate one capability at a time with shadow comparisons, a clear source of truth per data set during the overlap, and a defined exit for the old system.\""
+  },
   "thesis": "Use the strangler pattern: put a routing layer in front of the legacy system, move functionality slice by slice to the new system, keep data in sync during the overlap, and define a measurable exit criterion for turning the old system off. Big-bang rewrites fail because they defer all risk to one day.",
   "pitch": "When a legacy system can't just be switched off, I'd first put a facade or routing layer in front of it, at the API gateway, a proxy, or an anti-corruption layer in code, so traffic can be directed per capability. Then pick a first slice that's valuable, well understood and loosely coupled, build it in the new system, and route that traffic over, often starting with shadow traffic to compare results. Data is the hard part: during the overlap, either the new system owns the migrated data and syncs back to legacy for the remaining functions, or legacy remains the source and the new system reads from it via CDC. Ownership must be clear for each piece of data at every stage. Each slice moves with a rollback path. And I'd define the exit: which functions remain on legacy, the date or traffic threshold for decommissioning, and who signs off, because otherwise the 'temporary' coexistence lasts a decade.",
   "points": [

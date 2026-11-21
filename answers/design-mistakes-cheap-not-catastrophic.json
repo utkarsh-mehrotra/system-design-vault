@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"More code review and testing so mistakes don't happen.\"",
+    "why": "Mistakes will happen anyway. The question is about limiting blast radius and making undo fast.",
+    "probe": "Progressive delivery, cells, reversible changes, guardrails on destructive actions, tested recovery.",
+    "say": "\"Assume mistakes: canary and progressive rollouts with automatic rollback, flags for instant off, cells to contain damage, deletion protection, and practised restores.\""
+  },
   "thesis": "Assume mistakes will happen and design so each one has a small blast radius and a fast undo: progressive rollouts, reversible changes, feature flags, cells or shards that contain failures, backups with tested restores, and guardrails on destructive operations.",
   "pitch": "People will deploy bugs, push bad config, run the wrong command and delete the wrong thing. The goal is to make each of those cheap. I'd limit blast radius: progressive rollouts that start with a canary, one cell or one region and expand only if metrics stay healthy, with automatic rollback; cell-based architecture so a bad change or overload affects a fraction of customers. I'd make changes reversible: backward-compatible schema changes, feature flags that turn new behaviour off without a deploy, config changes versioned and quickly revertible. I'd add guardrails on destructive operations: soft delete, deletion protection on databases and buckets, confirmation and peer approval for dangerous commands, and least-privilege access so one mistake can't touch everything. And I'd make recovery real: tested backups and point-in-time restore. Culturally, blameless postmortems make people report and fix near-misses instead of hiding them.",
   "points": [

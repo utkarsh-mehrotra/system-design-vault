@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Randomly assign each request to A or B.\"",
+    "why": "Per-request assignment flips users between variants and ruins both experience and statistics. Analysing assigned rather than exposed users biases the results.",
+    "probe": "Deterministic bucketing, exposure logging, flag lifecycles, guardrail metrics.",
+    "say": "\"Hash the user or account id with the experiment key for stable buckets, log exposures, give every flag an owner and expiry, and add guardrails that stop a bad variant automatically.\""
+  },
   "thesis": "Put experiments and flags on a central service with stable user bucketing, log every exposure, give every flag an owner, expiry and kill switch, and keep experiment logic at the edges of business code so cleaning up a finished experiment is deleting a branch, not untangling logic.",
   "pitch": "I'd use a central flag and experiment service, built or bought, with SDKs that evaluate flags locally from cached rules, so a flag check is fast and doesn't fail if the service is down. Bucketing is deterministic: hash the user or account id with the experiment key, so a user consistently sees the same variant across sessions and devices. Every time a user is exposed to a variant, the SDK logs an exposure event, which analysis needs to compare like with like. I'd separate kinds of flags: release toggles, which are short-lived; experiments; operational kill switches; and permissions. Each flag has an owner and expected removal date, and stale flags are flagged in reviews or CI. In code, evaluate the flag once near the entry point and pass the decision down, rather than scattering checks through business logic. And I'd guard experiments with metrics that automatically stop them if errors or key business metrics degrade.",
   "points": [

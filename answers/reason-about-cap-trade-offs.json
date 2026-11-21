@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"We chose AP\" (or CP) for the system, or \"pick two of three.\"",
+    "why": "Partitions aren't optional, so CAP is about what each operation does during one. The everyday trade-off is latency against consistency.",
+    "probe": "Per-operation reasoning, PACELC, and the reconciliation story behind any choice of availability.",
+    "say": "\"During a partition, booking the last seat refuses; adding to a cart proceeds and merges later. Without a partition I'm trading write latency for consistency.\""
+  },
   "thesis": "CAP only bites during a network partition, and then it's a per-operation choice: refuse the request to stay consistent, or serve it and accept divergence you'll reconcile later. Most of the time the real trade-off is latency against consistency.",
   "pitch": "I treat CAP as a question I ask per operation: when a partition separates replicas, should this operation fail or proceed? Placing an order against limited inventory should probably fail or queue rather than oversell. Adding an item to a cart or liking a post should proceed and merge later. Outside partitions, which is most of the time, the trade-off is latency against consistency, which is what PACELC adds: synchronous cross-region replication costs a round trip on every write. So for each operation I state what happens on a partition, what the user sees, and how divergent state is reconciled afterwards. 'We chose AP' as a system-wide label is usually too coarse to be useful.",
   "points": [

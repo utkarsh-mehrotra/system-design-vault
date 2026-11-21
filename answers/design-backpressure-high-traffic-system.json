@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Put Kafka in the middle and the problem is solved.\"",
+    "why": "A queue moves the backlog into durable storage, but if consumers can't keep up, lag grows until retention expires and data is lost. Backpressure needs bounded buffers and a signal upstream.",
+    "probe": "Whether you know that unbounded buffers only delay failure, and where load should be dropped.",
+    "say": "\"Every buffer is bounded, producers get a slow-down signal (blocking, credits, 429s), and I decide deliberately where load is shed. I alert on lag age, not just depth.\""
+  },
   "thesis": "Backpressure means a slow consumer can slow down its producers instead of being buried. Bound every buffer, propagate 'I'm full' upstream (blocking, credits, 429s), and decide deliberately where excess load is dropped. Unbounded buffers only move the failure later and make it bigger.",
   "pitch": "In a pipeline, the slowest stage sets the throughput. If upstream keeps sending faster than that, the buffer between them grows until memory runs out or latency becomes useless. Backpressure fixes this by making capacity visible upstream. Inside a process, that's bounded queues where producers block or get rejected when full. Between services, it's flow control: HTTP/2 and gRPC have window-based flow control, streaming systems use pull-based consumption or credits, and request-response APIs return 429 or 503 to signal 'slow down'. At the edge, where you can't slow the user, you shed load deliberately. With queues like Kafka, consumers pull at their own pace and lag grows instead of memory, which is fine for a while, as long as you monitor lag and scale consumers or shed upstream before retention runs out.",
   "points": [

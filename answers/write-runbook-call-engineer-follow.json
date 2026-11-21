@@ -1,4 +1,10 @@
 {
+  "trap": {
+    "wrong": "\"Document the architecture and how the service works.\"",
+    "why": "At 3 a.m., the responder needs steps, not a tour. Architecture docs don't tell them what to check or do first.",
+    "probe": "Starting from the symptom, ordered checks, mitigating before diagnosing, exact commands, escalation.",
+    "say": "\"Symptom and severity first, ordered checks with links, mitigations from safest to riskiest with exact commands, escalation after a time limit, tested by someone who didn't write it.\""
+  },
   "thesis": "A good runbook starts from the alert's symptom, lists checks in order, gives exact commands and links, offers safe mitigations before risky ones, says when to escalate, and has been tested by someone who didn't write it. It's written for a tired person who has never seen this failure before.",
   "pitch": "I'd structure every runbook the same way. What this alert means in user terms and how bad it is. Quick checks in order, each with an exact command or dashboard link and what 'bad' looks like: is it all regions or one; did something deploy recently; is a dependency failing. Then mitigations from safest to riskiest: roll back the last deploy, flip this feature flag, shift traffic away from a zone, scale up, restart, with exact commands and expected effects. Then when to escalate and to whom, with a time limit, like 'if not mitigated in 20 minutes, page the database team'. Then communication: where to post updates and when to declare an incident. I'd keep it short, version it next to the code or alert definition, link it from the alert, and have someone outside the team follow it in a game day. After each incident, update it.",
   "points": [
