@@ -26,3 +26,19 @@ Vercel: `npx vercel --prod` from this folder (static, no framework).
 ## Roadmap
 
 See `docs/answer-plan.md` for the plan to add in-depth answers (and the debate on whether they are worth it).
+
+## Browser storage (progress)
+
+| Key | Contents |
+|---|---|
+| `sdv-done-v2` | Mastered questions `{id: 1}` (kept from earlier versions; set when a card is rated Solid) |
+| `sdv-conf-v1` | Confidence per question: `missed` / `shaky` / `solid` |
+| `sdv-drill-v1` | Trap drill spaced-repetition state per prompt |
+| `sdv-theme` | `dark` (default) or `light` |
+| `sdv-recall` | Whether "Hide outline (test yourself)" is on |
+
+Export/Import JSON carries `done`, `conf` and `drill`; older exports (with only `done` and `drill`) still import.
+
+## Keyboard
+
+`/` or `⌘K` search · `J`/`K` or `↓`/`↑` next/previous question · `Space` hide outline / reveal next section · `1` `2` `3` rate Missed/Shaky/Solid · Trap drill: `Space` reveal, `1` `2` `3` rate, `←` `→` previous/next.
