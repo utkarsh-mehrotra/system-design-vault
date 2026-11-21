@@ -68,14 +68,5 @@
     "break-glass-access",
     "encryption-key-management"
   ],
-  "sources": [
-    {
-      "title": "HHS: HIPAA minimum necessary requirement",
-      "url": "https://www.hhs.gov/hipaa/for-professionals/privacy/guidance/minimum-necessary-requirement/index.html"
-    },
-    {
-      "title": "HHS: HIPAA Security Rule",
-      "url": "https://www.hhs.gov/hipaa/for-professionals/security/index.html"
-    }
-  ]
+  "sources": []
 }

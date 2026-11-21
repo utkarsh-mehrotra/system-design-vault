@@ -70,10 +70,6 @@
   ],
   "sources": [
     {
-      "title": "Netflix Technology Blog: Per-title encode optimization",
-      "url": "https://netflixtechblog.com/per-title-encode-optimization-7e99442b62a2"
-    },
-    {
       "title": "Apple: HTTP Live Streaming (HLS) authoring specification",
       "url": "https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices"
     }

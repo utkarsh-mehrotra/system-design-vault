@@ -70,10 +70,6 @@
   ],
   "sources": [
     {
-      "title": "FATF: Guidance for a risk-based approach",
-      "url": "https://www.fatf-gafi.org/en/publications/Fatfrecommendations/Guidance-rba-banking-sector.html"
-    },
-    {
       "title": "OFAC: Sanctions list service",
       "url": "https://ofac.treasury.gov/sanctions-list-service"
     }

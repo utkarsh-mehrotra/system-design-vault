@@ -1,12 +1,15 @@
 # System Design Vault
 
-Staff-level system design **trap-question** prep: 93 questions in 10 categories. Each card has the trap (tempting wrong answer and what to say instead), a 60-second answer, key points, numbers, pitfalls and follow-ups. **Trap drill** mode quizzes traps and follow-ups with spaced repetition.
+Staff-level system design **trap-question** prep: 187 questions in 14 categories (including Security, Delivery & Infrastructure, AI & LLM Systems, and Domain Traps across 12 industries). Each card has the trap (tempting wrong answer and what to say instead), a 60-second answer, key points, numbers, pitfalls and follow-ups. **Trap drill** mode quizzes traps and follow-ups with spaced repetition.
 
 ## Files
 
 - `questions.json` — **single source of truth** (questions, categories, topics, tags).
 - `scripts/build.mjs` — validates `questions.json` and generates `data.js` and `system_design_vault_merged.md`.
 - `index.html` — static page; loads `data.js`. No build needed at deploy time.
+- `answers/<id>.json` — in-depth answer per card (trap, thesis, 60-second answer, points, numbers, pitfalls, follow-ups, sources).
+- `coverage.json` — concept coverage map; the build checks every card is mapped and writes `docs/coverage.md`.
+- `scripts/add-cards.mjs` — adds a batch of new cards (`{id: {meta, answer}}`) and keeps ordering.
 
 ## Editing questions
 

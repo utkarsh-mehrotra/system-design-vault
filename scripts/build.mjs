@@ -57,6 +57,32 @@ if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
+// coverage map: every listed id must exist, every card must be mapped
+const covPath = join(root, "coverage.json");
+let coverageMd = null;
+if (existsSync(covPath)) {
+  const cov = JSON.parse(readFileSync(covPath, "utf8"));
+  const mapped = new Set();
+  let concepts = 0, empty = 0;
+  for (const area of cov.areas) for (const [name, ids] of area.concepts) {
+    concepts++;
+    if (!ids.length) empty++;
+    for (const id of ids) { if (!byId.has(id)) errors.push(`coverage.json: "${name}" lists unknown card ${id}`); mapped.add(id); }
+  }
+  for (const q of data.questions) if (!mapped.has(q.id)) warnings.push(`${q.id}: not mapped to any concept in coverage.json`);
+  coverageMd = `# Coverage map\n\nGenerated from coverage.json by scripts/build.mjs. ${concepts} concepts, ${data.questions.length} cards${empty ? `, ${empty} uncovered concepts` : ""}.\n`;
+  for (const area of cov.areas) {
+    coverageMd += `\n## ${area.name}\n\n| Concept | Cards |\n|---|---|\n`;
+    for (const [name, ids] of area.concepts) coverageMd += `| ${name} | ${ids.length ? ids.map((id) => byId.get(id)?.q.replace(/\|/g, "/") ?? id).join("<br>") : "**gap**"} |\n`;
+  }
+  coverageMd += `\n## Deliberately out of scope\n\n` + cov.outOfScope.map((x) => `- ${x}`).join("\n") + "\n";
+}
+if (errors.length) {
+  console.error(errors.join("\n"));
+  process.exit(1);
+}
+if (coverageMd) writeFileSync(join(root, "docs", "coverage.md"), coverageMd);
+
 if (warnings.length) console.warn("warnings:\n  " + warnings.join("\n  "));
 
 writeFileSync(

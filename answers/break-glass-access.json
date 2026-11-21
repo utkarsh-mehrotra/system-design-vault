@@ -70,10 +70,6 @@
   ],
   "sources": [
     {
-      "title": "HHS: HIPAA Security Rule (emergency access procedure)",
-      "url": "https://www.hhs.gov/hipaa/for-professionals/security/index.html"
-    },
-    {
       "title": "NIST SP 800-53: Access control (AC) family",
       "url": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"
     }

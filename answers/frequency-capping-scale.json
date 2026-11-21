@@ -68,10 +68,5 @@
     "approximate-counting-sketches",
     "caching-story-hot-keys-large"
   ],
-  "sources": [
-    {
-      "title": "Aerospike: Real-time bidding and frequency capping use cases",
-      "url": "https://aerospike.com/solutions/use-case/adtech/"
-    }
-  ]
+  "sources": []
 }

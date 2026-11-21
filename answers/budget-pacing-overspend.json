@@ -68,10 +68,5 @@
     "frequency-capping-scale",
     "ad-event-counting-attribution"
   ],
-  "sources": [
-    {
-      "title": "Agarwal et al.: Budget pacing for targeted online advertisements at LinkedIn (KDD 2014)",
-      "url": "https://dl.acm.org/doi/10.1145/2623330.2623366"
-    }
-  ]
+  "sources": []
 }

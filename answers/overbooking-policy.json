@@ -67,10 +67,5 @@
     "flash-sale-never-oversell",
     "available-to-promise-inventory"
   ],
-  "sources": [
-    {
-      "title": "US Department of Transportation: Bumping and oversales",
-      "url": "https://www.transportation.gov/individuals/aviation-consumer-protection/bumping-oversales"
-    }
-  ]
+  "sources": []
 }
