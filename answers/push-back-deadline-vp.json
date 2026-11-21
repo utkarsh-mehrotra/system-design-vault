@@ -1,0 +1,73 @@
+{
+  "trap": {
+    "wrong": "\"Explain it can't be done\" or \"agree and work weekends.\"",
+    "why": "A flat no without options gets overruled; silent agreement hides risk until it explodes. Leaders need trade-offs they can choose between.",
+    "probe": "Turning disagreement into options with explicit risks, scope and dates.",
+    "say": "\"I'd lay out options: the full scope safely by date X, a reduced scope by the six-week date, or the six-week date with named risks and mitigations, and let the VP choose with the trade-offs explicit.\""
+  },
+  "thesis": "Pushing back works when it gives decision-makers better choices, not just objections. Understand the goal behind the deadline, quantify the risk, offer concrete options trading scope, time and risk, and once a decision is made, commit and record it.",
+  "pitch": "First I'd understand why six weeks: a customer commitment, a conference, a competitive threat. Often the real need is narrower than the full design, which opens options. Then I'd make the risk concrete: not 'this is risky' but 'without idempotent payment handling, retries could double-charge customers; in load tests at 3x traffic we saw X'. I'd present two or three options. Option A: full scope done safely in ten weeks. Option B: launch in six weeks with reduced scope, for example one payment method and a capped user cohort. Option C: six weeks with the full scope, accepting named risks with mitigations like a feature flag, a manual fallback and extra monitoring. I'd recommend one and explain why. I'd do this privately and early, not in a big meeting at week five. If the VP chooses a riskier option, I'd commit fully, write down the decision and the risks accepted, and set checkpoints to revisit.",
+  "points": [
+    {
+      "h": "Understand the driver",
+      "d": "Learn what the deadline protects; the underlying need often allows a smaller first release."
+    },
+    {
+      "h": "Make the risk concrete",
+      "d": "Specific failure scenarios, likelihood and impact, ideally with evidence from tests or past incidents."
+    },
+    {
+      "h": "Offer options, not a no",
+      "d": "Trade scope, date and risk explicitly in two or three viable options."
+    },
+    {
+      "h": "Recommend one",
+      "d": "Give your professional judgment and reasoning; don't just list choices."
+    },
+    {
+      "h": "Raise it early and privately",
+      "d": "Early conversations allow real choices; surprises in public meetings create defensiveness."
+    },
+    {
+      "h": "Disagree and commit",
+      "d": "Once the decision is made, support it fully, record the accepted risks, and set checkpoints."
+    }
+  ],
+  "decision": "Escalate concerns as options with trade-offs, recommend one, and commit once decided. Refuse only when an option is unethical, unsafe or illegal, and say so clearly.",
+  "numbers": [
+    "Framing example: 'Option B ships in 6 weeks with 70% of the value; Option A ships the remaining 30% in week 10 without the double-charge risk.'"
+  ],
+  "pitfalls": [
+    "Saying no without alternatives.",
+    "Agreeing publicly while expecting failure.",
+    "Raising concerns too late to change anything.",
+    "Vague risk statements nobody can weigh."
+  ],
+  "followups": [
+    {
+      "q": "The VP picks the riskiest option. What now?",
+      "a": "Commit, document the decision and accepted risks, add mitigations (flags, monitoring, rollback plans), and agree a checkpoint to reassess."
+    },
+    {
+      "q": "What if the risk is to customer money or safety?",
+      "a": "Be explicit that this crosses a line, involve the right stakeholders (risk, legal, security), and don't quietly accept it."
+    },
+    {
+      "q": "How do you keep the relationship healthy?",
+      "a": "Show you share the goal, bring solutions, and follow through on whichever option is chosen."
+    }
+  ],
+  "example": "Asked to launch instant payouts in six weeks, a staff engineer showed that the reconciliation pieces would take ten. She proposed launching to 5% of users with daily payout caps and manual reconciliation for six weeks, then full rollout at week ten. The VP agreed; the capped launch caught two reconciliation bugs before they affected many users.",
+  "related": [
+    "defend-design-trade-off-skeptical",
+    "cross-team-migration-no-authority",
+    "design-mistakes-cheap-not-catastrophic",
+    "tech-debt-vs-features"
+  ],
+  "sources": [
+    {
+      "title": "Will Larson: Staff Engineer (book and essays)",
+      "url": "https://staffeng.com/"
+    }
+  ]
+}

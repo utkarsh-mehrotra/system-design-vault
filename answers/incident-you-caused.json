@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "Downplaying it, explaining why it wasn't really your fault, or over-apologising and promising to be more careful.",
+    "why": "Defensiveness erodes trust, and 'I'll be more careful' isn't a fix. Interviewers look for ownership plus systemic improvements.",
+    "probe": "Ownership, fast mitigation, clear communication, and blameless systemic fixes.",
+    "say": "\"I'd say immediately that my change is the likely cause, help roll it back, communicate impact plainly, and then lead a blameless postmortem focused on why the system let the change through: missing tests, canary checks or guardrails.\""
+  },
+  "thesis": "Own it quickly and plainly, prioritise mitigation, communicate impact honestly, and then fix the system that allowed the mistake, not just your own carefulness. Blameless postmortems work only if the person who made the change is open about it.",
+  "pitch": "During the incident, the most useful thing I can do is say early, 'my deploy at 14:05 is the likely cause', because it saves the team from investigating elsewhere, then help mitigate: roll back, disable the flag, and verify recovery. I'd stay factual in the channel: what changed, what I see, what I'm doing. Afterwards, I'd help quantify impact and contact affected customers if needed. In the postmortem I'd describe my reasoning at the time openly, because the useful question is why the change looked safe: the test didn't cover that case, the canary didn't measure the right metric, the config wasn't validated, review missed it because the diff was large. Then I'd drive the follow-ups that make the class of mistake harder: a test, a validation, a canary metric, a smaller change process. Accountability means owning the fix to the system, not self-blame.",
+  "points": [
+    {
+      "h": "Say it early",
+      "d": "Flag your change as the likely cause as soon as you suspect it; it shortens the incident."
+    },
+    {
+      "h": "Mitigate first",
+      "d": "Roll back or disable, verify recovery with metrics, then investigate."
+    },
+    {
+      "h": "Communicate factually",
+      "d": "What changed, impact, actions, without defensiveness or speculation."
+    },
+    {
+      "h": "Help with impact and customers",
+      "d": "Quantify affected users or transactions, and support remediation and communication."
+    },
+    {
+      "h": "Blameless postmortem, with candour",
+      "d": "Explain your reasoning at the time; focus on how the system allowed the error."
+    },
+    {
+      "h": "Fix the system",
+      "d": "Tests, validations, canary metrics, guardrails or process changes that prevent the class of failure."
+    },
+    {
+      "h": "Follow through",
+      "d": "Own the action items to completion and share learnings with other teams."
+    }
+  ],
+  "decision": "Transparency and speed during the incident; systemic improvements afterwards. 'Be more careful' never counts as an action item.",
+  "numbers": [
+    "A useful postmortem metric: time from impact start to identifying the change. Early ownership often cuts it from tens of minutes to a few."
+  ],
+  "pitfalls": [
+    "Waiting until you're sure before mentioning your change.",
+    "Defensiveness or blaming others' code.",
+    "Action items that rely on individual vigilance.",
+    "Skipping customer impact assessment."
+  ],
+  "followups": [
+    {
+      "q": "Your manager is upset. How do you handle the conversation?",
+      "a": "Acknowledge the impact, explain what you did to mitigate, and present the systemic fixes and timeline; avoid excuses."
+    },
+    {
+      "q": "What if the root cause was partly another team's system?",
+      "a": "Describe contributing factors factually in the postmortem and agree joint actions, without shifting blame."
+    },
+    {
+      "q": "What makes a good postmortem action item?",
+      "a": "Specific, owned, dated, and reducing likelihood or impact of a class of failures, like 'add config schema validation to the deploy pipeline'."
+    }
+  ],
+  "example": "An engineer's migration added an index that locked a busy table. He posted in the incident channel within two minutes that his migration was the likely cause, killed it, and confirmed recovery. The postmortem led to lock timeouts on all migrations and a linter blocking non-concurrent index creation on large tables.",
+  "related": [
+    "incident-commander-first-15",
+    "design-mistakes-cheap-not-catastrophic",
+    "schema-changes-downtime",
+    "write-runbook-call-engineer-follow"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Postmortem culture",
+      "url": "https://sre.google/sre-book/postmortem-culture/"
+    }
+  ]
+}

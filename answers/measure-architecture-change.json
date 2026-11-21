@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"It's live and the team likes it.\"",
+    "why": "Without baselines and outcome metrics chosen up front, you can't show impact, distinguish it from other changes, or learn whether the investment paid off.",
+    "probe": "Defining success metrics before the change, baselines, and honest evaluation including costs.",
+    "say": "\"Before starting, I'd define the problem metrics (incident rate, latency, lead time, cost), record baselines, then measure the same metrics after rollout over comparable periods, including what got worse, and share the results.\""
+  },
+  "thesis": "Decide what success means before the change: specific outcome metrics tied to the problem it was meant to solve, with baselines. Measure after rollout over comparable periods, account for confounding changes and costs, and report results honestly, including disappointments.",
+  "pitch": "I'd tie metrics to the original motivation. If we split a service to speed up delivery, the metrics are deployment frequency, lead time for changes and change failure rate for the affected teams. If it was reliability, incident count and minutes of SLO breach. If it was cost, cost per request or per customer. I'd record baselines for several weeks before the change, because noise and seasonality matter. After rollout I'd compare the same metrics over a comparable period, ideally with a control group, such as teams or regions not yet migrated. I'd also capture costs and side effects: infrastructure spend, operational load, latency added by new network hops, developer satisfaction surveys. Then I'd write up results, including what didn't improve and why, and what I'd do differently. That builds credibility for the next big proposal and catches cases where the change didn't deliver and needs adjustment.",
+  "points": [
+    {
+      "h": "Metrics from the motivation",
+      "d": "Choose metrics that directly reflect the problem the change was meant to solve."
+    },
+    {
+      "h": "Baselines before starting",
+      "d": "Several weeks of data to understand normal variation and seasonality."
+    },
+    {
+      "h": "Comparable periods and controls",
+      "d": "Compare like with like; use teams or regions not yet migrated as a control where possible."
+    },
+    {
+      "h": "Delivery metrics",
+      "d": "Deployment frequency, lead time for changes, change failure rate and time to restore (DORA metrics)."
+    },
+    {
+      "h": "Reliability and cost metrics",
+      "d": "Incidents, SLO breaches, on-call pages, cost per unit of work."
+    },
+    {
+      "h": "Count the costs",
+      "d": "New operational load, added latency, infrastructure spend and developer experience."
+    },
+    {
+      "h": "Report honestly",
+      "d": "Share wins and misses; adjust or roll back parts that didn't deliver."
+    }
+  ],
+  "decision": "Write the success metrics into the design doc before work starts, measure with baselines and controls, and publish a retrospective with data a quarter after completion.",
+  "numbers": [
+    "Example result format: 'lead time for changes fell from 5 days to 1.5 days; change failure rate unchanged at 12%; infrastructure cost up 18%; p99 latency up 15 ms due to the extra hop.'"
+  ],
+  "pitfalls": [
+    "No baseline, so 'better' can't be shown.",
+    "Choosing metrics after the fact that happen to look good.",
+    "Ignoring costs and regressions.",
+    "Attributing improvements caused by other changes made at the same time."
+  ],
+  "followups": [
+    {
+      "q": "The metrics didn't improve. What do you do?",
+      "a": "Dig into why (adoption incomplete, wrong bottleneck, new problems), share it openly, and decide whether to adjust, continue or partially revert."
+    },
+    {
+      "q": "How do you measure developer productivity without gaming?",
+      "a": "Use team-level flow metrics (lead time, deploy frequency) plus surveys, not individual output counts."
+    },
+    {
+      "q": "How long should you wait to measure?",
+      "a": "Long enough to cover normal cycles and settle-in effects, often one to two quarters for delivery metrics."
+    }
+  ],
+  "example": "After splitting the payments monolith, a staff engineer compared DORA metrics for the payments teams against two unmigrated teams over the same quarter: lead time dropped from 6 days to 2, deploy frequency tripled, and incidents were flat. The write-up also reported a 22% infrastructure cost increase, which led to rightsizing work.",
+  "related": [
+    "write-design-doc-still-useful",
+    "tech-debt-vs-features",
+    "splitting-monolith-pay-itself",
+    "design-metrics-actually-tell-me"
+  ],
+  "sources": [
+    {
+      "title": "DORA: Software delivery performance metrics",
+      "url": "https://dora.dev/guides/dora-metrics-four-keys/"
+    }
+  ]
+}

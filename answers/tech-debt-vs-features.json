@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Ask for 20% of every sprint for tech debt\" or \"we need a rewrite.\"",
+    "why": "Generic debt budgets get raided under pressure and don't target what matters; rewrites rarely get approved or finished. Debt work has to be justified by business impact.",
+    "probe": "Quantifying cost, tying debt to outcomes, and incremental delivery.",
+    "say": "\"I'd quantify what the debt costs (incidents, lead time, on-call hours, blocked features), pick the items with the best return, attach them to roadmap work where possible, and deliver them incrementally with measurable results.\""
+  },
+  "thesis": "Tech debt gets prioritised when it's expressed as business cost and risk, tied to goals people already care about, and delivered incrementally with visible results. Treat it like a product backlog with a return on investment, not a moral argument.",
+  "pitch": "I'd first measure the cost of the debt: incidents and their customer impact, on-call hours, how much longer features take in that area, onboarding time, security or compliance exposure. Then rank items by return: cost reduced per unit of effort, and risk of something serious. The best pitch attaches debt work to roadmap goals: 'the next three payment features all touch this module, and fixing it first makes them 40% faster', or 'this is the cause of half our incidents, which is hurting our SLO'. I'd propose incremental work, a strangler or refactor in steps, rather than a rewrite, with a metric to show improvement. Some debt doesn't need fixing: code that rarely changes and rarely breaks can stay ugly. A standing capacity allocation can work, but only alongside a prioritised, data-backed list so it's spent well.",
+  "points": [
+    {
+      "h": "Quantify the cost",
+      "d": "Incidents, on-call load, slower delivery in affected areas, security and compliance risk, onboarding friction."
+    },
+    {
+      "h": "Rank by return",
+      "d": "Effort versus cost removed and risk reduced; fix high-interest debt first."
+    },
+    {
+      "h": "Attach to roadmap goals",
+      "d": "Frame debt work as enabling upcoming features or meeting reliability targets."
+    },
+    {
+      "h": "Incremental, measurable delivery",
+      "d": "Small steps with metrics (incident rate, lead time) rather than big-bang rewrites."
+    },
+    {
+      "h": "Leave low-interest debt alone",
+      "d": "Stable, rarely changed code isn't worth refactoring just for neatness."
+    },
+    {
+      "h": "Make it visible",
+      "d": "A debt register with owners and costs, reviewed with product partners."
+    }
+  ],
+  "decision": "Prioritise debt with the highest business cost per unit of effort, bundle it with related feature work, and show results with metrics to earn more investment.",
+  "numbers": [
+    "Example case: a flaky deploy pipeline costing 6 engineer-hours per week across a team is about 300 hours a year; a 3-week fix pays back within months."
+  ],
+  "pitfalls": [
+    "Moral arguments ('the code is bad') instead of business ones.",
+    "Asking for rewrites.",
+    "Debt time with no prioritised list, spent on pet projects.",
+    "Never measuring results, so the next request is harder."
+  ],
+  "followups": [
+    {
+      "q": "Product says features always come first. What do you do?",
+      "a": "Show the features being slowed or the incidents hurting customers, and propose the smallest debt fix that unblocks the next feature."
+    },
+    {
+      "q": "How do you measure that debt work paid off?",
+      "a": "Compare before and after: incident counts, lead time for changes in the area, on-call pages, or build times."
+    },
+    {
+      "q": "When is a rewrite justified?",
+      "a": "Rarely: when the platform is end-of-life or fundamentally can't meet requirements, and even then via incremental strangler migration."
+    }
+  ],
+  "example": "A team showed that 45% of payment incidents traced to one legacy reconciliation module and that two roadmap features needed changes there. Product agreed to a six-week incremental refactor bundled with the first feature; incidents in that area dropped 70% the next quarter.",
+  "related": [
+    "push-back-deadline-vp",
+    "design-migration-paths-legacy-system",
+    "measure-architecture-change",
+    "simplify-complex-design-losing-guarantees"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Technical debt quadrant",
+      "url": "https://martinfowler.com/bliki/TechnicalDebtQuadrant.html"
+    },
+    {
+      "title": "Will Larson: Migrations, the sole scalable fix to tech debt",
+      "url": "https://lethain.com/migrations/"
+    }
+  ]
+}

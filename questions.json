@@ -123,7 +123,8 @@
         "Logging & tracing",
         "Metrics, dashboards & alerts",
         "Latency debugging",
-        "Runbooks & failure drills"
+        "Runbooks & failure drills",
+        "Incident response"
       ]
     },
     {
@@ -160,7 +161,9 @@
       "topics": [
         "Trade-offs & design reviews",
         "Simplicity & over/under-engineering",
-        "Design docs & ownership"
+        "Design docs & ownership",
+        "Influence & delivery",
+        "Measuring & standardising"
       ]
     },
     {
@@ -2304,6 +2307,23 @@
       ]
     },
     {
+      "id": "incident-commander-first-15",
+      "cat": "observability",
+      "topic": "Incident response",
+      "level": "advanced",
+      "source": "mine",
+      "q": "You're incident commander for a major outage. What do you do in the first 15 minutes?",
+      "also": [],
+      "a": [
+        "The incident commander's job is coordination, not debugging: establish roles and communication, keep the team focused on restoring service rather than finding root cause, make decisions with incomplete information, and keep stakeholders informed on a predictable cadence."
+      ],
+      "tags": [
+        "Operations",
+        "Leadership"
+      ],
+      "legacy": []
+    },
+    {
       "id": "deploy-strategies-compared",
       "cat": "infra",
       "topic": "Deployments & config",
@@ -2784,6 +2804,108 @@
       "legacy": [
         87
       ]
+    },
+    {
+      "id": "cross-team-migration-no-authority",
+      "cat": "judgment",
+      "topic": "Influence & delivery",
+      "level": "advanced",
+      "source": "mine",
+      "q": "You need 15 teams to migrate off a deprecated platform, and you don't manage any of them. How do you drive it?",
+      "also": [],
+      "a": [
+        "Driving work across teams you don't manage is about reducing their cost and increasing their reasons: make migration nearly free with tooling and hands-on help, explain the benefit in their terms, create visible momentum, and reserve escalation for the end."
+      ],
+      "tags": [
+        "Leadership",
+        "Migration"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "push-back-deadline-vp",
+      "cat": "judgment",
+      "topic": "Influence & delivery",
+      "level": "advanced",
+      "source": "mine",
+      "q": "A VP wants a launch in six weeks with a design you believe is risky. How do you push back?",
+      "also": [],
+      "a": [
+        "Pushing back works when it gives decision-makers better choices, not just objections. Understand the goal behind the deadline, quantify the risk, offer concrete options trading scope, time and risk, and once a decision is made, commit and record it."
+      ],
+      "tags": [
+        "Leadership",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "incident-you-caused",
+      "cat": "judgment",
+      "topic": "Influence & delivery",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Your change caused a production incident. What do you do and say, during and after?",
+      "also": [],
+      "a": [
+        "Own it quickly and plainly, prioritise mitigation, communicate impact honestly, and then fix the system that allowed the mistake, not just your own carefulness. Blameless postmortems work only if the person who made the change is open about it."
+      ],
+      "tags": [
+        "Leadership",
+        "Operations"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "tech-debt-vs-features",
+      "cat": "judgment",
+      "topic": "Influence & delivery",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "How do you get tech debt prioritised against feature work?",
+      "also": [],
+      "a": [
+        "Tech debt gets prioritised when it's expressed as business cost and risk, tied to goals people already care about, and delivered incrementally with visible results. Treat it like a product backlog with a return on investment, not a moral argument."
+      ],
+      "tags": [
+        "Leadership",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "consistency-vs-local-optimisation",
+      "cat": "judgment",
+      "topic": "Measuring & standardising",
+      "level": "advanced",
+      "source": "mine",
+      "q": "One team wants a different database or framework that suits them better. When do you standardise, and when do you allow local choices?",
+      "also": [],
+      "a": [
+        "Standardisation reduces organisational costs (operations, security, hiring, shared tooling); local optimisation captures fit-for-purpose benefits. Decide by who bears the cost of variety, and make exceptions deliberate, owned and documented rather than forbidden or invisible."
+      ],
+      "tags": [
+        "Leadership",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "measure-architecture-change",
+      "cat": "judgment",
+      "topic": "Measuring & standardising",
+      "level": "advanced",
+      "source": "mine",
+      "q": "You led a major architecture change. How do you prove it worked?",
+      "also": [],
+      "a": [
+        "Decide what success means before the change: specific outcome metrics tied to the problem it was meant to solve, with baselines. Measure after rollout over comparable periods, account for confounding changes and costs, and report results honestly, including disappointments."
+      ],
+      "tags": [
+        "Leadership",
+        "Observability"
+      ],
+      "legacy": []
     }
   ]
 }

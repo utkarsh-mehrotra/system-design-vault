@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "Jumping into the logs and debugging the root cause yourself.",
+    "why": "The incident commander coordinates; if they debug, nobody is managing communication, roles, decisions and mitigation, and the response fragments.",
+    "probe": "Command structure, mitigation over diagnosis, communication cadence, and decision-making under uncertainty.",
+    "say": "\"I declare the incident, assign roles (ops lead, comms, scribe), set a channel and update cadence, focus everyone on mitigation, like rolling back recent changes or shifting traffic, and keep the timeline. Root cause comes later.\""
+  },
+  "thesis": "The incident commander's job is coordination, not debugging: establish roles and communication, keep the team focused on restoring service rather than finding root cause, make decisions with incomplete information, and keep stakeholders informed on a predictable cadence.",
+  "pitch": "In the first minutes I'd declare the incident with a severity, open a dedicated channel or bridge, and assign roles: an operations lead who directs technical work, a communications lead for status pages and stakeholders, and a scribe recording the timeline. I'd establish what we know: impact (who and how many users, which journeys), start time, and what changed recently, since deploys and config changes are the most common causes. Then I'd push for mitigation before diagnosis: roll back the latest deploy, disable the suspect flag, shift traffic away from a bad region, shed load. I'd set an update cadence, say every 15 or 30 minutes, even if the update is 'no change'. I'd make decisions explicit, like 'we roll back now, owner X, check in 5 minutes', and escalate early for more people or for decisions above my authority. And I'd protect responders from interruptions. Root cause analysis and the blameless postmortem come after service is restored.",
+  "points": [
+    {
+      "h": "Declare and set severity",
+      "d": "A clear declaration with severity triggers the right people and process; under-declaring delays help."
+    },
+    {
+      "h": "Assign roles",
+      "d": "Incident commander, operations lead, communications, scribe. Clear roles stop everyone doing the same thing."
+    },
+    {
+      "h": "Establish impact and recent changes",
+      "d": "Who's affected, since when, and what changed (deploys, config, traffic, dependencies)."
+    },
+    {
+      "h": "Mitigate before diagnosing",
+      "d": "Rollback, flags off, traffic shift, scale or shed load. Restore service first; understand later."
+    },
+    {
+      "h": "Predictable communication",
+      "d": "Regular updates to stakeholders and the status page at a set cadence, with impact, actions and next update time."
+    },
+    {
+      "h": "Explicit decisions and owners",
+      "d": "State decisions, owners and check-in times so nothing is ambiguous in a noisy channel."
+    },
+    {
+      "h": "Escalate early, hand off cleanly",
+      "d": "Bring in experts or leadership early; hand over command explicitly if the incident runs long."
+    }
+  ],
+  "decision": "Mitigate first with the safest reversible action that addresses the most likely cause (usually the most recent change), communicate on a fixed cadence, and leave root-cause work for after recovery.",
+  "numbers": [
+    "Typical cadence: internal updates every 15 minutes and customer status page updates every 30 minutes during a major incident."
+  ],
+  "pitfalls": [
+    "The commander debugging instead of coordinating.",
+    "Spending an hour on root cause while a rollback would have fixed it in five minutes.",
+    "Silence towards stakeholders, causing parallel escalations and distraction.",
+    "Too many people in the channel without roles."
+  ],
+  "followups": [
+    {
+      "q": "Nothing changed recently. What now?",
+      "a": "Check dependencies, traffic patterns and resource saturation; mitigate with load shedding, failover or scaling while investigating."
+    },
+    {
+      "q": "An executive joins and starts directing engineers. What do you do?",
+      "a": "Politely redirect: give them the current status and next update time, and route their questions through the comms lead so responders stay focused."
+    },
+    {
+      "q": "When do you close the incident?",
+      "a": "When impact has ended and is confirmed by metrics, with follow-up actions captured and a postmortem scheduled."
+    }
+  ],
+  "example": "During a checkout outage, the incident commander assigned roles within three minutes, saw a deploy 12 minutes before impact, and ordered a rollback while a second engineer checked the database. Service recovered at minute 9; the comms lead posted updates at minutes 5 and 20. The postmortem found the deploy had changed a connection-pool setting.",
+  "related": [
+    "write-runbook-call-engineer-follow",
+    "design-dashboards-help-during-incidents",
+    "incident-you-caused",
+    "alert-user-pain-not-noise"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Managing incidents",
+      "url": "https://sre.google/sre-book/managing-incidents/"
+    },
+    {
+      "title": "PagerDuty: Incident response documentation",
+      "url": "https://response.pagerduty.com/"
+    }
+  ]
+}

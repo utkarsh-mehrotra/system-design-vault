@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Get leadership to mandate it with a deadline.\"",
+    "why": "A mandate without making migration cheap produces resentment, slipped dates and half-done work. Teams prioritise their own roadmaps; you need to reduce their cost and align incentives.",
+    "probe": "Making migration easy, building the case, visible progress, and escalating only where needed.",
+    "say": "\"I'd make the migration as cheap as possible (tooling, docs, doing the first ones myself), make the case in each team's terms, track progress publicly, and use leadership support for the last few holdouts rather than as the first move.\""
+  },
+  "thesis": "Driving work across teams you don't manage is about reducing their cost and increasing their reasons: make migration nearly free with tooling and hands-on help, explain the benefit in their terms, create visible momentum, and reserve escalation for the end.",
+  "pitch": "I'd start by understanding why teams haven't migrated: usually effort, risk and competing priorities, not disagreement. Then reduce the cost: automated tooling or codemods, a clear migration guide, a compatibility layer so teams can move incrementally, and office hours. I'd migrate the first two or three teams myself or with my team, picking ones that are representative and influential, to find the sharp edges and create success stories. I'd frame the benefit per team: fewer incidents, faster deploys, or removal of a toil they complain about, and the cost of staying, such as security patches ending or rising operational burden. I'd get leadership to set a date and endorse the priority, but as support for a well-equipped migration, not instead of one. A public tracker shows progress team by team, which creates positive pressure. For the last holdouts I'd find out what's specifically blocking them, offer help, and only then escalate with data.",
+  "points": [
+    {
+      "h": "Understand the resistance",
+      "d": "Talk to teams: effort, risk, priorities or genuine technical blockers each need a different response."
+    },
+    {
+      "h": "Make it cheap",
+      "d": "Tooling, codemods, compatibility layers and step-by-step guides reduce migration from weeks to days."
+    },
+    {
+      "h": "Do the first ones yourself",
+      "d": "Hands-on migrations find problems early and produce credible examples and estimates."
+    },
+    {
+      "h": "Speak each team's language",
+      "d": "Benefits and risks framed in terms of their incidents, velocity and toil, not platform aesthetics."
+    },
+    {
+      "h": "Leadership endorsement with a date",
+      "d": "Leadership makes it a priority and sets an end date, backed by the support you provide."
+    },
+    {
+      "h": "Visible progress",
+      "d": "A public tracker by team creates momentum and makes stragglers visible without shaming."
+    },
+    {
+      "h": "Targeted escalation",
+      "d": "For holdouts, identify specific blockers, offer help, then escalate with data if needed."
+    }
+  ],
+  "decision": "Lead with enablement (tooling and hands-on help) and persuasion, back it with leadership-set dates, and escalate individually at the end. Budget your own team's time for supporting others.",
+  "numbers": [
+    "If migration takes each team 3 weeks unaided and tooling cuts it to 3 days, investing 6 weeks in tooling saves roughly 30 team-weeks across 15 teams."
+  ],
+  "pitfalls": [
+    "Mandate first, tooling never.",
+    "No understanding of why teams resist.",
+    "Declaring the old platform dead without a compatibility path.",
+    "Tracking progress privately, so nobody sees momentum."
+  ],
+  "followups": [
+    {
+      "q": "A team says they genuinely can't migrate this quarter. What do you do?",
+      "a": "Understand the constraint, offer to do part of the work, agree a specific later date, and record the exception and its risk."
+    },
+    {
+      "q": "How do you know the migration is worth it?",
+      "a": "Quantify the cost of the old platform (incidents, toil, security risk, licence) against migration effort; if that case is weak, reconsider."
+    },
+    {
+      "q": "How do you prevent the long tail from dragging on for years?",
+      "a": "Set a firm shutdown date, increase support as it approaches, and make running on the old platform progressively less convenient (no new features, then read-only)."
+    }
+  ],
+  "example": "Migrating 15 teams off a homegrown job scheduler: the platform team built a compatibility adapter and a CLI that converted job definitions, migrated three teams themselves, and published a tracker. Twelve teams migrated within a quarter; the last three got pairing help and an escalation for one, and the old scheduler was shut down two months later.",
+  "related": [
+    "design-migration-paths-legacy-system",
+    "deprecate-endpoint-safely",
+    "choose-between-building-platform-one",
+    "push-back-deadline-vp"
+  ],
+  "sources": [
+    {
+      "title": "Will Larson: Migrations, the sole scalable fix to tech debt",
+      "url": "https://lethain.com/migrations/"
+    }
+  ]
+}

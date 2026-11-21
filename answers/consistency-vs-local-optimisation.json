@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Everyone must use the standard stack\" or \"teams should be autonomous and choose freely.\"",
+    "why": "Strict standards block genuinely better fits; total freedom multiplies operational cost, on-call burden and hiring complexity. The answer depends on who bears the cost.",
+    "probe": "Weighing local benefit against organisational cost, and making exceptions explicit.",
+    "say": "\"Standardise where the cost of variety falls on the organisation (operations, security, on-call, data); allow exceptions when the team can show a real benefit and owns the operational cost, with a documented decision and an exit plan.\""
+  },
+  "thesis": "Standardisation reduces organisational costs (operations, security, hiring, shared tooling); local optimisation captures fit-for-purpose benefits. Decide by who bears the cost of variety, and make exceptions deliberate, owned and documented rather than forbidden or invisible.",
+  "pitch": "I'd think about where the costs land. A new database means someone runs backups, upgrades, security patches, monitoring and on-call, and the platform team may end up owning it when the original team moves on. A new language affects hiring, shared libraries and incident response. Those costs fall on the organisation, so the default should be the paved road: a small set of supported options with good tooling. But standards shouldn't block real needs, like a time-series workload that a relational database handles poorly. So I'd have a lightweight exception process: the team writes a short decision record explaining the requirement, why the standard doesn't fit, who operates the new thing, and how they'd exit if it doesn't work out. Approved exceptions that prove useful can become part of the paved road. And I'd review the standards themselves periodically, because a standard nobody likes is usually a sign the paved road isn't good enough.",
+  "points": [
+    {
+      "h": "Cost of variety",
+      "d": "Operations, security patching, on-call expertise, hiring, tooling and data integration all grow with each new technology."
+    },
+    {
+      "h": "Who bears the cost",
+      "d": "If the organisation pays for a team's choice, the bar should be higher; if the team fully owns it, more freedom is reasonable."
+    },
+    {
+      "h": "Paved road",
+      "d": "A small set of supported, well-tooled options that make the default choice easy and good."
+    },
+    {
+      "h": "Explicit exceptions",
+      "d": "A short decision record: requirement, why the standard fails, ownership, operational plan, exit plan."
+    },
+    {
+      "h": "Promote good exceptions",
+      "d": "Successful exceptions can join the paved road, keeping standards current."
+    },
+    {
+      "h": "Review the standards",
+      "d": "Frequent requests for exceptions signal the standard needs improving."
+    }
+  ],
+  "decision": "Default to the paved road; grant exceptions when the benefit is real and ownership is clear; revisit standards based on exception patterns.",
+  "numbers": [
+    "Rough cost check: each additional production database technology typically needs ongoing operational effort (upgrades, backups, on-call expertise) on the order of a fraction of an engineer per year, often more in regulated environments."
+  ],
+  "pitfalls": [
+    "Blanket bans that push teams to work around standards.",
+    "Unlimited freedom leading to a dozen half-maintained databases.",
+    "Exceptions with no owner when the original team moves on.",
+    "Standards that never change."
+  ],
+  "followups": [
+    {
+      "q": "A team adopted a database without approval and now needs help running it. What do you do?",
+      "a": "Help stabilise it, then decide together whether to support it properly, migrate off it, or make the team formally own it; fix the process gap that let it happen silently."
+    },
+    {
+      "q": "How do you make the paved road attractive?",
+      "a": "Templates, libraries, documentation, observability and support that make it faster than any alternative."
+    },
+    {
+      "q": "How strict should standards be for security-sensitive components?",
+      "a": "Stricter: authentication, cryptography and secrets management should have very few approved options."
+    }
+  ],
+  "example": "A data team requested ClickHouse for analytics workloads Postgres handled poorly. They submitted a decision record committing to own operations and showing a 20x query speedup; it was approved as an exception, and a year later became the supported analytics store for three teams.",
+  "related": [
+    "design-boring-reliability-instead-cleverness",
+    "choose-between-building-platform-one",
+    "design-systems-multiple-teams-safely",
+    "decide-between-sql-nosql-search"
+  ],
+  "sources": [
+    {
+      "title": "Dan McKinley: Choose boring technology",
+      "url": "https://mcfunley.com/choose-boring-technology"
+    },
+    {
+      "title": "Spotify engineering: How we use Golden Paths to solve fragmentation",
+      "url": "https://engineering.atspotify.com/2020/08/how-we-use-golden-paths-to-solve-fragmentation-in-our-software-ecosystem/"
+    }
+  ]
+}
