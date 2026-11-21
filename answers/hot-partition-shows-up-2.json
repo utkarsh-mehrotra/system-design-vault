@@ -1,0 +1,86 @@
+{
+  "thesis": "Prove it's skew and find the key, buy time with the cheapest mitigation aimed at that key, then fix the key design online. Don't start by adding capacity: a hot key stays on one partition however many nodes you add.",
+  "pitch": "At 2 a.m. I'm mitigating, not redesigning. First I confirm from per-partition metrics that one partition is saturated while the rest are mostly idle; that rules out general overload. Then I find the hot key from top-key sampling or access logs and work out why it's hot: one huge tenant, a client stuck in a retry loop, a viral item, or a monotonically increasing key piling writes onto the newest range. The mitigation targets that key: rate-limit or block the offending client, put a short-TTL cache in front of hot reads, or split the range if the store supports it. Once things are stable, the real fix is the key design (a composite key, salting only the heavy keys, or moving a giant tenant to dedicated partitions), rolled out with dual writes and an online backfill. I call it fixed when the per-partition load distribution has flattened, not just when errors stop.",
+  "points": [
+    {
+      "h": "Confirm it's skew, not overload",
+      "d": "Look at per-partition throughput, latency and throttling. Skew looks like one partition at its limit while the cluster average is low. Cluster-level dashboards hide it: a 30% average can contain one partition at 100%."
+    },
+    {
+      "h": "Find the key and the cause",
+      "d": "Use whatever the store offers for top keys (key sampling, per-partition metrics, consumer lag per partition) plus access logs. Typical causes: one very large tenant, a retry storm from one client, a celebrity item, or timestamp and auto-increment keys concentrating writes at the tail of the range."
+    },
+    {
+      "h": "Mitigate in minutes",
+      "d": "Hot reads: cache in front with a short TTL and request coalescing. Hot writes: rate-limit the offender, queue or shed non-critical writes, or flip a feature flag that turns off the trigger. If the store can split a range or rebalance automatically, let it or force it."
+    },
+    {
+      "h": "Protect everyone else on that partition",
+      "d": "Isolate the hot tenant or client (bulkhead, per-tenant limits) so the other tenants sharing the partition recover first. Post status updates in the incident channel while you work."
+    },
+    {
+      "h": "Fix the key shape",
+      "d": "Options: a composite key such as (tenant, entity) instead of (tenant); salt only the heavy keys with N suffixes and scatter-gather on read; prefix time-based keys with a hash bucket; give giant tenants dedicated partitions or cells."
+    },
+    {
+      "h": "Migrate without downtime",
+      "d": "Dual-write to the new key layout, backfill with throttling, verify with counts and checksums, switch reads, then stop writing the old layout. Changing a partition key in place is usually a full rewrite, so treat it as a migration."
+    },
+    {
+      "h": "Verify and prevent",
+      "d": "Watch the ratio of the hottest partition to the median until it flattens. Add alerts on per-partition saturation, track top tenants by load, and load test with skewed traffic instead of uniform."
+    }
+  ],
+  "decision": "Hot reads: cache and replicate. Hot writes: split or salt the key. One tenant hot: isolate the tenant. Keys drifting hot over time (monotonic): change the key shape. Adding nodes doesn't help any of these, because a single key always maps to a single partition.",
+  "numbers": [
+    "DynamoDB documents a ceiling of 3,000 read units and 1,000 write units per second per partition. A key that needs more is throttled however much capacity the table has.",
+    "Salting a heavy key into N buckets divides its per-partition write load by N but multiplies read fan-out by N. With N = 10, one logical read becomes 10 parallel reads, which is why you salt only the heavy keys.",
+    "Working heuristic for spotting skew: the hottest partition at its limit while the median sits at a fraction of it, for example 100% against 20%."
+  ],
+  "pitfalls": [
+    "Scaling out the cluster: the hot key still lives on one partition.",
+    "Stopping at the cache: it hides the hot read while the key keeps growing, and the next spike hits writes.",
+    "Salting every key instead of only the heavy ones: every read becomes a scatter-gather.",
+    "Changing the partition key in place without planning the data rewrite.",
+    "Declaring victory when errors stop instead of checking that load per partition has evened out."
+  ],
+  "followups": [
+    {
+      "q": "The hot key is a single counter, such as likes on a viral post.",
+      "a": "Shard the counter: N sub-counters, write to a random one, sum them on read or aggregate periodically. Accept that the displayed total is slightly stale."
+    },
+    {
+      "q": "How would you have caught this before 2 a.m.?",
+      "a": "Alert on per-partition saturation and on the max-to-median ratio, track the top tenants by load over time, and run load tests with skewed (Zipf-like) traffic instead of uniform traffic."
+    },
+    {
+      "q": "The hot tenant is your largest customer. Do you rate-limit them?",
+      "a": "Short term, protect everyone else and talk to them. Long term, give them a dedicated cell or partitions so their growth becomes their own capacity, priced accordingly."
+    },
+    {
+      "q": "Walk me through re-keying without downtime.",
+      "a": "Expand and contract: dual-write to the new layout, run a throttled and resumable backfill, verify, move reads, stop the old writes, then clean up after a full cycle with no reads on the old layout."
+    }
+  ],
+  "example": "A multi-tenant orders table is partitioned by tenant_id. A large retailer runs a flash sale; its partition throttles, failing writes for the 40 smaller tenants that share it. On-call caps the retailer's write rate and queues its non-urgent updates, and the other tenants recover. The follow-up changes the key to (tenant_id, hash bucket of order_id) for tenants above a size threshold, migrated with dual writes over a week.",
+  "related": [
+    "pick-partition-key-multi-tenant",
+    "shard-data-user-tenant-region",
+    "migrate-billion-row-table-new",
+    "caching-story-hot-keys-large"
+  ],
+  "sources": [
+    {
+      "title": "AWS DynamoDB: Designing partition keys to distribute your workload",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-uniform-load.html"
+    },
+    {
+      "title": "AWS DynamoDB: Best practices for partition key design",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 // Generates data.js (loaded by index.html) and system_design_vault_merged.md
 // from questions.json, the single source of truth. Run: node scripts/build.mjs
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -24,10 +24,39 @@ for (const q of data.questions) {
   for (const t of q.tags) if (!data.tags.includes(t)) errors.push(`${q.id}: unknown tag ${t}`);
   if (!q.a?.length) errors.push(`${q.id}: no answer`);
 }
+// merge answers/<id>.json (in-depth answers) into their questions
+const ansDir = join(root, "answers");
+const byId = new Map(data.questions.map((q) => [q.id, q]));
+const words = (s) => (String(s).match(/\S+/g) || []).length;
+const isStr = (v) => typeof v === "string" && v.trim().length > 0;
+const warnings = [];
+for (const f of existsSync(ansDir) ? readdirSync(ansDir).filter((f) => f.endsWith(".json")) : []) {
+  const id = f.slice(0, -5);
+  const q = byId.get(id);
+  if (!q) { errors.push(`answers/${f}: no question with id ${id}`); continue; }
+  let a;
+  try { a = JSON.parse(readFileSync(join(ansDir, f), "utf8")); } catch (e) { errors.push(`answers/${f}: ${e.message}`); continue; }
+  const e = (m) => errors.push(`answers/${f}: ${m}`);
+  if (!isStr(a.thesis)) e("thesis required");
+  if (!isStr(a.pitch)) e("pitch required");
+  if (!Array.isArray(a.points) || a.points.length < 3 || a.points.some((p) => !isStr(p.h) || !isStr(p.d))) e("points: at least 3 {h, d}");
+  if (!isStr(a.decision)) e("decision required");
+  if (!Array.isArray(a.pitfalls) || a.pitfalls.length < 2) e("pitfalls: at least 2");
+  if (!Array.isArray(a.followups) || a.followups.length < 2 || a.followups.some((x) => !isStr(x.q) || !isStr(x.a))) e("followups: at least 2 {q, a}");
+  for (const r of a.related || []) if (!byId.has(r)) e(`related id not found: ${r}`);
+  for (const s of a.sources || []) if (!isStr(s.title) || !/^https:\/\//.test(s.url || "")) e(`bad source: ${JSON.stringify(s)}`);
+  if (["scale", "data"].includes(q.cat) && !(a.numbers || []).length) warnings.push(`${id}: no numbers (expected for ${q.cat})`);
+  if (a.deepDive && (!isStr(a.deepDive.title) || !Array.isArray(a.deepDive.steps))) e("deepDive: {title, steps:[{h,d}]}");
+  const core = [a.thesis, a.pitch, a.decision, a.example, ...(a.points || []).flatMap((p) => [p.h, p.d]), ...(a.numbers || []), ...(a.pitfalls || []), ...(a.followups || []).flatMap((x) => [x.q, x.a])].filter(Boolean).join(" ");
+  const n = words(core);
+  if (n < 450 || n > 1300) warnings.push(`${id}: ${n} words (target 600–1200)`);
+  q.answer = a;
+}
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
+if (warnings.length) console.warn("warnings:\n  " + warnings.join("\n  "));
 
 writeFileSync(
   join(root, "data.js"),
@@ -47,10 +76,20 @@ for (const c of data.categories) {
     md += `\n### ${t}\n`;
     for (const q of qs.filter((x) => x.topic === t)) {
       md += `${++n}. **${q.q}** [${src[q.source]} · ${cap(q.level)} · ${q.tags.join(", ")}]\n`;
-      for (const a of q.a) md += `   - ${a}\n`;
+      if (q.answer) {
+        const A = q.answer;
+        md += `   - **Thesis:** ${A.thesis}\n   - **60-second answer:** ${A.pitch}\n   - **Key points:**\n`;
+        A.points.forEach((p, i) => (md += `     ${i + 1}. **${p.h}.** ${p.d}\n`));
+        md += `   - **When to choose what:** ${A.decision}\n`;
+        if (A.numbers?.length) md += `   - **Numbers:**\n` + A.numbers.map((x) => `     - ${x}\n`).join("");
+        md += `   - **Pitfalls:**\n` + A.pitfalls.map((x) => `     - ${x}\n`).join("");
+        md += `   - **Follow-ups:**\n` + A.followups.map((x) => `     - _${x.q}_ ${x.a}\n`).join("");
+        if (A.example) md += `   - **Example:** ${A.example}\n`;
+        if (A.sources?.length) md += `   - **Sources:** ` + A.sources.map((x) => `[${x.title}](${x.url})`).join("; ") + `\n`;
+      } else for (const a of q.a) md += `   - ${a}\n`;
       if (q.also.length) md += `   - _Also asked as:_ ${q.also.join(" / ")}\n`;
     }
   }
 }
 writeFileSync(join(root, "system_design_vault_merged.md"), md);
-console.log(`ok: ${data.questions.length} questions, ${data.categories.length} categories, ${data.tags.length} tags`);
+console.log(`ok: ${data.questions.length} questions, ${data.questions.filter((q) => q.answer).length} in-depth answers, ${data.categories.length} categories, ${data.tags.length} tags`);

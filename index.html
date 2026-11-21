@@ -119,6 +119,25 @@ details.qa[open] .chev{transform:rotate(90deg)}
 .empty{padding:40px 0;color:var(--muted)}
 footer{margin:48px 0;padding-top:16px;border-top:1px solid var(--rule);color:var(--muted);font-size:13px}
 footer .row{margin-top:10px}
+/* in-depth answers */
+.thesis{font-weight:600;font-size:17px;line-height:1.5;margin:0 0 16px;padding-left:12px;border-left:3px solid var(--accent)}
+.sec{margin:0 0 18px}
+.sec>p{margin:0 0 8px}
+.pts{margin:0;padding-left:22px}
+.pts li{margin:0 0 10px}
+.pts li b{display:block;font-weight:600}
+.pts li span{display:block;color:var(--ink)}
+.sec ul{margin:0;padding-left:20px}
+.sec ul li{margin:0 0 6px}
+details.fu{border:1px solid var(--rule);border-radius:4px;margin:0 0 8px;background:var(--bg)}
+details.fu>summary{cursor:pointer;padding:8px 12px;font-weight:500}
+details.fu>p{margin:0;padding:0 12px 10px}
+details.deep{border:1px solid var(--accent);border-radius:4px;margin:0 0 18px}
+details.deep>summary{cursor:pointer;padding:10px 12px;font:600 13px var(--display);color:var(--accent)}
+details.deep>ol{margin:0;padding:0 16px 12px 36px}
+.rel a,.src a{color:var(--accent);text-underline-offset:3px}
+.note{font:500 12px var(--display);color:var(--muted);margin:0 0 12px}
+.meta .deep-tag{color:var(--accent)}
 /* side-by-side layout (wide screens) */
 .split{display:block}
 #pane{display:none}
@@ -171,6 +190,7 @@ body.is-split #pane{display:block;position:sticky;top:64px;max-height:calc(100vh
     <div class="tools">
       <button class="btn primary" type="button" id="random">Random unreviewed</button>
       <button class="btn" type="button" id="layout" hidden></button>
+      <button class="btn" type="button" id="depth"></button>
       <button class="btn" type="button" id="expand">Expand all</button>
       <button class="btn" type="button" id="collapse">Collapse all</button>
     </div>
@@ -203,6 +223,11 @@ function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localSto
 var cats={};V.categories.forEach(function(c,i){c.pos=i;cats[c.id]=c});
 var items=V.questions.map(function(q,i){q.num=i+1;return q});
 var byId={};items.forEach(function(q){byId[q.id]=q});
+items.forEach(function(q){
+  var A=q.answer,parts=[q.q,q.topic,q.also.join(" "),q.a.join(" "),q.tags.join(" ")];
+  if(A)parts.push(A.thesis,A.pitch,A.decision,A.example||"",A.points.map(function(p){return p.h+" "+p.d}).join(" "),(A.numbers||[]).join(" "),A.pitfalls.join(" "),A.followups.map(function(f){return f.q+" "+f.a}).join(" "));
+  q.hay=parts.join(" ").toLowerCase();
+});
 var tagCount={};items.forEach(function(q){q.tags.forEach(function(t){tagCount[t]=(tagCount[t]||0)+1})});
 var tagsByUse=V.tags.filter(function(t){return tagCount[t]}).sort(function(a,b){return tagCount[b]-tagCount[a]||a.localeCompare(b)});
 
@@ -217,25 +242,25 @@ function save(){store(KEY,JSON.stringify(done))}
 function nDone(list){return list.filter(function(q){return done[q.id]}).length}
 
 /* ---------- state <-> URL ---------- */
-var st={q:"",lvl:"",cat:"",src:"",todo:false,tags:{}};
+var st={q:"",lvl:"",cat:"",src:"",todo:false,deep:false,tags:{}};
 var moreTags=false;
 function readURL(){
   var p=new URLSearchParams(location.search);
   st.q=(p.get("q")||"").toLowerCase();st.lvl=LV[p.get("lvl")]?p.get("lvl"):"";
   st.cat=cats[p.get("cat")]?p.get("cat"):"";st.src=SRC[p.get("src")]?p.get("src"):"";
-  st.todo=p.get("todo")==="1";st.tags={};
+  st.todo=p.get("todo")==="1";st.deep=p.get("deep")==="1";st.tags={};
   (p.get("tags")||"").split(",").forEach(function(t){if(tagCount[t])st.tags[t]=1});
 }
 function writeURL(){
   var p=new URLSearchParams();
   if(st.q)p.set("q",st.q);if(st.lvl)p.set("lvl",st.lvl);if(st.cat)p.set("cat",st.cat);
-  if(st.src)p.set("src",st.src);if(st.todo)p.set("todo","1");
+  if(st.src)p.set("src",st.src);if(st.todo)p.set("todo","1");if(st.deep)p.set("deep","1");
   var t=Object.keys(st.tags);if(t.length)p.set("tags",t.join(","));
   var s=p.toString();
   history.replaceState(null,"",location.pathname+(s?"?"+s:"")+location.hash);
 }
-function resetFilters(){st={q:"",lvl:"",cat:"",src:"",todo:false,tags:{}};$("q").value="";cs.value="";update()}
-function activeCount(){return (st.lvl?1:0)+(st.src?1:0)+(st.todo?1:0)+Object.keys(st.tags).length}
+function resetFilters(){st={q:"",lvl:"",cat:"",src:"",todo:false,deep:false,tags:{}};$("q").value="";cs.value="";update()}
+function activeCount(){return (st.lvl?1:0)+(st.src?1:0)+(st.todo?1:0)+(st.deep?1:0)+Object.keys(st.tags).length}
 
 /* ---------- theme ---------- */
 function themeLabel(){var t=store("sdv-theme")||"light";$("theme").textContent="Theme: "+t;$("theme").setAttribute("aria-label","Theme: "+t+". Click to change.")}
@@ -258,6 +283,7 @@ function drawChips(){
   Object.keys(SRC).forEach(function(k){s.appendChild(chip(SRC[k],st.src===k,function(){st.src=st.src===k?"":k;update()}))});
   var u=$("status");u.innerHTML="";
   u.appendChild(chip("Unreviewed only",st.todo,function(){st.todo=!st.todo;update()}));
+  u.appendChild(chip("In-depth only",st.deep,function(){st.deep=!st.deep;update()}));
   var t=$("tags");t.innerHTML="";
   var shown=moreTags?tagsByUse:tagsByUse.filter(function(g,i){return i<TOP_TAGS||st.tags[g]});
   shown.forEach(function(g){t.appendChild(chip(g,!!st.tags[g],function(){if(st.tags[g])delete st.tags[g];else st.tags[g]=1;update()}))});
@@ -279,7 +305,8 @@ function match(x){
   if(st.cat&&x.cat!==st.cat)return false;
   if(st.todo&&done[x.id])return false;
   for(var g in st.tags){if(x.tags.indexOf(g)<0)return false}
-  if(st.q){var h=(x.q+" "+x.also.join(" ")+" "+x.a.join(" ")+" "+x.tags.join(" ")+" "+x.topic+" "+cats[x.cat].name).toLowerCase();if(h.indexOf(st.q)<0)return false}
+  if(st.deep&&!x.answer)return false;
+  if(st.q&&(x.hay+" "+cats[x.cat].name.toLowerCase()).indexOf(st.q)<0)return false;
   return true;
 }
 function hl(s){
@@ -296,10 +323,29 @@ function metaHTML(x){
     '<span>'+x.tags.map(esc).join(" · ")+'</span>'+
     (x.source==="ref"?'<span>ref list</span>':"")+
     (x.also.length?'<span>+'+x.also.length+' similar</span>':"")+
+    (x.answer?'<span class="deep-tag">in-depth</span>':"")+
     (done[x.id]?'<span class="ok">✓ reviewed</span>':"");
 }
+function depth(){return store("sdv-depth")||"full"}
+function sec(t,h){return '<div class="sec"><p class="lbl">'+t+'</p>'+h+'</div>'}
+function ul(a){return '<ul>'+a.map(function(t){return"<li>"+hl(t)+"</li>"}).join("")+'</ul>'}
+function ansHTML(x){
+  var A=x.answer,quick=depth()==="quick";
+  var h='<p class="thesis">'+hl(A.thesis)+'</p>'+sec("Say it in 60 seconds","<p>"+hl(A.pitch)+"</p>")+
+    sec("Key points",'<ol class="pts">'+A.points.map(function(p){return"<li><b>"+hl(p.h)+"</b>"+(quick?"":"<span>"+hl(p.d)+"</span>")+"</li>"}).join("")+"</ol>");
+  if(quick)return h+'<p class="note">Quick view. Switch Depth to Full for decision rules, numbers, pitfalls and follow-ups.</p>';
+  h+=sec("When to choose what","<p>"+hl(A.decision)+"</p>");
+  if(A.numbers&&A.numbers.length)h+=sec("Numbers",ul(A.numbers));
+  h+=sec("Pitfalls",ul(A.pitfalls));
+  h+=sec("Follow-ups you will get",'<p class="note">Answer each one out loud first, then open it.</p>'+A.followups.map(function(f){return'<details class="fu"><summary>'+hl(f.q)+"</summary><p>"+hl(f.a)+"</p></details>"}).join(""));
+  if(A.example)h+=sec("Example","<p>"+hl(A.example)+"</p>");
+  if(A.deepDive)h+='<details class="deep"><summary>Deep dive: '+esc(A.deepDive.title)+'</summary><ol class="pts">'+A.deepDive.steps.map(function(p){return"<li><b>"+hl(p.h)+"</b><span>"+hl(p.d)+"</span></li>"}).join("")+"</ol></details>";
+  if(A.related&&A.related.length)h+=sec("Related",'<ul class="rel">'+A.related.filter(function(r){return byId[r]}).map(function(r){return'<li><a href="#'+r+'">Q'+String(byId[r].num).padStart(2,"0")+" · "+esc(byId[r].q)+"</a></li>"}).join("")+"</ul>");
+  if(A.sources&&A.sources.length)h+=sec("Sources",'<ul class="src">'+A.sources.map(function(x){return'<li><a href="'+esc(x.url)+'" target="_blank" rel="noopener">'+esc(x.title)+"</a></li>"}).join("")+"</ul>");
+  return h;
+}
 function bodyHTML(x){
-  return '<div class="body"><p class="lbl">A strong answer covers</p>'+x.a.map(function(p){return"<p>"+hl(p)+"</p>"}).join("")+
+  return '<div class="body">'+(x.answer?ansHTML(x):'<p class="lbl">Outline</p>'+x.a.map(function(p){return"<p>"+hl(p)+"</p>"}).join("")+'<p class="note">In-depth answer not written yet.</p>')+
     (x.also.length?'<p class="lbl">Also asked as</p><ul class="also">'+x.also.map(function(a){return"<li>"+hl(a)+"</li>"}).join("")+"</ul>":"")+
     '<div class="actions"><label class="done"><input type="checkbox" data-done="'+x.id+'"'+(done[x.id]?" checked":"")+'> Mark as reviewed</label>'+
     '<button type="button" class="link" data-copy="'+x.id+'">Copy link</button></div></div>';
@@ -350,6 +396,9 @@ function select(id,keepFocus){
   history.replaceState(null,"",location.pathname+location.search+"#"+id);
   pane();
 }
+function depthLabel(){$("depth").textContent="Depth: "+depth()}
+depthLabel();
+$("depth").onclick=function(){store("sdv-depth",depth()==="full"?"quick":"full");depthLabel();render()};
 $("layout").onclick=function(){store("sdv-layout",isSplit()?"list":"split");applyLayout();render()};
 WIDE.addEventListener("change",function(){applyLayout();render()});
 $("list").addEventListener("click",function(e){var b=e.target.closest("[data-sel]");if(b)select(b.dataset.sel)});

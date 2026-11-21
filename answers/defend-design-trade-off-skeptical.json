@@ -1,0 +1,72 @@
+{
+  "thesis": "Lead with the constraint, not the design. A skeptic is persuaded by seeing that you considered their option, priced your own downside honestly, and know what evidence would change your mind.",
+  "pitch": "I'd spend the first minute restating the requirement and the one or two constraints that drive the decision, for example p99 under 100 ms and a team of four, and check we agree on them. Then the decision in one sentence. Then the alternatives I rejected, including the one the architect probably prefers, each with the specific reason it lost against those constraints. Then what we're giving up, said plainly before they have to point it out. I'd close with the trigger that would make me reverse the decision and how cheaply we'll detect it: a metric, a load test, a date. If they still disagree, I'd ask which constraint they weigh differently, because that's usually where the real disagreement is.",
+  "points": [
+    {
+      "h": "Agree on the problem first",
+      "d": "Restate the requirement and the deciding constraints and get a nod. Many design arguments are really disagreements about requirements, and they dissolve once that's surfaced."
+    },
+    {
+      "h": "State the decision in one sentence",
+      "d": "For example: 'One Postgres primary with read replicas, not a distributed SQL database.' A crisp claim is easier to examine than a diagram."
+    },
+    {
+      "h": "Steelman the alternatives",
+      "d": "Present the skeptic's preferred option at its strongest, then show why it loses on these constraints: cost, team skills, latency, timeline. Strawmanning it loses the room immediately."
+    },
+    {
+      "h": "Name your costs before they do",
+      "d": "'This caps us at roughly X writes per second and means a migration in about 18 months if growth holds.' Saying it first removes the gotcha and shows you've done the arithmetic."
+    },
+    {
+      "h": "Show how reversible it is",
+      "d": "Distinguish one-way doors (data model, public API, deep vendor lock-in) from two-way doors. Point to the seams that make reversal cheaper: an interface boundary, an export path."
+    },
+    {
+      "h": "Set kill criteria",
+      "d": "A measurable trigger, an owner and a check date. 'If p99 write latency exceeds 50 ms at peak or we pass 5 TB, we revisit.' That turns the debate into a plan."
+    },
+    {
+      "h": "Find the crux if you still disagree",
+      "d": "Locate the specific assumption you differ on (growth rate, failure tolerance, team size) and propose a cheap experiment to settle it. If it's their call, record the reasoning and commit."
+    }
+  ],
+  "decision": "Push hard on one-way doors; concede quickly on two-way doors where trying is cheaper than arguing. A disagreement about facts needs data; a disagreement about values (cost against safety, speed against flexibility) needs a decider.",
+  "numbers": [
+    "A five-minute shape: about 1 minute on problem and constraints, 30 seconds on the decision, 2 minutes on alternatives and costs, 1 minute on reversal criteria, the rest for questions."
+  ],
+  "pitfalls": [
+    "Defending the diagram instead of the decision: reasons persuade, boxes don't.",
+    "Strawmanning the alternative; the skeptic notices and stops listening.",
+    "Hiding the downside and letting them find it.",
+    "Treating it as a contest: being right while leaving the architect unheard costs you the next review.",
+    "Unfalsifiable claims such as 'it will scale' instead of a number and a test."
+  ],
+  "followups": [
+    {
+      "q": "What would make you change your mind?",
+      "a": "Have a specific answer ready: a metric threshold, a requirement change or a test result, plus when you'll check it."
+    },
+    {
+      "q": "Why not just use X? Everyone does.",
+      "a": "Acknowledge where X is genuinely better, then tie your choice back to the constraints. Popularity is evidence about ecosystem and hiring, which you can price, not a reason on its own."
+    },
+    {
+      "q": "I'm the approver and I think you're wrong.",
+      "a": "Ask which constraint they weigh differently, record the decision and its rationale, and commit. If the decision is reversible, propose a checkpoint to revisit it with data."
+    }
+  ],
+  "example": "Proposing a modular monolith instead of microservices for a new lending product, with a team of six and a nine-month deadline. The architect preferred services for future scale. The defence conceded that independent scaling and deploys were being given up, showed module boundaries drawn along the future service lines, and set a trigger: split a module out when its team or deploy cadence diverges from the rest.",
+  "related": [
+    "review-peer-s-design-deeply",
+    "tell-design-over-engineered",
+    "write-design-doc-still-useful",
+    "decide-buy-build"
+  ],
+  "sources": [
+    {
+      "title": "Michael Nygard: Documenting architecture decisions",
+      "url": "https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions"
+    }
+  ]
+}

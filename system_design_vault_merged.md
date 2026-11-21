@@ -56,8 +56,34 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - High cardinality, even access, aligned with the dominant query, and stable over time. Avoid monotonically increasing keys that create a hot tail.
    - _Also asked as:_ What does a good partition key look like in a distributed store?
 15. **A hot partition shows up at 2 a.m. Diagnose it and fix it without downtime.** [mine + ref · Advanced · Sharding, Operations, Databases]
-   - Confirm skew from per-partition metrics. Short-term: cache the hot key, rate limit, split the range. Long-term: change the key, add a salt, rebalance online. Say how you verify the fix.
-   - Choose a well-distributed key, salt or split heavy keys, cache hot reads, and monitor per-partition load so skew is seen before it becomes an outage.
+   - **Thesis:** Prove it's skew and find the key, buy time with the cheapest mitigation aimed at that key, then fix the key design online. Don't start by adding capacity: a hot key stays on one partition however many nodes you add.
+   - **60-second answer:** At 2 a.m. I'm mitigating, not redesigning. First I confirm from per-partition metrics that one partition is saturated while the rest are mostly idle; that rules out general overload. Then I find the hot key from top-key sampling or access logs and work out why it's hot: one huge tenant, a client stuck in a retry loop, a viral item, or a monotonically increasing key piling writes onto the newest range. The mitigation targets that key: rate-limit or block the offending client, put a short-TTL cache in front of hot reads, or split the range if the store supports it. Once things are stable, the real fix is the key design (a composite key, salting only the heavy keys, or moving a giant tenant to dedicated partitions), rolled out with dual writes and an online backfill. I call it fixed when the per-partition load distribution has flattened, not just when errors stop.
+   - **Key points:**
+     1. **Confirm it's skew, not overload.** Look at per-partition throughput, latency and throttling. Skew looks like one partition at its limit while the cluster average is low. Cluster-level dashboards hide it: a 30% average can contain one partition at 100%.
+     2. **Find the key and the cause.** Use whatever the store offers for top keys (key sampling, per-partition metrics, consumer lag per partition) plus access logs. Typical causes: one very large tenant, a retry storm from one client, a celebrity item, or timestamp and auto-increment keys concentrating writes at the tail of the range.
+     3. **Mitigate in minutes.** Hot reads: cache in front with a short TTL and request coalescing. Hot writes: rate-limit the offender, queue or shed non-critical writes, or flip a feature flag that turns off the trigger. If the store can split a range or rebalance automatically, let it or force it.
+     4. **Protect everyone else on that partition.** Isolate the hot tenant or client (bulkhead, per-tenant limits) so the other tenants sharing the partition recover first. Post status updates in the incident channel while you work.
+     5. **Fix the key shape.** Options: a composite key such as (tenant, entity) instead of (tenant); salt only the heavy keys with N suffixes and scatter-gather on read; prefix time-based keys with a hash bucket; give giant tenants dedicated partitions or cells.
+     6. **Migrate without downtime.** Dual-write to the new key layout, backfill with throttling, verify with counts and checksums, switch reads, then stop writing the old layout. Changing a partition key in place is usually a full rewrite, so treat it as a migration.
+     7. **Verify and prevent.** Watch the ratio of the hottest partition to the median until it flattens. Add alerts on per-partition saturation, track top tenants by load, and load test with skewed traffic instead of uniform.
+   - **When to choose what:** Hot reads: cache and replicate. Hot writes: split or salt the key. One tenant hot: isolate the tenant. Keys drifting hot over time (monotonic): change the key shape. Adding nodes doesn't help any of these, because a single key always maps to a single partition.
+   - **Numbers:**
+     - DynamoDB documents a ceiling of 3,000 read units and 1,000 write units per second per partition. A key that needs more is throttled however much capacity the table has.
+     - Salting a heavy key into N buckets divides its per-partition write load by N but multiplies read fan-out by N. With N = 10, one logical read becomes 10 parallel reads, which is why you salt only the heavy keys.
+     - Working heuristic for spotting skew: the hottest partition at its limit while the median sits at a fraction of it, for example 100% against 20%.
+   - **Pitfalls:**
+     - Scaling out the cluster: the hot key still lives on one partition.
+     - Stopping at the cache: it hides the hot read while the key keeps growing, and the next spike hits writes.
+     - Salting every key instead of only the heavy ones: every read becomes a scatter-gather.
+     - Changing the partition key in place without planning the data rewrite.
+     - Declaring victory when errors stop instead of checking that load per partition has evened out.
+   - **Follow-ups:**
+     - _The hot key is a single counter, such as likes on a viral post._ Shard the counter: N sub-counters, write to a random one, sum them on read or aggregate periodically. Accept that the displayed total is slightly stale.
+     - _How would you have caught this before 2 a.m.?_ Alert on per-partition saturation and on the max-to-median ratio, track the top tenants by load over time, and run load tests with skewed (Zipf-like) traffic instead of uniform traffic.
+     - _The hot tenant is your largest customer. Do you rate-limit them?_ Short term, protect everyone else and talk to them. Long term, give them a dedicated cell or partitions so their growth becomes their own capacity, priced accordingly.
+     - _Walk me through re-keying without downtime._ Expand and contract: dual-write to the new layout, run a throttled and resumable backfill, verify, move reads, stop the old writes, then clean up after a full cycle with no reads on the old layout.
+   - **Example:** A multi-tenant orders table is partitioned by tenant_id. A large retailer runs a flash sale; its partition throttles, failing writes for the 40 smaller tenants that share it. On-call caps the retailer's write rate and queues its non-urgent updates, and the other tenants recover. The follow-up changes the key to (tenant_id, hash bucket of order_id) for tenants above a size threshold, migrated with dual writes over a week.
+   - **Sources:** [AWS DynamoDB: Designing partition keys to distribute your workload](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-uniform-load.html); [AWS DynamoDB: Best practices for partition key design](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html); [Martin Kleppmann: Designing Data-Intensive Applications, chapter 6 (Partitioning)](https://dataintensive.net/)
    - _Also asked as:_ How do I avoid hot partitions and skew?
 16. **How do I shard data by user, tenant, region, or something else?** [ref · Intermediate · Sharding, Databases]
    - Shard on the dimension most queries filter by and that spreads load evenly. Cover cross-shard queries, rebalancing, and tenant or region affinity for locality and compliance.
@@ -112,8 +138,34 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### Idempotency
 30. **Build idempotency for a write API that clients and your own gateway can both retry.** [mine + ref · Advanced · Consistency, APIs, Databases]
-   - Client-supplied key, atomic claim of the key with the write, stored response for replays, key expiry, and the in-flight duplicate case. Say what you do when the request body differs.
-   - Idempotency key per logical operation, atomically recorded with the write, replayed response on duplicates, a defined behavior for a duplicate that arrives while the first is still running, and key expiry.
+   - **Thesis:** The client names each logical operation with an idempotency key; the server records that key atomically with the effect and replays the stored result for any repeat. Everything else is handling the edges of that one rule.
+   - **60-second answer:** I'd require an Idempotency-Key header on every mutating endpoint, generated by the client once per logical operation and reused on every retry. On the server, the first request inserts the key, scoped to the account and stored with a hash of the request, in the same transaction as the business write; when it finishes we store the response. A retry with a finished key gets that stored response replayed. A retry that arrives while the original is still running gets a 409 with Retry-After instead of running twice. The same key with a different body is a 422, because that's a client bug, not a retry. Keys live longer than the longest client retry window, typically 24 hours. The gateway forwards the key and never mints one, or every gateway retry would look like a new operation.
+   - **Key points:**
+     1. **One key per logical operation, owned by the client.** Generated before the first attempt (a UUID is fine) and persisted client-side, so a retry after an app restart reuses it. SDK and gateway retries pass the key through. If the gateway generated keys, its own retries would each look new and dedupe would never fire.
+     2. **Scope and fingerprint the key.** Make (account_id, key) unique, not the key alone, so tenants can't collide or see each other's responses. Store a hash of method, path and canonical body so a reused key with different parameters is detected and rejected.
+     3. **Claim the key atomically with the effect.** Insert the key row with status 'started' in the same database transaction as the business write. The unique constraint makes a concurrent duplicate lose. Either the effect and the key both commit, or neither does, so a crash can't leave a half-applied operation.
+     4. **Replay what executed; don't save what never ran.** Once execution has started, store the status code and body (including failures produced during execution) and return them byte-for-byte on a repeat. Requests rejected before execution, such as validation errors or a concurrent conflict, are not saved, so the client can fix the request and retry with the same key.
+     5. **Handle the in-flight duplicate explicitly.** If the key exists with status 'started', return 409 Conflict with Retry-After rather than waiting or running again. If a 'started' row is older than a takeover timeout, a later retry may resume it, guarded by a version check so two takeovers can't both proceed.
+     6. **External side effects need recovery points.** A card charge or an email can't join your database transaction. Model the request as a state machine (started, charge_requested, charged, completed), commit progress between steps, and pass a key derived from the client's key to the provider so it dedupes too. A retry resumes from the last recovery point.
+     7. **Expire keys deliberately.** Keep keys longer than the longest client retry horizon, then purge. After expiry the same key is a new operation; document that so clients don't retry days later and get charged again.
+   - **When to choose what:** If the effect is a write in one database, claim the key and write in a single transaction: simplest and correct. If the effect is external, use the recovery-point state machine plus a downstream idempotency key. If the operation can be made naturally idempotent (PUT of full state, conditional write on a version, set-based update), do that and skip the key store entirely.
+   - **Numbers:**
+     - Key storage ≈ writes/day × bytes per key × retention days. At 5M writes/day, about 1 KB per key (key, request hash, stored response) and 1 day of retention: about 5 GB, small enough to live in the primary database.
+     - Latency cost of the same-database design is one extra indexed insert inside a transaction you already run. A separate key store adds a network round trip per write and, worse, a window where the key and the effect can disagree.
+   - **Pitfalls:**
+     - Recording the key after the side effect: a crash in between means the retry applies the effect twice.
+     - Letting the gateway or load balancer generate keys: every retry gets a fresh key and nothing is deduplicated.
+     - Saving a transient failure (timeout, 503 from a dependency) as the final result: that key can now never succeed.
+     - Making keys globally unique instead of per account: one tenant's key can collide with another's or return their response.
+     - Expiry shorter than the client's retry window, for example a mobile app that retries after hours offline.
+     - Keys in a separate store such as a cache, with no transaction spanning it and the write: the double-apply window is back.
+   - **Follow-ups:**
+     - _The idempotency store is down. Do you fail open or closed?_ If keys live in the same database as the write, the question disappears: no database means no write. With a separate store, fail closed for money movement (return 503 and let the client retry) and fail open only for low-risk writes that are deduplicated downstream. Say which and why.
+     - _Two requests with the same key arrive 5 ms apart on different servers._ The unique constraint on (account_id, key) decides. One insert wins; the other hits the conflict and returns 409 with Retry-After. No distributed lock is needed when the database enforces uniqueness.
+     - _How does this extend to a saga across several services?_ Derive child keys deterministically from the parent key plus the step name, for example parent:reserve-stock. Every step is idempotent on its own, and replaying the saga hits the same keys.
+     - _What changes in an active-active, multi-region setup?_ Uniqueness has to be enforced in one place per key. Pin each account's writes to a home region, which account-scoped keys make natural, or accept a cross-region dedupe window and run a reconciliation job.
+   - **Example:** A mobile app sends POST /payments with key k1. The server commits the charge, but the response is lost when the phone switches networks. The app retries with k1 a few seconds later; the server finds k1 completed and replays the original 201 with the same payment id. The user is charged once and sees one payment.
+   - **Sources:** [Stripe API reference: Idempotent requests](https://docs.stripe.com/api/idempotent_requests); [Brandur Leach: Implementing Stripe-like idempotency keys in Postgres](https://brandur.org/idempotency-keys); [IETF draft: The Idempotency-Key HTTP header field](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)
    - _Also asked as:_ How do I handle idempotency for write APIs?
 
 ### Consistency models & CAP
@@ -351,8 +403,31 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### Trade-offs & design reviews
 83. **Defend a design trade-off to a skeptical architect in five minutes.** [mine + ref · Intermediate · Leadership, Architecture]
-   - State the constraint, the options you rejected and why, what would change your mind, and how you will find out cheaply if you are wrong.
-   - State requirements and constraints, show alternatives with costs, say what you are giving up, and name the signal that would make you reverse the decision.
+   - **Thesis:** Lead with the constraint, not the design. A skeptic is persuaded by seeing that you considered their option, priced your own downside honestly, and know what evidence would change your mind.
+   - **60-second answer:** I'd spend the first minute restating the requirement and the one or two constraints that drive the decision, for example p99 under 100 ms and a team of four, and check we agree on them. Then the decision in one sentence. Then the alternatives I rejected, including the one the architect probably prefers, each with the specific reason it lost against those constraints. Then what we're giving up, said plainly before they have to point it out. I'd close with the trigger that would make me reverse the decision and how cheaply we'll detect it: a metric, a load test, a date. If they still disagree, I'd ask which constraint they weigh differently, because that's usually where the real disagreement is.
+   - **Key points:**
+     1. **Agree on the problem first.** Restate the requirement and the deciding constraints and get a nod. Many design arguments are really disagreements about requirements, and they dissolve once that's surfaced.
+     2. **State the decision in one sentence.** For example: 'One Postgres primary with read replicas, not a distributed SQL database.' A crisp claim is easier to examine than a diagram.
+     3. **Steelman the alternatives.** Present the skeptic's preferred option at its strongest, then show why it loses on these constraints: cost, team skills, latency, timeline. Strawmanning it loses the room immediately.
+     4. **Name your costs before they do.** 'This caps us at roughly X writes per second and means a migration in about 18 months if growth holds.' Saying it first removes the gotcha and shows you've done the arithmetic.
+     5. **Show how reversible it is.** Distinguish one-way doors (data model, public API, deep vendor lock-in) from two-way doors. Point to the seams that make reversal cheaper: an interface boundary, an export path.
+     6. **Set kill criteria.** A measurable trigger, an owner and a check date. 'If p99 write latency exceeds 50 ms at peak or we pass 5 TB, we revisit.' That turns the debate into a plan.
+     7. **Find the crux if you still disagree.** Locate the specific assumption you differ on (growth rate, failure tolerance, team size) and propose a cheap experiment to settle it. If it's their call, record the reasoning and commit.
+   - **When to choose what:** Push hard on one-way doors; concede quickly on two-way doors where trying is cheaper than arguing. A disagreement about facts needs data; a disagreement about values (cost against safety, speed against flexibility) needs a decider.
+   - **Numbers:**
+     - A five-minute shape: about 1 minute on problem and constraints, 30 seconds on the decision, 2 minutes on alternatives and costs, 1 minute on reversal criteria, the rest for questions.
+   - **Pitfalls:**
+     - Defending the diagram instead of the decision: reasons persuade, boxes don't.
+     - Strawmanning the alternative; the skeptic notices and stops listening.
+     - Hiding the downside and letting them find it.
+     - Treating it as a contest: being right while leaving the architect unheard costs you the next review.
+     - Unfalsifiable claims such as 'it will scale' instead of a number and a test.
+   - **Follow-ups:**
+     - _What would make you change your mind?_ Have a specific answer ready: a metric threshold, a requirement change or a test result, plus when you'll check it.
+     - _Why not just use X? Everyone does._ Acknowledge where X is genuinely better, then tie your choice back to the constraints. Popularity is evidence about ecosystem and hiring, which you can price, not a reason on its own.
+     - _I'm the approver and I think you're wrong._ Ask which constraint they weigh differently, record the decision and its rationale, and commit. If the decision is reversible, propose a checkpoint to revisit it with data.
+   - **Example:** Proposing a modular monolith instead of microservices for a new lending product, with a team of six and a nine-month deadline. The architect preferred services for future scale. The defence conceded that independent scaling and deploys were being given up, showed module boundaries drawn along the future service lines, and set a trigger: split a module out when its team or deploy cadence diverges from the rest.
+   - **Sources:** [Michael Nygard: Documenting architecture decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
    - _Also asked as:_ How do I defend trade-offs to a sceptical architect?
 84. **Review a peer's design deeply and still be easy to work with.** [mine + ref · Advanced · Leadership]
    - Ask questions that expose assumptions, separate blocking concerns from preferences, propose an alternative when you object, and credit what is good.
