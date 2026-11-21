@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"The browser runs a countdown timer and submits when it reaches zero.\"",
+    "why": "Client-side timers and checks can be manipulated, and all answers being sent at the start lets students see the whole exam. Enforcement must be server-side.",
+    "probe": "Server-authoritative timing, per-question delivery, randomisation, integrity signals and accommodations.",
+    "say": "\"The server owns the exam clock and validates every answer's time, questions are served per section from randomised pools, answers are saved server-side as students go, and integrity signals are flagged for review rather than auto-failing students.\""
+  },
+  "thesis": "Exam integrity can't rely on the client. The server owns start and end times, delivers questions progressively from randomised pools, records answers as they're given, applies accommodations per student, and treats proctoring signals as evidence for human review.",
+  "pitch": "When a student starts, the server records the start time and computes their deadline, including any accommodations like extra time, and rejects answers after it, with a small grace period for network latency. The client timer is just a display synced to server time. Questions come from pools with randomised selection and ordering per student, served section by section rather than all at once, so the full exam isn't exposed. Answers are saved server-side as the student moves, which also protects against crashes. Integrity measures range from lockdown browsers and webcam proctoring to lighter signals: tab switching, copy and paste, unusual answer timing, identical wrong answers across students. Those generate flags reviewed by humans, because automated proctoring has false positives and accessibility issues. Reconnection is handled gracefully: a student who drops can resume with their remaining time, since the deadline is server-side. And audit logs record every event for disputes.",
+  "points": [
+    {
+      "h": "Server-owned clock",
+      "d": "Start time and deadline stored server-side; answers after the deadline (plus small grace) are rejected."
+    },
+    {
+      "h": "Accommodations per student",
+      "d": "Extra time or breaks configured per student and applied by the server."
+    },
+    {
+      "h": "Progressive question delivery",
+      "d": "Serve questions or sections as needed, not the whole exam up front."
+    },
+    {
+      "h": "Randomised pools",
+      "d": "Different questions and orderings per student reduce answer sharing."
+    },
+    {
+      "h": "Continuous server-side saving",
+      "d": "Each answer saved as given; crashes and reconnects lose nothing."
+    },
+    {
+      "h": "Integrity signals for review",
+      "d": "Tab switches, paste events, timing anomalies and answer similarity flagged for humans, not auto-penalised."
+    },
+    {
+      "h": "Audit trail",
+      "d": "Every start, answer, reconnect and flag logged for disputes and appeals."
+    }
+  ],
+  "decision": "Server-authoritative timing and progressive delivery for all timed exams; proctoring intensity chosen by stakes, with human review of flags and attention to accessibility and privacy.",
+  "numbers": [
+    "Grace period example: accept answers up to 10–30 seconds after the server deadline to absorb network latency, logged as late-but-accepted."
+  ],
+  "pitfalls": [
+    "Trusting client timers or client-side submission logic.",
+    "Sending all questions at exam start.",
+    "Auto-failing students on proctoring flags.",
+    "No resume path after disconnection."
+  ],
+  "followups": [
+    {
+      "q": "A student loses connection for 5 minutes. What happens?",
+      "a": "Their server-side deadline keeps running unless policy pauses it; on reconnect they resume with answers intact and remaining time shown."
+    },
+    {
+      "q": "How do you detect collusion?",
+      "a": "Compare answer patterns, especially identical wrong answers and timing, across students in the same exam, flagging pairs for review."
+    },
+    {
+      "q": "What about privacy concerns with webcam proctoring?",
+      "a": "Use the least invasive method that fits the exam's stakes, minimise retention, and get informed consent."
+    }
+  ],
+  "example": "An online course platform found students changing system clocks to extend client-side timers. Moving the deadline server-side, serving questions per section from randomised pools, and flagging identical wrong-answer patterns for instructor review ended the timer exploit and surfaced two collusion rings.",
+  "related": [
+    "exam-deadline-submission-spike",
+    "clocks-ordering-lww",
+    "audit-logs-tamper-evident",
+    "offline-progress-sync"
+  ],
+  "sources": [
+    {
+      "title": "OWASP: Business logic security (time and sequence validation)",
+      "url": "https://owasp.org/www-community/vulnerabilities/Business_logic_vulnerability"
+    }
+  ]
+}

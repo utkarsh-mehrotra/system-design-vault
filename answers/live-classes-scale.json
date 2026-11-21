@@ -1,0 +1,80 @@
+{
+  "trap": {
+    "wrong": "\"Use peer-to-peer WebRTC so every participant connects to every other.\"",
+    "why": "Mesh WebRTC uploads each participant's stream to every other participant, which collapses beyond a handful of people. Large audiences need servers and different protocols.",
+    "probe": "SFU vs MCU vs broadcast, latency tiers, simulcast, and scaling across regions.",
+    "say": "\"Small interactive classes use an SFU, which forwards streams with simulcast so clients receive what their bandwidth allows; large lectures use a few interactive presenters on the SFU and stream to the audience via low-latency HLS or a CDN, with chat and Q&A over a separate channel.\""
+  },
+  "thesis": "Real-time video architecture depends on group size and interactivity. Peer-to-peer works for two or three people; selective forwarding units (SFUs) handle interactive groups; broadcast via CDN-based streaming handles large audiences, with a few presenters interactive and everyone else watching with a few seconds of delay.",
+  "pitch": "In a mesh, each participant sends their video to everyone else, so upload bandwidth grows with group size and fails beyond about four people. An SFU receives each participant's stream once and forwards it to others without decoding, which scales interactive sessions to dozens of participants. With simulcast, senders publish several qualities, and the SFU forwards each receiver the layer their bandwidth and screen allow. An MCU mixes streams into one, saving client bandwidth but costing server CPU and latency. For a lecture with thousands, I'd keep the teacher and a few speakers on an SFU at sub-second latency, and stream the composed output to the audience via low-latency HLS, DASH or WebRTC broadcast through a CDN, at a few seconds of delay, which is fine for watching. Interaction from the audience goes through chat, polls and raise-hand over WebSockets, and promoting a student to speaker moves them onto the SFU. SFUs run in multiple regions with cascading between them, TURN servers handle restrictive networks, and recording is a server-side composition.",
+  "points": [
+    {
+      "h": "Mesh limits",
+      "d": "Each sender uploads one stream per receiver; practical only for very small groups."
+    },
+    {
+      "h": "SFU for interactive groups",
+      "d": "Forwards streams without transcoding; scales to dozens of active participants with modest server CPU."
+    },
+    {
+      "h": "Simulcast and adaptive layers",
+      "d": "Senders publish multiple qualities; the SFU picks per receiver based on bandwidth and layout."
+    },
+    {
+      "h": "MCU trade-offs",
+      "d": "Mixes into one stream, easing weak clients but adding server cost and latency."
+    },
+    {
+      "h": "Broadcast for large audiences",
+      "d": "Few interactive presenters, mass audience via CDN streaming with seconds of latency."
+    },
+    {
+      "h": "Separate interaction channel",
+      "d": "Chat, polls and Q&A over WebSockets; promote participants to speakers when needed."
+    },
+    {
+      "h": "Global SFU cascading and TURN",
+      "d": "Regional SFUs linked together reduce latency; TURN relays handle firewalls and NAT."
+    }
+  ],
+  "decision": "SFU with simulcast for classes up to dozens of active participants; hybrid SFU-plus-CDN broadcast for large lectures; managed video platforms unless real-time video is core to your differentiation.",
+  "numbers": [
+    "Mesh bandwidth: 10 participants at 1.5 Mbit/s each means each uploads 13.5 Mbit/s, beyond many home connections. With an SFU, each uploads 1.5 Mbit/s (or a few layers via simulcast)."
+  ],
+  "pitfalls": [
+    "Mesh WebRTC for classroom-sized groups.",
+    "Sending full-resolution streams to every participant.",
+    "One SFU region for a global audience.",
+    "No TURN servers, so students behind strict firewalls can't connect."
+  ],
+  "followups": [
+    {
+      "q": "How do you record classes?",
+      "a": "A server-side recorder joins the session as a participant, composes streams and writes to object storage, then transcodes for playback."
+    },
+    {
+      "q": "Students on poor connections keep freezing. What helps?",
+      "a": "Simulcast lower layers, audio prioritisation, bandwidth estimation and letting students turn off incoming video."
+    },
+    {
+      "q": "Build or buy?",
+      "a": "Usually buy or use managed WebRTC platforms; building SFUs and global media infrastructure is a large specialist effort."
+    }
+  ],
+  "example": "An edtech startup using mesh WebRTC saw classes break above five students. Moving to a managed SFU with simulcast fixed small classes, and weekly guest lectures for 3,000 students moved to a hybrid model: three speakers on the SFU and the audience on low-latency HLS via CDN, with Q&A in chat.",
+  "related": [
+    "realtime-delivery-polling-websockets",
+    "adaptive-bitrate-cdn-live",
+    "decide-buy-build"
+  ],
+  "sources": [
+    {
+      "title": "WebRTC: Getting started (webrtc.org)",
+      "url": "https://webrtc.org/getting-started/overview"
+    },
+    {
+      "title": "MDN: WebRTC API",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Each device uploads its progress record when online; the latest upload wins.\"",
+    "why": "Last-write-wins lets an old device overwrite newer progress from another, and quiz attempts or scores can be lost or counted twice.",
+    "probe": "Recording events rather than states, mergeable progress, idempotent uploads, and server-authoritative grades.",
+    "say": "\"Devices record learning events with unique ids (lesson completed, answer submitted) offline and sync them idempotently; the server merges them into progress using rules like max or union, and grades are computed or confirmed server-side.\""
+  },
+  "thesis": "Offline multi-device sync works best when devices record immutable events rather than overwrite state. Events sync idempotently, merge with rules that are order-independent (union of completed lessons, best score), and anything that matters for grades is validated server-side.",
+  "pitch": "I'd store progress on devices as a local log of events: lesson opened, video watched to 80%, quiz attempt with answers, each with a unique id, device time and user id. When online, the app uploads unsynced events; the server dedupes by id and applies them. Progress is derived with merge rules that don't depend on arrival order: completed lessons are a union, so completion on either device counts; the furthest position in a video takes the max; quiz attempts are a list, and the score shown is the best or latest per policy. That's the CRDT idea in domain form. The server then sends the merged state back so every device converges. Grades that count toward certificates or courses are computed server-side from submitted answers, not trusted from the client. Content packages are versioned, so an answer to an old version of a quiz is graded against that version. And conflicts that can't merge automatically, such as two edited essay drafts, are kept as versions for the learner to choose.",
+  "points": [
+    {
+      "h": "Events, not overwrites",
+      "d": "Devices log immutable learning events with unique ids instead of replacing a progress record."
+    },
+    {
+      "h": "Idempotent sync",
+      "d": "Server dedupes by event id, so retries and repeated uploads are harmless."
+    },
+    {
+      "h": "Order-independent merge rules",
+      "d": "Union for completions, max for progress position, append for attempts; results don't depend on sync order."
+    },
+    {
+      "h": "Converge every device",
+      "d": "After merging, devices pull the merged state so they all agree."
+    },
+    {
+      "h": "Server-authoritative grading",
+      "d": "Scores that matter are computed or validated server-side from answers."
+    },
+    {
+      "h": "Versioned content",
+      "d": "Answers reference the content version they were made against."
+    },
+    {
+      "h": "Keep unresolvable conflicts",
+      "d": "Concurrent edits to free text are kept as versions for the user to resolve."
+    }
+  ],
+  "decision": "Event-based local logs with idempotent sync and domain merge rules for progress; server-side grading for anything with academic or certification weight.",
+  "numbers": [
+    "Storage sketch: a learner generating 200 events a day at ~200 bytes each is ~40 KB/day; a month offline is just over 1 MB, easy to store and sync."
+  ],
+  "pitfalls": [
+    "Last-write-wins progress records.",
+    "Trusting client-computed scores for certificates.",
+    "Server-assigned ids at upload, creating duplicates on retry.",
+    "Grading answers against a newer version of the quiz."
+  ],
+  "followups": [
+    {
+      "q": "A learner completes the same quiz offline on two devices. Which score counts?",
+      "a": "Both attempts are recorded; policy decides whether the best, first or latest counts, applied consistently on the server."
+    },
+    {
+      "q": "How do you handle device clock errors for streaks and deadlines?",
+      "a": "Use server receipt time for deadlines and validate device times against plausible ranges; streak logic should tolerate time zones and offline delays."
+    },
+    {
+      "q": "How much should be downloadable for offline use?",
+      "a": "Course content in versioned packages with explicit download choices, managing storage and expiry on the device."
+    }
+  ],
+  "example": "A language-learning app lost streaks and lesson completions when learners used a tablet offline and then a phone. Switching to event logs with union and max merge rules and server-side quiz scoring eliminated lost progress complaints within a release.",
+  "related": [
+    "offline-scanner-events-ordering",
+    "replication-topologies",
+    "clocks-ordering-lww",
+    "build-idempotency-write-api-clients"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann et al.: Local-first software",
+      "url": "https://www.inkandswitch.com/local-first/"
+    },
+    {
+      "title": "Shapiro et al.: Conflict-free replicated data types",
+      "url": "https://inria.hal.science/inria-00609399/document"
+    }
+  ]
+}

@@ -3297,6 +3297,142 @@
         "Consistency"
       ],
       "legacy": []
+    },
+    {
+      "id": "available-to-promise-inventory",
+      "cat": "domains",
+      "topic": "Supply chain & logistics",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Show customers accurate stock and delivery promises when inventory sits across many warehouses and stores.",
+      "also": [],
+      "a": [
+        "Available-to-promise (ATP) is not on-hand stock. It's sellable quantity per location after reservations and safety buffers, plus inbound supply that arrives in time, filtered by locations that can meet the promised date. Orders reserve against specific locations, and physical counts continually correct the numbers."
+      ],
+      "tags": [
+        "Consistency",
+        "Databases"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "offline-scanner-events-ordering",
+      "cat": "domains",
+      "topic": "Supply chain & logistics",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Warehouse scanners and delivery devices go offline, then upload events hours later and out of order. How do you keep shipment state correct?",
+      "also": [],
+      "a": [
+        "Edge devices produce events offline that arrive late, duplicated and out of order. Give every event a unique id and device time and sequence, ingest idempotently, derive current state from the ordered event history with a state machine that accepts late events, and flag genuine conflicts for review."
+      ],
+      "tags": [
+        "Messaging",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "partner-integrations-reconcile",
+      "cat": "domains",
+      "topic": "Supply chain & logistics",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "You integrate with dozens of carriers and suppliers via APIs, files and EDI. How do you keep data flowing and correct?",
+      "also": [],
+      "a": [
+        "Partner integrations are unreliable, heterogeneous and slow to change. Isolate them behind an integration layer with a canonical internal model, per-partner adapters, durable asynchronous delivery, raw message archives, monitoring per partner, and regular reconciliation to catch what fell through the cracks."
+      ],
+      "tags": [
+        "Messaging",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "route-optimisation-batch-realtime",
+      "cat": "domains",
+      "topic": "Supply chain & logistics",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Plan delivery routes for thousands of drivers each day, and adjust when things change during the day.",
+      "also": [],
+      "a": [
+        "Route optimisation is an NP-hard problem solved with heuristics under time limits. Plan in batch before the day starts, partitioned by region, then repair routes incrementally as orders, traffic and failures change, preferring stability for drivers over theoretical optimality."
+      ],
+      "tags": [
+        "Scaling",
+        "Architecture"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "exam-deadline-submission-spike",
+      "cat": "domains",
+      "topic": "Edtech",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Thousands of students submit an exam or assignment in the last minute before the deadline. How do you make sure no submission is lost?",
+      "also": [],
+      "a": [
+        "Deadline spikes are predictable and extreme. Make the submit path a tiny, durable, timestamped write that can absorb the burst, defer all heavy processing to queues, autosave work continuously so nothing is lost, and define fair handling of late or failed submissions caused by the platform."
+      ],
+      "tags": [
+        "Scaling",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "proctoring-time-integrity",
+      "cat": "domains",
+      "topic": "Edtech",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Run timed online exams fairly: enforce time limits, randomise questions and resist cheating.",
+      "also": [],
+      "a": [
+        "Exam integrity can't rely on the client. The server owns start and end times, delivers questions progressively from randomised pools, records answers as they're given, applies accommodations per student, and treats proctoring signals as evidence for human review."
+      ],
+      "tags": [
+        "Security",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "live-classes-scale",
+      "cat": "domains",
+      "topic": "Edtech",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design live online classes with interactive video for small groups and lectures for thousands.",
+      "also": [],
+      "a": [
+        "Real-time video architecture depends on group size and interactivity. Peer-to-peer works for two or three people; selective forwarding units (SFUs) handle interactive groups; broadcast via CDN-based streaming handles large audiences, with a few presenters interactive and everyone else watching with a few seconds of delay."
+      ],
+      "tags": [
+        "Scaling",
+        "Latency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "offline-progress-sync",
+      "cat": "domains",
+      "topic": "Edtech",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Learners use the app offline on multiple devices. How do you sync progress and grades without losing or corrupting data?",
+      "also": [],
+      "a": [
+        "Offline multi-device sync works best when devices record immutable events rather than overwrite state. Events sync idempotently, merge with rules that are order-independent (union of completed lessons, best score), and anything that matters for grades is validated server-side."
+      ],
+      "tags": [
+        "Consistency",
+        "APIs"
+      ],
+      "legacy": []
     }
   ]
 }

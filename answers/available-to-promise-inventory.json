@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Sum on-hand quantity across all locations and show that as available.\"",
+    "why": "On-hand stock includes units already reserved, damaged, in transit or in locations that can't ship in time, and counts drift from reality. Promising from raw totals oversells and breaks delivery dates.",
+    "probe": "Available-to-promise calculations, reservations, safety stock, sourcing rules and reconciliation with physical counts.",
+    "say": "\"Available-to-promise = on hand − reserved − safety stock, plus inbound that arrives in time, per location; orders reserve against a specific location chosen by sourcing rules; and cycle counts reconcile system stock with physical reality.\""
+  },
+  "thesis": "Available-to-promise (ATP) is not on-hand stock. It's sellable quantity per location after reservations and safety buffers, plus inbound supply that arrives in time, filtered by locations that can meet the promised date. Orders reserve against specific locations, and physical counts continually correct the numbers.",
+  "pitch": "I'd keep inventory per SKU per location with separate quantities: on hand, reserved for open orders, damaged or held, and inbound with expected dates. ATP for a location is on hand minus reserved minus safety stock, plus inbound arriving before the promise date. A sourcing engine picks which location fulfils an order, based on ATP, distance or delivery time, cost and capacity, and the order reserves units at that location atomically, so two orders can't reserve the same last unit. Customer-facing availability is a projection aggregated across eligible locations for the customer's region, cached and updated from inventory events, and treated as an estimate; the reservation is the real check. Safety stock absorbs inaccuracies from shrinkage, mis-scans and delays. Cycle counts compare physical and system stock and post adjustments, and adjustments feed back into safety stock settings. Store inventory used for online orders, like ship-from-store or pickup, needs bigger buffers because shelf stock is less reliable.",
+  "points": [
+    {
+      "h": "Separate quantity buckets",
+      "d": "On hand, reserved, held or damaged, and inbound with dates, per SKU per location."
+    },
+    {
+      "h": "ATP formula",
+      "d": "On hand − reserved − safety stock + inbound arriving in time, per location and date."
+    },
+    {
+      "h": "Sourcing rules",
+      "d": "Choose fulfilment locations by availability, delivery promise, cost, capacity and splitting policy."
+    },
+    {
+      "h": "Atomic reservations per location",
+      "d": "Reserve units at the chosen location with conditional updates; release on cancellation."
+    },
+    {
+      "h": "Customer view is a projection",
+      "d": "Aggregated, cached availability for display; the reservation at checkout is authoritative."
+    },
+    {
+      "h": "Safety stock for inaccuracy",
+      "d": "Buffers sized by location type and historical count accuracy; larger for store shelves."
+    },
+    {
+      "h": "Cycle counts and adjustments",
+      "d": "Physical counts reconcile system stock, with adjustments logged and analysed."
+    }
+  ],
+  "decision": "Compute ATP per location with reservations and buffers, aggregate for display, reserve authoritatively at checkout, and continuously reconcile with physical counts.",
+  "numbers": [
+    "Example: on hand 50, reserved 12, safety stock 5, inbound 30 arriving in 3 days. ATP today = 33; ATP for delivery in 5 days = 63."
+  ],
+  "pitfalls": [
+    "Displaying raw on-hand totals as available.",
+    "No per-location reservations, so the same unit is promised twice.",
+    "Ignoring inbound timing in delivery promises.",
+    "Never reconciling with physical counts."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle an order that has to split across warehouses?",
+      "a": "The sourcing engine decides whether splitting is allowed by cost and policy, reserving at each location and creating separate shipments."
+    },
+    {
+      "q": "How fresh must the displayed availability be?",
+      "a": "Near-real-time for low-stock items, with thresholds like 'only 3 left' derived conservatively; precise numbers matter less than not overselling."
+    },
+    {
+      "q": "What if a store's stock is wrong when the picker arrives?",
+      "a": "Re-source the order to another location automatically, adjust the store's inventory, and update safety stock if it happens often."
+    }
+  ],
+  "example": "A retailer offering ship-from-store had 8% of online orders fail at picking because shelf stock was wrong. Adding store-specific safety stock based on count accuracy, per-location reservations and automatic re-sourcing cut failed picks to under 1%.",
+  "related": [
+    "flash-sale-never-oversell",
+    "offline-scanner-events-ordering",
+    "catalog-search-freshness",
+    "reconcile-divergent-data-across-systems"
+  ],
+  "sources": [
+    {
+      "title": "APICS / ASCM: Available-to-promise (dictionary definition)",
+      "url": "https://www.ascm.org/learning-development/certifications-credentials/dictionary/"
+    }
+  ]
+}

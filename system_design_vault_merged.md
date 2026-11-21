@@ -4019,7 +4019,7 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Example:** After splitting the payments monolith, a staff engineer compared DORA metrics for the payments teams against two unmigrated teams over the same quarter: lead time dropped from 6 days to 2, deploy frequency tripled, and incidents were flat. The write-up also reported a 22% infrastructure cost increase, which led to rightsizing work.
    - **Sources:** [DORA: Software delivery performance metrics](https://dora.dev/guides/dora-metrics-four-keys/)
 
-## Domain Traps (16)
+## Domain Traps (24)
 
 ### Fintech & lending
 147. **Integrate a card payment provider: authorise, capture, refund, with webhooks. What does your payment state machine look like?** [mine · Advanced · Transactions, Reliability]
@@ -4444,8 +4444,216 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Sources:** [Uber engineering: H3, Uber's hexagonal hierarchical spatial index](https://www.uber.com/blog/h3/)
 
 ### Supply chain & logistics
+163. **Show customers accurate stock and delivery promises when inventory sits across many warehouses and stores.** [mine · Advanced · Consistency, Databases]
+   - **Trap:** "Sum on-hand quantity across all locations and show that as available." — _Why it fails:_ On-hand stock includes units already reserved, damaged, in transit or in locations that can't ship in time, and counts drift from reality. Promising from raw totals oversells and breaks delivery dates. — _Probing:_ Available-to-promise calculations, reservations, safety stock, sourcing rules and reconciliation with physical counts. — _Say:_ "Available-to-promise = on hand − reserved − safety stock, plus inbound that arrives in time, per location; orders reserve against a specific location chosen by sourcing rules; and cycle counts reconcile system stock with physical reality."
+   - **Thesis:** Available-to-promise (ATP) is not on-hand stock. It's sellable quantity per location after reservations and safety buffers, plus inbound supply that arrives in time, filtered by locations that can meet the promised date. Orders reserve against specific locations, and physical counts continually correct the numbers.
+   - **60-second answer:** I'd keep inventory per SKU per location with separate quantities: on hand, reserved for open orders, damaged or held, and inbound with expected dates. ATP for a location is on hand minus reserved minus safety stock, plus inbound arriving before the promise date. A sourcing engine picks which location fulfils an order, based on ATP, distance or delivery time, cost and capacity, and the order reserves units at that location atomically, so two orders can't reserve the same last unit. Customer-facing availability is a projection aggregated across eligible locations for the customer's region, cached and updated from inventory events, and treated as an estimate; the reservation is the real check. Safety stock absorbs inaccuracies from shrinkage, mis-scans and delays. Cycle counts compare physical and system stock and post adjustments, and adjustments feed back into safety stock settings. Store inventory used for online orders, like ship-from-store or pickup, needs bigger buffers because shelf stock is less reliable.
+   - **Key points:**
+     1. **Separate quantity buckets.** On hand, reserved, held or damaged, and inbound with dates, per SKU per location.
+     2. **ATP formula.** On hand − reserved − safety stock + inbound arriving in time, per location and date.
+     3. **Sourcing rules.** Choose fulfilment locations by availability, delivery promise, cost, capacity and splitting policy.
+     4. **Atomic reservations per location.** Reserve units at the chosen location with conditional updates; release on cancellation.
+     5. **Customer view is a projection.** Aggregated, cached availability for display; the reservation at checkout is authoritative.
+     6. **Safety stock for inaccuracy.** Buffers sized by location type and historical count accuracy; larger for store shelves.
+     7. **Cycle counts and adjustments.** Physical counts reconcile system stock, with adjustments logged and analysed.
+   - **When to choose what:** Compute ATP per location with reservations and buffers, aggregate for display, reserve authoritatively at checkout, and continuously reconcile with physical counts.
+   - **Numbers:**
+     - Example: on hand 50, reserved 12, safety stock 5, inbound 30 arriving in 3 days. ATP today = 33; ATP for delivery in 5 days = 63.
+   - **Pitfalls:**
+     - Displaying raw on-hand totals as available.
+     - No per-location reservations, so the same unit is promised twice.
+     - Ignoring inbound timing in delivery promises.
+     - Never reconciling with physical counts.
+   - **Follow-ups:**
+     - _How do you handle an order that has to split across warehouses?_ The sourcing engine decides whether splitting is allowed by cost and policy, reserving at each location and creating separate shipments.
+     - _How fresh must the displayed availability be?_ Near-real-time for low-stock items, with thresholds like 'only 3 left' derived conservatively; precise numbers matter less than not overselling.
+     - _What if a store's stock is wrong when the picker arrives?_ Re-source the order to another location automatically, adjust the store's inventory, and update safety stock if it happens often.
+   - **Example:** A retailer offering ship-from-store had 8% of online orders fail at picking because shelf stock was wrong. Adding store-specific safety stock based on count accuracy, per-location reservations and automatic re-sourcing cut failed picks to under 1%.
+   - **Sources:** [APICS / ASCM: Available-to-promise (dictionary definition)](https://www.ascm.org/learning-development/certifications-credentials/dictionary/)
+164. **Warehouse scanners and delivery devices go offline, then upload events hours later and out of order. How do you keep shipment state correct?** [mine · Advanced · Messaging, Consistency]
+   - **Trap:** "Apply events in the order they arrive at the server." — _Why it fails:_ A 'delivered' scan uploaded before an earlier 'out for delivery' scan would move the package backwards, and duplicates from retried uploads double-apply. — _Probing:_ Device-side ids and timestamps, idempotent ingestion, state machines that tolerate reordering, and conflict handling. — _Say:_ "Every scan gets a device-generated unique id, a device timestamp and sequence; ingestion is idempotent; shipment state is derived from all events ordered by event time with valid transitions, so late events are slotted into history rather than overwriting newer state."
+   - **Thesis:** Edge devices produce events offline that arrive late, duplicated and out of order. Give every event a unique id and device time and sequence, ingest idempotently, derive current state from the ordered event history with a state machine that accepts late events, and flag genuine conflicts for review.
+   - **60-second answer:** Each scanner creates events locally with a UUID, the device's timestamp, a per-device sequence number, the user, location and payload, stores them durably on the device, and uploads when connected, retrying until acknowledged. The server dedupes by event id, so retries are harmless. For each shipment, events are stored in an append-only log, and current status is computed by ordering them by event time, with sequence numbers to order events from the same device and to detect gaps. A state machine defines valid progressions; a late 'out for delivery' event that's older than an existing 'delivered' event goes into history but doesn't move status backwards. Device clocks drift, so I'd correct them using the offset between device time and server time at upload, and treat implausible timestamps with suspicion. Genuine conflicts, like 'delivered' at two different addresses, go to an exceptions queue. Downstream consumers receive status-change events only when derived status actually changes.
+   - **Key points:**
+     1. **Device-generated ids and sequences.** UUID per event plus per-device sequence numbers for dedupe, ordering and gap detection.
+     2. **Durable local queue and retry.** Devices store events until the server acknowledges them, surviving reboots and dead zones.
+     3. **Idempotent ingestion.** Dedupe on event id so repeated uploads don't double-apply.
+     4. **Derive state from ordered history.** Order events by event time (and device sequence) and compute status; don't overwrite state with whatever arrives last.
+     5. **Tolerant state machine.** Late events earlier than the current state are recorded but don't regress status.
+     6. **Clock correction.** Estimate device clock offset at upload and adjust timestamps; flag implausible values.
+     7. **Exceptions for real conflicts.** Contradictory events (two delivery locations) go to human review.
+   - **When to choose what:** Event-sourced shipment history with idempotent ingestion and event-time ordering for edge-generated data; status derived, never blindly overwritten.
+   - **Numbers:**
+     - Example: a courier offline for 3 hours uploads 120 scans at once; with event ids and ordering by device time, the shipment timeline is rebuilt correctly in one pass.
+   - **Pitfalls:**
+     - Last-write-wins on arrival order.
+     - Server-generated ids at upload, so retries create duplicates.
+     - Trusting device clocks blindly.
+     - Status regressions visible to customers ('delivered' then 'out for delivery').
+   - **Follow-ups:**
+     - _How do you notify customers if status changes late?_ Only notify on forward status changes, and suppress notifications for events far in the past (just update the timeline).
+     - _How do you detect a lost event?_ Gaps in a device's sequence numbers indicate missing events; request a re-upload or flag for investigation.
+     - _How does this relate to CRDTs?_ Similar goal of convergence regardless of order; here a domain state machine over an ordered log provides it.
+   - **Example:** A parcel carrier's tracking pages showed packages moving backwards when couriers' devices synced late. Moving to device-generated ids, an append-only event log per parcel and status derived by event time removed regressions and duplicate 'delivered' notifications.
+   - **Sources:** [Martin Kleppmann et al.: Local-first software](https://www.inkandswitch.com/local-first/)
+165. **You integrate with dozens of carriers and suppliers via APIs, files and EDI. How do you keep data flowing and correct?** [mine · Intermediate · Messaging, Reliability]
+   - **Trap:** "Build a direct integration from our order service to each partner's API." — _Why it fails:_ Each partner has different formats, reliability and protocols; direct coupling spreads partner quirks through core systems, and failures or format changes in one partner break your flows. Without reconciliation, missing messages go unnoticed. — _Probing:_ An integration layer with canonical models, adapters per partner, durable queues, monitoring and reconciliation. — _Say:_ "An integration layer translating each partner's format to a canonical model, with adapters per partner, durable queues and retries, raw message archives, per-partner monitoring, and reconciliation of what was sent and acknowledged against what partners report."
+   - **Thesis:** Partner integrations are unreliable, heterogeneous and slow to change. Isolate them behind an integration layer with a canonical internal model, per-partner adapters, durable asynchronous delivery, raw message archives, monitoring per partner, and regular reconciliation to catch what fell through the cracks.
+   - **60-second answer:** Core services publish and consume canonical events like ShipmentCreated or InventoryUpdated. An integration layer has an adapter per partner that translates to and from their format: REST, SOAP, SFTP files, EDI documents. Outbound messages go through durable queues with retries and backoff, idempotency keys where partners support them, and per-partner rate limits. Inbound messages are archived raw before parsing, so failures can be replayed after fixing a parser, and parsing errors go to a dead-letter queue with alerts. Each partner has dashboards for volume, latency, error rate and acknowledgement gaps, because a partner silently sending nothing looks like a quiet day. Reconciliation compares our records with partner reports: shipments we sent versus those they acknowledged, inventory we think a supplier has versus their file. And I'd version adapters independently, test them against recorded partner messages, and onboard new partners through configuration where formats are standard.
+   - **Key points:**
+     1. **Canonical internal model.** Core systems speak one data model; partner formats never leak into them.
+     2. **Adapter per partner.** Translation, protocol handling and partner quirks isolated and independently deployable.
+     3. **Durable asynchronous delivery.** Queues with retries, backoff, idempotency and per-partner rate limits.
+     4. **Archive raw messages.** Store original inbound and outbound payloads for audit, debugging and replay after parser fixes.
+     5. **Per-partner observability.** Volume, error rates, latency and missing acknowledgements, with alerts for silence as well as errors.
+     6. **Reconciliation.** Periodic comparison of what each side believes happened, with exception handling.
+     7. **Contract tests.** Recorded partner messages as test fixtures, catching breaking changes before deploys.
+   - **When to choose what:** A dedicated integration layer (or integration platform) for all partners, canonical events internally, and reconciliation as a standard control for every partner relationship.
+   - **Numbers:**
+     - Monitoring rule example: alert if a partner that normally sends 500 status updates an hour sends fewer than 50 in an hour during business hours.
+   - **Pitfalls:**
+     - Core services calling partner APIs directly.
+     - No raw message archive, so bad files can't be reprocessed.
+     - Monitoring only errors and missing silent outages.
+     - No reconciliation, so lost messages are discovered by customers.
+   - **Follow-ups:**
+     - _A partner sends a file with a format change and half the records fail. What happens?_ Raw file archived, failures in the DLQ with alerts, adapter fixed, then the archived file replayed; the partner is contacted about the change.
+     - _How do you onboard a new carrier quickly?_ Reuse standard adapters (EDI, common APIs) configured per partner, with a certification checklist and test messages.
+     - _Build or buy integration tooling?_ Buy or use integration platforms for standard protocols like EDI and AS2; build adapters for strategic partners with custom APIs.
+   - **Example:** A logistics company found that 2% of shipments had never been acknowledged by one carrier, discovered only through customer complaints. An integration layer with per-carrier acknowledgement monitoring and daily reconciliation now catches such gaps within hours, and archived raw messages allow replay after fixes.
+   - **Sources:** [Enterprise Integration Patterns: Canonical data model](https://www.enterpriseintegrationpatterns.com/patterns/messaging/CanonicalDataModel.html)
+166. **Plan delivery routes for thousands of drivers each day, and adjust when things change during the day.** [mine · Advanced · Scaling, Architecture]
+   - **Trap:** "Compute the optimal routes with a solver every time something changes." — _Why it fails:_ Vehicle routing is NP-hard; optimal solutions for thousands of stops take far too long, and recomputing everything on each change disrupts drivers who've already started. You need good-enough heuristics and incremental repair. — _Probing:_ Batch planning with heuristics and time limits, incremental real-time repair, constraints, and stability for drivers. — _Say:_ "Plan overnight with a heuristic solver under a time limit across partitioned regions, then during the day repair routes incrementally for new orders, cancellations and delays, minimising disruption to drivers already on the road."
+   - **Thesis:** Route optimisation is an NP-hard problem solved with heuristics under time limits. Plan in batch before the day starts, partitioned by region, then repair routes incrementally as orders, traffic and failures change, preferring stability for drivers over theoretical optimality.
+   - **60-second answer:** Before the day, I'd run batch planning: orders, vehicles, capacities, time windows, driver shifts and road-network travel times feed a vehicle routing solver, such as OR-Tools or a commercial engine, using heuristics like savings or local search with a time limit, partitioned by depot or region so each solves in minutes. Results are routes and estimated times per stop, published to drivers. During the day things change: new same-day orders, cancellations, a vehicle breakdown, traffic. Re-solving everything would reshuffle every driver's day, so I'd use incremental repair: insert new orders into the route with the cheapest feasible insertion, rebalance only affected routes, and lock stops a driver is already heading to. ETAs update from live locations and traffic, and customers get updated windows. I'd measure plan quality with distance, on-time rate and utilisation, and compare solver changes on historical days before rolling them out.
+   - **Key points:**
+     1. **NP-hard, so heuristics.** Exact optimisation doesn't scale; use metaheuristics with time limits and accept near-optimal plans.
+     2. **Model real constraints.** Vehicle capacity, time windows, driver hours, skills, traffic-dependent travel times.
+     3. **Partition the problem.** Solve per depot or region in parallel to keep solve times bounded.
+     4. **Batch plan before the day.** Overnight or early-morning planning with the full order set produces the baseline routes.
+     5. **Incremental repair during the day.** Insert, remove and rebalance locally for changes rather than full re-solves.
+     6. **Stability for drivers.** Lock started and next stops; limit how much a driver's route can change at once.
+     7. **Measure and test on history.** Evaluate solver changes against historical days on distance, on-time rate and utilisation.
+   - **When to choose what:** Heuristic batch planning plus incremental real-time repair, with constraints modelled explicitly and stability rules for drivers. Use proven solver libraries rather than writing one.
+   - **Numbers:**
+     - Scale example: 3,000 drivers and 60,000 stops split across 30 depots is about 2,000 stops per depot problem, solvable to good quality in minutes with metaheuristics.
+   - **Pitfalls:**
+     - Seeking optimal solutions and missing the planning deadline.
+     - Full re-solves on every change, confusing drivers.
+     - Straight-line distances instead of road travel times.
+     - Ignoring driver hours and breaks, producing infeasible plans.
+   - **Follow-ups:**
+     - _A vehicle breaks down mid-day. What happens?_ Remaining stops are reassigned to nearby drivers by insertion heuristics, respecting capacity and time windows, and customers get updated ETAs.
+     - _How do you handle traffic?_ Time-dependent travel times from historical data for planning and live traffic for re-estimating ETAs during the day.
+     - _Build or buy the solver?_ Use libraries like OR-Tools or commercial solvers; invest your effort in data quality, constraints and integration.
+   - **Example:** A grocery delivery company re-solved all routes every 15 minutes, so drivers' stop orders changed constantly. Switching to an early-morning batch plan with locked next stops and insertion-based repair for new orders cut driver complaints and improved on-time delivery by 6%.
+   - **Sources:** [Google OR-Tools: Vehicle routing](https://developers.google.com/optimization/routing)
 
 ### Edtech
+167. **Thousands of students submit an exam or assignment in the last minute before the deadline. How do you make sure no submission is lost?** [mine · Intermediate · Scaling, Reliability]
+   - **Trap:** "Autoscale the servers before the deadline." — _Why it fails:_ The spike is concentrated in seconds, autoscaling reacts in minutes, and if the submit path depends on slow processing (file scanning, grading, plagiarism checks) requests time out and students lose work or miss the deadline unfairly. — _Probing:_ Fast durable acceptance, server-side timestamps, deferring processing, autosave, and fairness for failures. — _Say:_ "Make submission a fast, durable write: accept and timestamp on receipt, store the file directly to object storage, queue grading and checks for later, autosave drafts continuously, and have a policy for students hit by our failures."
+   - **Thesis:** Deadline spikes are predictable and extreme. Make the submit path a tiny, durable, timestamped write that can absorb the burst, defer all heavy processing to queues, autosave work continuously so nothing is lost, and define fair handling of late or failed submissions caused by the platform.
+   - **60-second answer:** I'd design the submit path to do as little as possible: authenticate, write a submission record with a server-side receipt timestamp, and store any file via a presigned upload directly to object storage. Plagiarism checks, virus scans, conversion and grading run asynchronously from a queue after the deadline. Students get an immediate receipt with the timestamp, so there's no ambiguity about whether they submitted on time. Autosave saves drafts every few seconds during the exam, so even a failed final submit leaves recent work recorded, and the deadline can auto-submit the last saved draft. Capacity is pre-provisioned for the known deadline rather than relying on autoscaling, and load tested at several times the expected peak. Deadlines themselves can be staggered by course or section where possible. If the platform fails, logs show who tried to submit and when, so instructors can accept submissions attempted before the deadline.
+   - **Key points:**
+     1. **Minimal, durable submit path.** Auth, record, timestamp; nothing slow in the request.
+     2. **Server-side receipt timestamps.** The server's receipt time decides on-time status, shown to the student immediately.
+     3. **Direct-to-storage uploads.** Files go to object storage via presigned URLs, keeping app servers out of the bandwidth path.
+     4. **Defer heavy processing.** Scanning, plagiarism checks and grading run from queues after acceptance.
+     5. **Autosave and auto-submit.** Frequent draft saves and automatic submission of the latest draft at the deadline.
+     6. **Pre-provision for known peaks.** Scale ahead of scheduled deadlines and load test at multiples of expected volume.
+     7. **Fair failure policy.** Logged submission attempts let instructors accept work that our systems failed to receive in time.
+   - **When to choose what:** Fast durable acceptance with receipts, async processing, autosave and pre-provisioned capacity; staggered deadlines where the institution allows.
+   - **Numbers:**
+     - Burst sizing: 20,000 students with 40% submitting in the final 60 seconds is about 130 submissions per second, with file uploads; trivial if submission is a small write, risky if each runs a 10-second plagiarism check inline.
+   - **Pitfalls:**
+     - Synchronous plagiarism checks or file conversion in the submit request.
+     - Client-side timestamps deciding lateness.
+     - Relying on autoscaling for a 60-second spike.
+     - No autosave, so a failed submit loses the whole exam.
+   - **Follow-ups:**
+     - _How do you handle a student whose upload is still in progress at the deadline?_ Record when the upload started; accept it if initiated before the deadline and completed within a grace period.
+     - _What if the database is slow at peak?_ Buffer submission records in a durable queue that writes to the database asynchronously, while still giving receipts.
+     - _How do you prove a submission was received?_ Signed receipt with timestamp and content hash shown to the student and logged.
+   - **Example:** A university's assignment system timed out at deadlines because plagiarism checks ran inline. Moving checks to a queue, adding presigned uploads, autosave every 10 seconds, and pre-scaling an hour before major deadlines eliminated lost submissions, and receipts ended disputes about timing.
+   - **Sources:** [AWS S3: Sharing objects with presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html)
+168. **Run timed online exams fairly: enforce time limits, randomise questions and resist cheating.** [mine · Intermediate · Security, Consistency]
+   - **Trap:** "The browser runs a countdown timer and submits when it reaches zero." — _Why it fails:_ Client-side timers and checks can be manipulated, and all answers being sent at the start lets students see the whole exam. Enforcement must be server-side. — _Probing:_ Server-authoritative timing, per-question delivery, randomisation, integrity signals and accommodations. — _Say:_ "The server owns the exam clock and validates every answer's time, questions are served per section from randomised pools, answers are saved server-side as students go, and integrity signals are flagged for review rather than auto-failing students."
+   - **Thesis:** Exam integrity can't rely on the client. The server owns start and end times, delivers questions progressively from randomised pools, records answers as they're given, applies accommodations per student, and treats proctoring signals as evidence for human review.
+   - **60-second answer:** When a student starts, the server records the start time and computes their deadline, including any accommodations like extra time, and rejects answers after it, with a small grace period for network latency. The client timer is just a display synced to server time. Questions come from pools with randomised selection and ordering per student, served section by section rather than all at once, so the full exam isn't exposed. Answers are saved server-side as the student moves, which also protects against crashes. Integrity measures range from lockdown browsers and webcam proctoring to lighter signals: tab switching, copy and paste, unusual answer timing, identical wrong answers across students. Those generate flags reviewed by humans, because automated proctoring has false positives and accessibility issues. Reconnection is handled gracefully: a student who drops can resume with their remaining time, since the deadline is server-side. And audit logs record every event for disputes.
+   - **Key points:**
+     1. **Server-owned clock.** Start time and deadline stored server-side; answers after the deadline (plus small grace) are rejected.
+     2. **Accommodations per student.** Extra time or breaks configured per student and applied by the server.
+     3. **Progressive question delivery.** Serve questions or sections as needed, not the whole exam up front.
+     4. **Randomised pools.** Different questions and orderings per student reduce answer sharing.
+     5. **Continuous server-side saving.** Each answer saved as given; crashes and reconnects lose nothing.
+     6. **Integrity signals for review.** Tab switches, paste events, timing anomalies and answer similarity flagged for humans, not auto-penalised.
+     7. **Audit trail.** Every start, answer, reconnect and flag logged for disputes and appeals.
+   - **When to choose what:** Server-authoritative timing and progressive delivery for all timed exams; proctoring intensity chosen by stakes, with human review of flags and attention to accessibility and privacy.
+   - **Numbers:**
+     - Grace period example: accept answers up to 10–30 seconds after the server deadline to absorb network latency, logged as late-but-accepted.
+   - **Pitfalls:**
+     - Trusting client timers or client-side submission logic.
+     - Sending all questions at exam start.
+     - Auto-failing students on proctoring flags.
+     - No resume path after disconnection.
+   - **Follow-ups:**
+     - _A student loses connection for 5 minutes. What happens?_ Their server-side deadline keeps running unless policy pauses it; on reconnect they resume with answers intact and remaining time shown.
+     - _How do you detect collusion?_ Compare answer patterns, especially identical wrong answers and timing, across students in the same exam, flagging pairs for review.
+     - _What about privacy concerns with webcam proctoring?_ Use the least invasive method that fits the exam's stakes, minimise retention, and get informed consent.
+   - **Example:** An online course platform found students changing system clocks to extend client-side timers. Moving the deadline server-side, serving questions per section from randomised pools, and flagging identical wrong-answer patterns for instructor review ended the timer exploit and surfaced two collusion rings.
+   - **Sources:** [OWASP: Business logic security (time and sequence validation)](https://owasp.org/www-community/vulnerabilities/Business_logic_vulnerability)
+169. **Design live online classes with interactive video for small groups and lectures for thousands.** [mine · Advanced · Scaling, Latency]
+   - **Trap:** "Use peer-to-peer WebRTC so every participant connects to every other." — _Why it fails:_ Mesh WebRTC uploads each participant's stream to every other participant, which collapses beyond a handful of people. Large audiences need servers and different protocols. — _Probing:_ SFU vs MCU vs broadcast, latency tiers, simulcast, and scaling across regions. — _Say:_ "Small interactive classes use an SFU, which forwards streams with simulcast so clients receive what their bandwidth allows; large lectures use a few interactive presenters on the SFU and stream to the audience via low-latency HLS or a CDN, with chat and Q&A over a separate channel."
+   - **Thesis:** Real-time video architecture depends on group size and interactivity. Peer-to-peer works for two or three people; selective forwarding units (SFUs) handle interactive groups; broadcast via CDN-based streaming handles large audiences, with a few presenters interactive and everyone else watching with a few seconds of delay.
+   - **60-second answer:** In a mesh, each participant sends their video to everyone else, so upload bandwidth grows with group size and fails beyond about four people. An SFU receives each participant's stream once and forwards it to others without decoding, which scales interactive sessions to dozens of participants. With simulcast, senders publish several qualities, and the SFU forwards each receiver the layer their bandwidth and screen allow. An MCU mixes streams into one, saving client bandwidth but costing server CPU and latency. For a lecture with thousands, I'd keep the teacher and a few speakers on an SFU at sub-second latency, and stream the composed output to the audience via low-latency HLS, DASH or WebRTC broadcast through a CDN, at a few seconds of delay, which is fine for watching. Interaction from the audience goes through chat, polls and raise-hand over WebSockets, and promoting a student to speaker moves them onto the SFU. SFUs run in multiple regions with cascading between them, TURN servers handle restrictive networks, and recording is a server-side composition.
+   - **Key points:**
+     1. **Mesh limits.** Each sender uploads one stream per receiver; practical only for very small groups.
+     2. **SFU for interactive groups.** Forwards streams without transcoding; scales to dozens of active participants with modest server CPU.
+     3. **Simulcast and adaptive layers.** Senders publish multiple qualities; the SFU picks per receiver based on bandwidth and layout.
+     4. **MCU trade-offs.** Mixes into one stream, easing weak clients but adding server cost and latency.
+     5. **Broadcast for large audiences.** Few interactive presenters, mass audience via CDN streaming with seconds of latency.
+     6. **Separate interaction channel.** Chat, polls and Q&A over WebSockets; promote participants to speakers when needed.
+     7. **Global SFU cascading and TURN.** Regional SFUs linked together reduce latency; TURN relays handle firewalls and NAT.
+   - **When to choose what:** SFU with simulcast for classes up to dozens of active participants; hybrid SFU-plus-CDN broadcast for large lectures; managed video platforms unless real-time video is core to your differentiation.
+   - **Numbers:**
+     - Mesh bandwidth: 10 participants at 1.5 Mbit/s each means each uploads 13.5 Mbit/s, beyond many home connections. With an SFU, each uploads 1.5 Mbit/s (or a few layers via simulcast).
+   - **Pitfalls:**
+     - Mesh WebRTC for classroom-sized groups.
+     - Sending full-resolution streams to every participant.
+     - One SFU region for a global audience.
+     - No TURN servers, so students behind strict firewalls can't connect.
+   - **Follow-ups:**
+     - _How do you record classes?_ A server-side recorder joins the session as a participant, composes streams and writes to object storage, then transcodes for playback.
+     - _Students on poor connections keep freezing. What helps?_ Simulcast lower layers, audio prioritisation, bandwidth estimation and letting students turn off incoming video.
+     - _Build or buy?_ Usually buy or use managed WebRTC platforms; building SFUs and global media infrastructure is a large specialist effort.
+   - **Example:** An edtech startup using mesh WebRTC saw classes break above five students. Moving to a managed SFU with simulcast fixed small classes, and weekly guest lectures for 3,000 students moved to a hybrid model: three speakers on the SFU and the audience on low-latency HLS via CDN, with Q&A in chat.
+   - **Sources:** [WebRTC: Getting started (webrtc.org)](https://webrtc.org/getting-started/overview); [MDN: WebRTC API](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API)
+170. **Learners use the app offline on multiple devices. How do you sync progress and grades without losing or corrupting data?** [mine · Intermediate · Consistency, APIs]
+   - **Trap:** "Each device uploads its progress record when online; the latest upload wins." — _Why it fails:_ Last-write-wins lets an old device overwrite newer progress from another, and quiz attempts or scores can be lost or counted twice. — _Probing:_ Recording events rather than states, mergeable progress, idempotent uploads, and server-authoritative grades. — _Say:_ "Devices record learning events with unique ids (lesson completed, answer submitted) offline and sync them idempotently; the server merges them into progress using rules like max or union, and grades are computed or confirmed server-side."
+   - **Thesis:** Offline multi-device sync works best when devices record immutable events rather than overwrite state. Events sync idempotently, merge with rules that are order-independent (union of completed lessons, best score), and anything that matters for grades is validated server-side.
+   - **60-second answer:** I'd store progress on devices as a local log of events: lesson opened, video watched to 80%, quiz attempt with answers, each with a unique id, device time and user id. When online, the app uploads unsynced events; the server dedupes by id and applies them. Progress is derived with merge rules that don't depend on arrival order: completed lessons are a union, so completion on either device counts; the furthest position in a video takes the max; quiz attempts are a list, and the score shown is the best or latest per policy. That's the CRDT idea in domain form. The server then sends the merged state back so every device converges. Grades that count toward certificates or courses are computed server-side from submitted answers, not trusted from the client. Content packages are versioned, so an answer to an old version of a quiz is graded against that version. And conflicts that can't merge automatically, such as two edited essay drafts, are kept as versions for the learner to choose.
+   - **Key points:**
+     1. **Events, not overwrites.** Devices log immutable learning events with unique ids instead of replacing a progress record.
+     2. **Idempotent sync.** Server dedupes by event id, so retries and repeated uploads are harmless.
+     3. **Order-independent merge rules.** Union for completions, max for progress position, append for attempts; results don't depend on sync order.
+     4. **Converge every device.** After merging, devices pull the merged state so they all agree.
+     5. **Server-authoritative grading.** Scores that matter are computed or validated server-side from answers.
+     6. **Versioned content.** Answers reference the content version they were made against.
+     7. **Keep unresolvable conflicts.** Concurrent edits to free text are kept as versions for the user to resolve.
+   - **When to choose what:** Event-based local logs with idempotent sync and domain merge rules for progress; server-side grading for anything with academic or certification weight.
+   - **Numbers:**
+     - Storage sketch: a learner generating 200 events a day at ~200 bytes each is ~40 KB/day; a month offline is just over 1 MB, easy to store and sync.
+   - **Pitfalls:**
+     - Last-write-wins progress records.
+     - Trusting client-computed scores for certificates.
+     - Server-assigned ids at upload, creating duplicates on retry.
+     - Grading answers against a newer version of the quiz.
+   - **Follow-ups:**
+     - _A learner completes the same quiz offline on two devices. Which score counts?_ Both attempts are recorded; policy decides whether the best, first or latest counts, applied consistently on the server.
+     - _How do you handle device clock errors for streaks and deadlines?_ Use server receipt time for deadlines and validate device times against plausible ranges; streak logic should tolerate time zones and offline delays.
+     - _How much should be downloadable for offline use?_ Course content in versioned packages with explicit download choices, managing storage and expiry on the device.
+   - **Example:** A language-learning app lost streaks and lesson completions when learners used a tablet offline and then a phone. Switching to event logs with union and max merge rules and server-side quiz scoring eliminated lost progress complaints within a release.
+   - **Sources:** [Martin Kleppmann et al.: Local-first software](https://www.inkandswitch.com/local-first/); [Shapiro et al.: Conflict-free replicated data types](https://inria.hal.science/inria-00609399/document)
 
 ### Media & streaming
 

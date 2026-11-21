@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Apply events in the order they arrive at the server.\"",
+    "why": "A 'delivered' scan uploaded before an earlier 'out for delivery' scan would move the package backwards, and duplicates from retried uploads double-apply.",
+    "probe": "Device-side ids and timestamps, idempotent ingestion, state machines that tolerate reordering, and conflict handling.",
+    "say": "\"Every scan gets a device-generated unique id, a device timestamp and sequence; ingestion is idempotent; shipment state is derived from all events ordered by event time with valid transitions, so late events are slotted into history rather than overwriting newer state.\""
+  },
+  "thesis": "Edge devices produce events offline that arrive late, duplicated and out of order. Give every event a unique id and device time and sequence, ingest idempotently, derive current state from the ordered event history with a state machine that accepts late events, and flag genuine conflicts for review.",
+  "pitch": "Each scanner creates events locally with a UUID, the device's timestamp, a per-device sequence number, the user, location and payload, stores them durably on the device, and uploads when connected, retrying until acknowledged. The server dedupes by event id, so retries are harmless. For each shipment, events are stored in an append-only log, and current status is computed by ordering them by event time, with sequence numbers to order events from the same device and to detect gaps. A state machine defines valid progressions; a late 'out for delivery' event that's older than an existing 'delivered' event goes into history but doesn't move status backwards. Device clocks drift, so I'd correct them using the offset between device time and server time at upload, and treat implausible timestamps with suspicion. Genuine conflicts, like 'delivered' at two different addresses, go to an exceptions queue. Downstream consumers receive status-change events only when derived status actually changes.",
+  "points": [
+    {
+      "h": "Device-generated ids and sequences",
+      "d": "UUID per event plus per-device sequence numbers for dedupe, ordering and gap detection."
+    },
+    {
+      "h": "Durable local queue and retry",
+      "d": "Devices store events until the server acknowledges them, surviving reboots and dead zones."
+    },
+    {
+      "h": "Idempotent ingestion",
+      "d": "Dedupe on event id so repeated uploads don't double-apply."
+    },
+    {
+      "h": "Derive state from ordered history",
+      "d": "Order events by event time (and device sequence) and compute status; don't overwrite state with whatever arrives last."
+    },
+    {
+      "h": "Tolerant state machine",
+      "d": "Late events earlier than the current state are recorded but don't regress status."
+    },
+    {
+      "h": "Clock correction",
+      "d": "Estimate device clock offset at upload and adjust timestamps; flag implausible values."
+    },
+    {
+      "h": "Exceptions for real conflicts",
+      "d": "Contradictory events (two delivery locations) go to human review."
+    }
+  ],
+  "decision": "Event-sourced shipment history with idempotent ingestion and event-time ordering for edge-generated data; status derived, never blindly overwritten.",
+  "numbers": [
+    "Example: a courier offline for 3 hours uploads 120 scans at once; with event ids and ordering by device time, the shipment timeline is rebuilt correctly in one pass."
+  ],
+  "pitfalls": [
+    "Last-write-wins on arrival order.",
+    "Server-generated ids at upload, so retries create duplicates.",
+    "Trusting device clocks blindly.",
+    "Status regressions visible to customers ('delivered' then 'out for delivery')."
+  ],
+  "followups": [
+    {
+      "q": "How do you notify customers if status changes late?",
+      "a": "Only notify on forward status changes, and suppress notifications for events far in the past (just update the timeline)."
+    },
+    {
+      "q": "How do you detect a lost event?",
+      "a": "Gaps in a device's sequence numbers indicate missing events; request a re-upload or flag for investigation."
+    },
+    {
+      "q": "How does this relate to CRDTs?",
+      "a": "Similar goal of convergence regardless of order; here a domain state machine over an ordered log provides it."
+    }
+  ],
+  "example": "A parcel carrier's tracking pages showed packages moving backwards when couriers' devices synced late. Moving to device-generated ids, an append-only event log per parcel and status derived by event time removed regressions and duplicate 'delivered' notifications.",
+  "related": [
+    "clocks-ordering-lww",
+    "stream-windows-late-data",
+    "event-sourcing-cqrs-trap",
+    "offline-progress-sync"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann et al.: Local-first software",
+      "url": "https://www.inkandswitch.com/local-first/"
+    }
+  ]
+}

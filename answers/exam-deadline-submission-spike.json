@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Autoscale the servers before the deadline.\"",
+    "why": "The spike is concentrated in seconds, autoscaling reacts in minutes, and if the submit path depends on slow processing (file scanning, grading, plagiarism checks) requests time out and students lose work or miss the deadline unfairly.",
+    "probe": "Fast durable acceptance, server-side timestamps, deferring processing, autosave, and fairness for failures.",
+    "say": "\"Make submission a fast, durable write: accept and timestamp on receipt, store the file directly to object storage, queue grading and checks for later, autosave drafts continuously, and have a policy for students hit by our failures.\""
+  },
+  "thesis": "Deadline spikes are predictable and extreme. Make the submit path a tiny, durable, timestamped write that can absorb the burst, defer all heavy processing to queues, autosave work continuously so nothing is lost, and define fair handling of late or failed submissions caused by the platform.",
+  "pitch": "I'd design the submit path to do as little as possible: authenticate, write a submission record with a server-side receipt timestamp, and store any file via a presigned upload directly to object storage. Plagiarism checks, virus scans, conversion and grading run asynchronously from a queue after the deadline. Students get an immediate receipt with the timestamp, so there's no ambiguity about whether they submitted on time. Autosave saves drafts every few seconds during the exam, so even a failed final submit leaves recent work recorded, and the deadline can auto-submit the last saved draft. Capacity is pre-provisioned for the known deadline rather than relying on autoscaling, and load tested at several times the expected peak. Deadlines themselves can be staggered by course or section where possible. If the platform fails, logs show who tried to submit and when, so instructors can accept submissions attempted before the deadline.",
+  "points": [
+    {
+      "h": "Minimal, durable submit path",
+      "d": "Auth, record, timestamp; nothing slow in the request."
+    },
+    {
+      "h": "Server-side receipt timestamps",
+      "d": "The server's receipt time decides on-time status, shown to the student immediately."
+    },
+    {
+      "h": "Direct-to-storage uploads",
+      "d": "Files go to object storage via presigned URLs, keeping app servers out of the bandwidth path."
+    },
+    {
+      "h": "Defer heavy processing",
+      "d": "Scanning, plagiarism checks and grading run from queues after acceptance."
+    },
+    {
+      "h": "Autosave and auto-submit",
+      "d": "Frequent draft saves and automatic submission of the latest draft at the deadline."
+    },
+    {
+      "h": "Pre-provision for known peaks",
+      "d": "Scale ahead of scheduled deadlines and load test at multiples of expected volume."
+    },
+    {
+      "h": "Fair failure policy",
+      "d": "Logged submission attempts let instructors accept work that our systems failed to receive in time."
+    }
+  ],
+  "decision": "Fast durable acceptance with receipts, async processing, autosave and pre-provisioned capacity; staggered deadlines where the institution allows.",
+  "numbers": [
+    "Burst sizing: 20,000 students with 40% submitting in the final 60 seconds is about 130 submissions per second, with file uploads; trivial if submission is a small write, risky if each runs a 10-second plagiarism check inline."
+  ],
+  "pitfalls": [
+    "Synchronous plagiarism checks or file conversion in the submit request.",
+    "Client-side timestamps deciding lateness.",
+    "Relying on autoscaling for a 60-second spike.",
+    "No autosave, so a failed submit loses the whole exam."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a student whose upload is still in progress at the deadline?",
+      "a": "Record when the upload started; accept it if initiated before the deadline and completed within a grace period."
+    },
+    {
+      "q": "What if the database is slow at peak?",
+      "a": "Buffer submission records in a durable queue that writes to the database asynchronously, while still giving receipts."
+    },
+    {
+      "q": "How do you prove a submission was received?",
+      "a": "Signed receipt with timestamp and content hash shown to the student and logged."
+    }
+  ],
+  "example": "A university's assignment system timed out at deadlines because plagiarism checks ran inline. Moving checks to a queue, adding presigned uploads, autosave every 10 seconds, and pre-scaling an hour before major deadlines eliminated lost submissions, and receipts ended disputes about timing.",
+  "related": [
+    "large-file-uploads",
+    "design-admission-control-service-stays",
+    "autoscaling-pitfalls",
+    "proctoring-time-integrity"
+  ],
+  "sources": [
+    {
+      "title": "AWS S3: Sharing objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "trap": {
+    "wrong": "\"Compute the optimal routes with a solver every time something changes.\"",
+    "why": "Vehicle routing is NP-hard; optimal solutions for thousands of stops take far too long, and recomputing everything on each change disrupts drivers who've already started. You need good-enough heuristics and incremental repair.",
+    "probe": "Batch planning with heuristics and time limits, incremental real-time repair, constraints, and stability for drivers.",
+    "say": "\"Plan overnight with a heuristic solver under a time limit across partitioned regions, then during the day repair routes incrementally for new orders, cancellations and delays, minimising disruption to drivers already on the road.\""
+  },
+  "thesis": "Route optimisation is an NP-hard problem solved with heuristics under time limits. Plan in batch before the day starts, partitioned by region, then repair routes incrementally as orders, traffic and failures change, preferring stability for drivers over theoretical optimality.",
+  "pitch": "Before the day, I'd run batch planning: orders, vehicles, capacities, time windows, driver shifts and road-network travel times feed a vehicle routing solver, such as OR-Tools or a commercial engine, using heuristics like savings or local search with a time limit, partitioned by depot or region so each solves in minutes. Results are routes and estimated times per stop, published to drivers. During the day things change: new same-day orders, cancellations, a vehicle breakdown, traffic. Re-solving everything would reshuffle every driver's day, so I'd use incremental repair: insert new orders into the route with the cheapest feasible insertion, rebalance only affected routes, and lock stops a driver is already heading to. ETAs update from live locations and traffic, and customers get updated windows. I'd measure plan quality with distance, on-time rate and utilisation, and compare solver changes on historical days before rolling them out.",
+  "points": [
+    {
+      "h": "NP-hard, so heuristics",
+      "d": "Exact optimisation doesn't scale; use metaheuristics with time limits and accept near-optimal plans."
+    },
+    {
+      "h": "Model real constraints",
+      "d": "Vehicle capacity, time windows, driver hours, skills, traffic-dependent travel times."
+    },
+    {
+      "h": "Partition the problem",
+      "d": "Solve per depot or region in parallel to keep solve times bounded."
+    },
+    {
+      "h": "Batch plan before the day",
+      "d": "Overnight or early-morning planning with the full order set produces the baseline routes."
+    },
+    {
+      "h": "Incremental repair during the day",
+      "d": "Insert, remove and rebalance locally for changes rather than full re-solves."
+    },
+    {
+      "h": "Stability for drivers",
+      "d": "Lock started and next stops; limit how much a driver's route can change at once."
+    },
+    {
+      "h": "Measure and test on history",
+      "d": "Evaluate solver changes against historical days on distance, on-time rate and utilisation."
+    }
+  ],
+  "decision": "Heuristic batch planning plus incremental real-time repair, with constraints modelled explicitly and stability rules for drivers. Use proven solver libraries rather than writing one.",
+  "numbers": [
+    "Scale example: 3,000 drivers and 60,000 stops split across 30 depots is about 2,000 stops per depot problem, solvable to good quality in minutes with metaheuristics."
+  ],
+  "pitfalls": [
+    "Seeking optimal solutions and missing the planning deadline.",
+    "Full re-solves on every change, confusing drivers.",
+    "Straight-line distances instead of road travel times.",
+    "Ignoring driver hours and breaks, producing infeasible plans."
+  ],
+  "followups": [
+    {
+      "q": "A vehicle breaks down mid-day. What happens?",
+      "a": "Remaining stops are reassigned to nearby drivers by insertion heuristics, respecting capacity and time windows, and customers get updated ETAs."
+    },
+    {
+      "q": "How do you handle traffic?",
+      "a": "Time-dependent travel times from historical data for planning and live traffic for re-estimating ETAs during the day."
+    },
+    {
+      "q": "Build or buy the solver?",
+      "a": "Use libraries like OR-Tools or commercial solvers; invest your effort in data quality, constraints and integration."
+    }
+  ],
+  "example": "A grocery delivery company re-solved all routes every 15 minutes, so drivers' stop orders changed constantly. Switching to an early-morning batch plan with locked next stops and insertion-based repair for new orders cut driver complaints and improved on-time delivery by 6%.",
+  "related": [
+    "dispatch-matching-shortage",
+    "driver-location-updates-scale",
+    "design-fan-out-fan-pipeline"
+  ],
+  "sources": [
+    {
+      "title": "Google OR-Tools: Vehicle routing",
+      "url": "https://developers.google.com/optimization/routing"
+    }
+  ]
+}

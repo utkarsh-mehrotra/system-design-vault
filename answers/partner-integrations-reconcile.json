@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Build a direct integration from our order service to each partner's API.\"",
+    "why": "Each partner has different formats, reliability and protocols; direct coupling spreads partner quirks through core systems, and failures or format changes in one partner break your flows. Without reconciliation, missing messages go unnoticed.",
+    "probe": "An integration layer with canonical models, adapters per partner, durable queues, monitoring and reconciliation.",
+    "say": "\"An integration layer translating each partner's format to a canonical model, with adapters per partner, durable queues and retries, raw message archives, per-partner monitoring, and reconciliation of what was sent and acknowledged against what partners report.\""
+  },
+  "thesis": "Partner integrations are unreliable, heterogeneous and slow to change. Isolate them behind an integration layer with a canonical internal model, per-partner adapters, durable asynchronous delivery, raw message archives, monitoring per partner, and regular reconciliation to catch what fell through the cracks.",
+  "pitch": "Core services publish and consume canonical events like ShipmentCreated or InventoryUpdated. An integration layer has an adapter per partner that translates to and from their format: REST, SOAP, SFTP files, EDI documents. Outbound messages go through durable queues with retries and backoff, idempotency keys where partners support them, and per-partner rate limits. Inbound messages are archived raw before parsing, so failures can be replayed after fixing a parser, and parsing errors go to a dead-letter queue with alerts. Each partner has dashboards for volume, latency, error rate and acknowledgement gaps, because a partner silently sending nothing looks like a quiet day. Reconciliation compares our records with partner reports: shipments we sent versus those they acknowledged, inventory we think a supplier has versus their file. And I'd version adapters independently, test them against recorded partner messages, and onboard new partners through configuration where formats are standard.",
+  "points": [
+    {
+      "h": "Canonical internal model",
+      "d": "Core systems speak one data model; partner formats never leak into them."
+    },
+    {
+      "h": "Adapter per partner",
+      "d": "Translation, protocol handling and partner quirks isolated and independently deployable."
+    },
+    {
+      "h": "Durable asynchronous delivery",
+      "d": "Queues with retries, backoff, idempotency and per-partner rate limits."
+    },
+    {
+      "h": "Archive raw messages",
+      "d": "Store original inbound and outbound payloads for audit, debugging and replay after parser fixes."
+    },
+    {
+      "h": "Per-partner observability",
+      "d": "Volume, error rates, latency and missing acknowledgements, with alerts for silence as well as errors."
+    },
+    {
+      "h": "Reconciliation",
+      "d": "Periodic comparison of what each side believes happened, with exception handling."
+    },
+    {
+      "h": "Contract tests",
+      "d": "Recorded partner messages as test fixtures, catching breaking changes before deploys."
+    }
+  ],
+  "decision": "A dedicated integration layer (or integration platform) for all partners, canonical events internally, and reconciliation as a standard control for every partner relationship.",
+  "numbers": [
+    "Monitoring rule example: alert if a partner that normally sends 500 status updates an hour sends fewer than 50 in an hour during business hours."
+  ],
+  "pitfalls": [
+    "Core services calling partner APIs directly.",
+    "No raw message archive, so bad files can't be reprocessed.",
+    "Monitoring only errors and missing silent outages.",
+    "No reconciliation, so lost messages are discovered by customers."
+  ],
+  "followups": [
+    {
+      "q": "A partner sends a file with a format change and half the records fail. What happens?",
+      "a": "Raw file archived, failures in the DLQ with alerts, adapter fixed, then the archived file replayed; the partner is contacted about the change."
+    },
+    {
+      "q": "How do you onboard a new carrier quickly?",
+      "a": "Reuse standard adapters (EDI, common APIs) configured per partner, with a certification checklist and test messages."
+    },
+    {
+      "q": "Build or buy integration tooling?",
+      "a": "Buy or use integration platforms for standard protocols like EDI and AS2; build adapters for strategic partners with custom APIs."
+    }
+  ],
+  "example": "A logistics company found that 2% of shipments had never been acknowledged by one carrier, discovered only through customer complaints. An integration layer with per-carrier acknowledgement monitoring and daily reconciliation now catches such gaps within hours, and archived raw messages allow replay after fixes.",
+  "related": [
+    "reconcile-divergent-data-across-systems",
+    "design-dead-letter-queues-retry",
+    "third-party-worse-sla",
+    "design-migration-paths-legacy-system"
+  ],
+  "sources": [
+    {
+      "title": "Enterprise Integration Patterns: Canonical data model",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/CanonicalDataModel.html"
+    }
+  ]
+}
