@@ -66,9 +66,14 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .ibtn.sq{width:32px;padding:0;justify-content:center}
 
 /* workspace */
-.ws{flex:1;min-height:0;display:grid;grid-template-columns:minmax(320px,45%) 1fr}
+.ws{flex:1;min-height:0;display:grid;grid-template-columns:minmax(300px,var(--side-w,45%)) 7px minmax(360px,1fr)}
+.resizer{position:relative;cursor:col-resize;background:transparent;margin-left:-4px;margin-right:-3px;z-index:5;touch-action:none}
+.resizer::after{content:"";position:absolute;top:0;bottom:0;left:3px;width:1px;background:var(--line);transition:background .15s,width .15s}
+.resizer:hover::after,.resizer:focus-visible::after,.resizer.drag::after{background:var(--accent);width:3px;left:2px}
+.resizer:focus-visible{outline:none}
+body.resizing{cursor:col-resize;user-select:none}
 .ws[hidden]{display:none}
-.side{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--panel)}
+.side{display:flex;flex-direction:column;min-height:0;background:var(--panel)}
 .ctl{flex:none;padding:14px 14px 10px;display:grid;gap:10px;border-bottom:1px solid var(--line)}
 .search{position:relative}
 .search svg{position:absolute;left:11px;top:50%;width:15px;height:15px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
@@ -222,6 +227,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
   .brand p{display:none}
   .ws{display:block}
   .side{border-right:0}
+  .resizer{display:none}
   .list{overflow:visible}
   .pane{display:none;overflow:visible}
   body.pane-open .side{display:none}
@@ -283,6 +289,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
     </div>
     <div class="list" id="list" role="listbox" aria-label="Questions"></div>
   </aside>
+  <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Resize question list" aria-valuemin="25" aria-valuemax="70" tabindex="0" title="Drag to resize · double-click to reset"></div>
   <section class="pane" id="pane" aria-label="Answer workspace"></section>
 </main>
 
@@ -668,6 +675,29 @@ $("file").onchange=e=>{
   e.target.value="";
 };
 $("reset").onclick=()=>{if(!confirm("Reset all progress? Confidence ratings, mastered questions and drill history will be cleared from this browser. Export first if you want a backup."))return;done={};conf={};drill={};saveAll();dHist=[];dHi=-1;dCur=null;render();msg("Progress reset")};
+
+/* ---------- resizable split ---------- */
+(function(){
+  const ws=$("study"),rz=$("resizer"),MIN=25,MAX=70,DEF=45;
+  const apply=v=>{v=Math.max(MIN,Math.min(MAX,v));ws.style.setProperty("--side-w",v+"%");rz.setAttribute("aria-valuenow",Math.round(v));rz.setAttribute("aria-valuetext",Math.round(v)+"% list, "+Math.round(100-v)+"% answer");return v};
+  let cur=apply(parseFloat(store("sdv-split"))||DEF);
+  const save=()=>store("sdv-split",String(Math.round(cur*10)/10));
+  rz.addEventListener("pointerdown",e=>{
+    e.preventDefault();rz.setPointerCapture(e.pointerId);rz.classList.add("drag");document.body.classList.add("resizing");
+    const r=ws.getBoundingClientRect();
+    const mv=ev=>{cur=apply((ev.clientX-r.left)/r.width*100)};
+    const up=()=>{rz.removeEventListener("pointermove",mv);rz.removeEventListener("pointerup",up);rz.removeEventListener("pointercancel",up);rz.classList.remove("drag");document.body.classList.remove("resizing");save()};
+    rz.addEventListener("pointermove",mv);rz.addEventListener("pointerup",up);rz.addEventListener("pointercancel",up);
+  });
+  rz.addEventListener("dblclick",()=>{cur=apply(DEF);save()});
+  rz.addEventListener("keydown",e=>{
+    const step=e.shiftKey?5:2;
+    if(e.key==="ArrowLeft"){e.preventDefault();e.stopPropagation();cur=apply(cur-step);save()}
+    else if(e.key==="ArrowRight"){e.preventDefault();e.stopPropagation();cur=apply(cur+step);save()}
+    else if(e.key==="Home"){e.preventDefault();cur=apply(MIN);save()}
+    else if(e.key==="End"){e.preventDefault();cur=apply(MAX);save()}
+  });
+})();
 
 /* ---------- boot ---------- */
 readURL();$("q").value=st.q;
