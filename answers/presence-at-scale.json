@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"When a user's status changes, notify all their contacts.\"",
+    "why": "Presence changes constantly (app backgrounded, network flaps), and users can have thousands of contacts, so naive fan-out creates a flood of updates mostly to people not looking at them.",
+    "probe": "Heartbeats with TTLs, debouncing, subscription-based fan-out only to interested viewers, and accepting staleness.",
+    "say": "\"Presence is soft state: heartbeats with TTLs in a fast store, debounced transitions, and updates fanned out only to clients currently viewing that user, with approximate 'last seen' for everyone else.\""
+  },
+  "thesis": "Presence is soft, frequently changing, low-value-per-update state. Track it with heartbeats and expiring entries, debounce flapping, publish changes only to clients that are actively watching, and accept seconds of staleness rather than paying for global real-time precision.",
+  "pitch": "Each connected client sends heartbeats, and the presence service stores user status in an in-memory store with a TTL slightly longer than the heartbeat interval, so a crashed or disconnected client goes offline automatically. Users have multiple devices, so a user is online if any device is. Transitions are debounced: going offline only after missing heartbeats for a short grace period, so a subway tunnel doesn't flash offline and online. Fan-out is where naive designs fail. Instead of pushing every change to every contact, clients subscribe to presence for the users currently visible on their screen, like the open conversation or the visible part of the contact list, and only those subscribers get updates. For large groups or channels, show aggregate counts or sample members rather than everyone's live status. Presence is regional for latency, with cross-region propagation for users who talk across regions, and it's fine for it to be a few seconds stale. Privacy settings, such as hiding online status, are enforced at the presence service.",
+  "points": [
+    {
+      "h": "Heartbeats and TTLs",
+      "d": "Status entries expire unless refreshed, handling crashes and disconnects without explicit logout."
+    },
+    {
+      "h": "Multi-device aggregation",
+      "d": "A user is online if any device is active; track per-device and aggregate."
+    },
+    {
+      "h": "Debounce flapping",
+      "d": "Grace periods before marking offline avoid flicker from brief network losses."
+    },
+    {
+      "h": "Subscription-based fan-out",
+      "d": "Only clients currently viewing a user receive their presence updates."
+    },
+    {
+      "h": "Aggregate for large groups",
+      "d": "Show counts or partial lists for big channels instead of per-member live updates."
+    },
+    {
+      "h": "Accept staleness",
+      "d": "Seconds of delay are fine; presence isn't worth strong consistency."
+    },
+    {
+      "h": "Privacy controls",
+      "d": "Respect settings that hide status or last-seen, enforced server-side."
+    }
+  ],
+  "decision": "Soft state with TTLs, debounced transitions, and subscription-scoped fan-out; approximate last-seen for everything not on screen.",
+  "numbers": [
+    "Naive fan-out: 10 million online users with 300 contacts each, changing status a few times an hour, would generate billions of notifications per hour; subscription-scoped fan-out cuts this by orders of magnitude."
+  ],
+  "pitfalls": [
+    "Fan-out of every change to every contact.",
+    "No TTL, leaving ghost 'online' users after crashes.",
+    "Flapping status from network blips.",
+    "Treating presence as strongly consistent data."
+  ],
+  "followups": [
+    {
+      "q": "How do you implement 'last seen'?",
+      "a": "Record the last heartbeat time (coarsened for privacy) when a user goes offline, and serve it on request rather than pushing it."
+    },
+    {
+      "q": "How do typing indicators differ?",
+      "a": "Even more ephemeral: short-lived signals sent only to participants of the open conversation, never stored."
+    },
+    {
+      "q": "How do you scale the presence store?",
+      "a": "Shard by user id in an in-memory store, with connection servers updating it and a pub/sub layer for subscriptions."
+    }
+  ],
+  "example": "A collaboration tool pushed presence changes to every workspace member, and large workspaces generated millions of updates per minute. Scoping updates to users visible on each client's screen and showing counts for big channels cut presence traffic by over 95% with no user-visible downside.",
+  "related": [
+    "realtime-delivery-polling-websockets",
+    "chat-ordering-receipts-multidevice",
+    "feed-fanout-celebrity",
+    "clocks-ordering-lww"
+  ],
+  "sources": [
+    {
+      "title": "Slack engineering: Real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  ]
+}

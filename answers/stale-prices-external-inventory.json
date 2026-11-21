@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Cache supplier prices for a few hours and use them for booking.\"",
+    "why": "Supplier prices and availability change constantly; booking at a cached price leads to failed bookings or selling at a loss, while querying suppliers live on every search is too slow and exceeds rate limits.",
+    "probe": "Tiered freshness: cached prices for search, live verification before booking, and handling price changes honestly.",
+    "say": "\"Search uses cached prices with known freshness; when the user selects an option, we re-price live with the supplier; if it changed, we show the new price before payment; and caching is tuned by look-to-book ratio and supplier limits.\""
+  },
+  "thesis": "With external inventory, use different freshness for different steps: cached or precomputed prices for search, live re-pricing when the customer selects, and confirmation at booking. Communicate price changes before charging, and tune caching to supplier rate limits and look-to-book ratios.",
+  "pitch": "In travel, millions of searches happen for every booking, the look-to-book ratio, and suppliers like airlines, hotel systems and global distribution systems are slow, rate-limited and charge per query. So search results come from a cache of recent prices, refreshed by a mix of what users actually search for and proactive refresh of popular routes and dates, each entry tagged with its age. Results show prices as 'from' or with a freshness indicator. When a user selects an option, the system re-prices it live with the supplier, which is fewer and more valuable calls; if the price or availability changed, the user sees that before entering payment, never after. At booking, the supplier confirms, ideally with a hold or the exact fare quote referenced. I'd monitor price accuracy, how often re-pricing differs from the cached price and by how much, per supplier and route, and use that to tune cache TTLs. Supplier calls go through a gateway with rate limiting, caching, timeouts and circuit breakers, since one slow supplier shouldn't slow all searches.",
+  "points": [
+    {
+      "h": "Look-to-book economics",
+      "d": "Searches vastly outnumber bookings; live supplier queries per search are too slow and expensive."
+    },
+    {
+      "h": "Cached search prices with age",
+      "d": "Store prices with timestamps; refresh popular items proactively and others on demand."
+    },
+    {
+      "h": "Live re-price on selection",
+      "d": "Verify price and availability with the supplier when the user picks an option."
+    },
+    {
+      "h": "Confirm at booking",
+      "d": "Book against the verified quote, using supplier holds where available."
+    },
+    {
+      "h": "Honest price changes",
+      "d": "Show changes before payment, with clear messaging; never charge more than displayed."
+    },
+    {
+      "h": "Measure accuracy",
+      "d": "Track cached vs live price differences per supplier and route to tune TTLs and refresh."
+    },
+    {
+      "h": "Supplier gateway",
+      "d": "Rate limits, timeouts, circuit breakers and per-supplier isolation so one slow supplier doesn't degrade search."
+    }
+  ],
+  "decision": "Cached prices for discovery, live verification for commitment, and transparent handling of differences; tune freshness per supplier using measured price accuracy.",
+  "numbers": [
+    "Look-to-book example: 1,000 searches per booking. Live-querying a supplier for every search at 1 million searches a day means 1 million calls; caching with live re-pricing only on selection (say 5% of searches) cuts it to 50,000."
+  ],
+  "pitfalls": [
+    "Booking at cached prices without re-pricing.",
+    "Showing a price change only after payment details are entered or charged.",
+    "Live supplier calls on every search.",
+    "One slow supplier blocking the entire results page."
+  ],
+  "followups": [
+    {
+      "q": "How do you rank results if some prices are stale?",
+      "a": "Use cached prices with freshness weighting, and prefer options with recently verified prices when quality matters."
+    },
+    {
+      "q": "A supplier is down. What do users see?",
+      "a": "Results from that supplier marked unavailable or hidden, while other suppliers continue; cached prices aren't bookable until re-priced."
+    },
+    {
+      "q": "How do you handle currency and taxes from suppliers?",
+      "a": "Normalise at the gateway, record supplier currency and conversion, and show final totals including taxes at re-price time."
+    }
+  ],
+  "example": "A travel site booked hotels at prices cached for 6 hours and had 7% of bookings fail or lose money. Adding live re-pricing on room selection, showing changes before payment, and per-supplier TTLs tuned by accuracy data cut failures below 1%.",
+  "related": [
+    "catalog-search-freshness",
+    "booking-holds-no-double",
+    "third-party-worse-sla",
+    "design-cache-invalidation-rules-not"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Caching challenges and strategies",
+      "url": "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+    }
+  ]
+}

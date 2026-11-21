@@ -3433,6 +3433,159 @@
         "APIs"
       ],
       "legacy": []
+    },
+    {
+      "id": "video-transcoding-pipeline",
+      "cat": "domains",
+      "topic": "Media & streaming",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design the pipeline that turns uploaded videos into streamable formats at scale.",
+      "also": [],
+      "a": [
+        "Transcoding is a compute-heavy batch workflow: store the source, split into segments, transcode segments in parallel into a bitrate ladder, package for adaptive streaming, and publish. Orchestrate it as a resumable workflow with retries, priorities and cost-aware scaling."
+      ],
+      "tags": [
+        "Messaging",
+        "Scaling"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "adaptive-bitrate-cdn-live",
+      "cat": "domains",
+      "topic": "Media & streaming",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Deliver video to millions of viewers, on-demand and live, with smooth playback. How do adaptive bitrate and CDNs fit together?",
+      "also": [],
+      "a": [
+        "Streaming at scale relies on adaptive bitrate (ABR): videos split into short segments at multiple bitrates, with players switching based on network conditions. CDNs cache those segments close to viewers, origin shielding and request collapsing protect origins during live spikes, and live latency is tuned against rebuffering."
+      ],
+      "tags": [
+        "Caching",
+        "Latency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "view-counting-trending",
+      "cat": "domains",
+      "topic": "Media & streaming",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Count views for billions of videos and compute 'trending now'. How do you keep it accurate, fast and resistant to manipulation?",
+      "also": [],
+      "a": [
+        "Views are events, not increments. Define what counts as a view, process events in a pipeline that dedupes and filters invalid traffic, aggregate in time windows into scalable counters, and compute trending from recent velocity with decay and anomaly detection."
+      ],
+      "tags": [
+        "Databases",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "chat-ordering-receipts-multidevice",
+      "cat": "domains",
+      "topic": "Social & messaging",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design a chat system with correct message order, delivery and read receipts, across multiple devices per user.",
+      "also": [],
+      "a": [
+        "Chat correctness comes from a durable per-conversation log: the server assigns each message a sequence number in its conversation, stores it before delivery, and every device syncs from its own cursor. Client-generated ids make sends idempotent, and receipts are per-user positions in the log."
+      ],
+      "tags": [
+        "Messaging",
+        "Consistency"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "presence-at-scale",
+      "cat": "domains",
+      "topic": "Social & messaging",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Show who's online for millions of users. Why is presence harder than it looks?",
+      "also": [],
+      "a": [
+        "Presence is soft, frequently changing, low-value-per-update state. Track it with heartbeats and expiring entries, debounce flapping, publish changes only to clients that are actively watching, and accept seconds of staleness rather than paying for global real-time precision."
+      ],
+      "tags": [
+        "Scaling",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "content-moderation-pipeline",
+      "cat": "domains",
+      "topic": "Social & messaging",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Design content moderation for user posts, images and messages at scale.",
+      "also": [],
+      "a": [
+        "Moderation is a pipeline of detection, decision and enforcement shaped by policy. Combine hash matching, classifiers, user reports and behavioural signals; act according to severity and confidence; route uncertain cases to trained reviewers; support appeals; and measure quality continuously."
+      ],
+      "tags": [
+        "Security",
+        "Messaging"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "booking-holds-no-double",
+      "cat": "domains",
+      "topic": "Travel & booking",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Design hotel or seat booking so the same room or seat is never sold twice, including while the customer is paying.",
+      "also": [],
+      "a": [
+        "Booking needs a hold-then-confirm flow: reserve specific inventory atomically for a short time when the customer commits to it, take payment against the hold, convert it to a booking, and release expired holds automatically. Model inventory at the granularity it's sold (seat, room-night) and integrate external suppliers' hold semantics."
+      ],
+      "tags": [
+        "Consistency",
+        "Transactions"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "stale-prices-external-inventory",
+      "cat": "domains",
+      "topic": "Travel & booking",
+      "level": "intermediate",
+      "source": "mine",
+      "q": "Prices and availability come from slow, rate-limited external suppliers. How do you show fast search results without selling at wrong prices?",
+      "also": [],
+      "a": [
+        "With external inventory, use different freshness for different steps: cached or precomputed prices for search, live re-pricing when the customer selects, and confirmation at booking. Communicate price changes before charging, and tune caching to supplier rate limits and look-to-book ratios."
+      ],
+      "tags": [
+        "Caching",
+        "Reliability"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "overbooking-policy",
+      "cat": "domains",
+      "topic": "Travel & booking",
+      "level": "advanced",
+      "source": "mine",
+      "q": "Airlines and hotels deliberately overbook. How do you design a system that allows controlled overbooking?",
+      "also": [],
+      "a": [
+        "Overbooking is a deliberate revenue policy: sell up to an authorised limit above physical capacity, set from forecast no-shows and cancellations and the cost of denied boarding or walking a guest. The system enforces the limit atomically, tracks the oversold risk, and has a defined process for when demand exceeds capacity."
+      ],
+      "tags": [
+        "Consistency",
+        "Architecture"
+      ],
+      "legacy": []
     }
   ]
 }

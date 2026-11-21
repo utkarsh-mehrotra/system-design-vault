@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Order messages by the sender's timestamp and push them to the recipient's connected device.\"",
+    "why": "Device clocks differ, so ordering by client time misorders conversations; pushing only to connected devices loses messages for offline devices; and users with several devices need consistent history on all of them.",
+    "probe": "Server-assigned per-conversation sequence numbers, durable storage before delivery, per-device sync cursors, and idempotent sends.",
+    "say": "\"Each conversation has a server-assigned sequence; messages are stored durably before fan-out; every device syncs from its last-seen sequence on reconnect; sends carry client message ids for idempotency; and receipts are per-user high-water marks.\""
+  },
+  "thesis": "Chat correctness comes from a durable per-conversation log: the server assigns each message a sequence number in its conversation, stores it before delivery, and every device syncs from its own cursor. Client-generated ids make sends idempotent, and receipts are per-user positions in the log.",
+  "pitch": "When a user sends a message, the client attaches a client-generated message id and sends it to the server, which assigns the next sequence number for that conversation, the single source of order, stores it durably, then acknowledges to the sender. The client id dedupes retries, so a flaky connection doesn't post twice. Fan-out then notifies recipients: online devices get it pushed over their connections; offline devices get a push notification. Each device keeps a cursor, the last sequence it has, and on reconnect asks for everything after it, so messages are never lost even if pushes were missed. That also gives multi-device consistency: a new laptop syncs history from the log. Delivery and read receipts are per user and conversation high-water marks, 'read up to sequence 1,042', rather than per-message flags, which keeps them cheap. For group chats with many members, fan-out is async, and very large groups or channels may switch to pull. End-to-end encryption changes where some of this runs, but the ordering and sync model stays similar.",
+  "points": [
+    {
+      "h": "Server-assigned sequence per conversation",
+      "d": "Order comes from the conversation's owner, not device clocks; the conversation can be partitioned by id."
+    },
+    {
+      "h": "Store before deliver",
+      "d": "Messages are durable before acknowledgement and fan-out, so a crash doesn't lose acknowledged messages."
+    },
+    {
+      "h": "Client message ids",
+      "d": "Idempotent sends: retries return the existing message rather than creating a duplicate."
+    },
+    {
+      "h": "Per-device sync cursors",
+      "d": "Each device fetches everything after its last seen sequence on reconnect."
+    },
+    {
+      "h": "Push is a hint",
+      "d": "Live pushes and push notifications speed delivery, but correctness comes from cursor-based sync."
+    },
+    {
+      "h": "Receipts as high-water marks",
+      "d": "Delivered-up-to and read-up-to positions per user and conversation."
+    },
+    {
+      "h": "Group fan-out",
+      "d": "Async fan-out for small groups; pull-based reading for very large groups or channels."
+    }
+  ],
+  "decision": "Durable per-conversation logs with server sequencing, idempotent sends and cursor-based multi-device sync; receipts as positions; push as an optimisation.",
+  "numbers": [
+    "Receipt efficiency: a 200-member group reading 1,000 messages needs 200 high-water marks, not 200,000 per-message read flags."
+  ],
+  "pitfalls": [
+    "Ordering by client timestamps.",
+    "Delivering only to connected devices with no sync on reconnect.",
+    "No client message ids, so retries duplicate messages.",
+    "Per-message receipt rows exploding storage in groups."
+  ],
+  "followups": [
+    {
+      "q": "How do you scale the sequence assignment?",
+      "a": "Partition conversations across servers or shards; each conversation's sequence is assigned by its owning partition, so there's no global counter."
+    },
+    {
+      "q": "How does end-to-end encryption change this?",
+      "a": "The server stores and orders ciphertext and can't read content; key management and multi-device keys add complexity, but sequencing and sync work similarly."
+    },
+    {
+      "q": "How do you handle message edits and deletes?",
+      "a": "As new events in the log referencing the original message, so all devices apply them in order."
+    }
+  ],
+  "example": "A chat app ordered messages by sender timestamp, and a user with a fast phone clock had replies appearing above the messages they answered. Moving to per-conversation server sequences, client message ids and cursor-based sync fixed ordering and duplicate messages, and new devices now load full history reliably.",
+  "related": [
+    "realtime-delivery-polling-websockets",
+    "presence-at-scale",
+    "clocks-ordering-lww",
+    "keep-ordering-also-need-parallelism"
+  ],
+  "sources": [
+    {
+      "title": "Discord engineering: How Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  ]
+}

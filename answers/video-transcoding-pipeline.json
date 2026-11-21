@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"When a video is uploaded, a server transcodes it into all formats and then publishes it.\"",
+    "why": "Transcoding a long video serially on one machine takes ages, one failure restarts everything, and GPUs or large instances sit idle between uploads. A pipeline needs chunking, parallelism, retries and prioritisation.",
+    "probe": "Chunked parallel transcoding, a workflow with retries, an encoding ladder, and cost control.",
+    "say": "\"Upload to object storage, then a workflow splits the video into segments, transcodes segments in parallel into an encoding ladder on autoscaled workers, stitches and packages into HLS/DASH, and publishes, with per-step retries, priorities and progress tracking.\""
+  },
+  "thesis": "Transcoding is a compute-heavy batch workflow: store the source, split into segments, transcode segments in parallel into a bitrate ladder, package for adaptive streaming, and publish. Orchestrate it as a resumable workflow with retries, priorities and cost-aware scaling.",
+  "pitch": "Uploads land in object storage via presigned multipart uploads, and a storage event starts a workflow for that video. Step one: validate and probe the file for codec, resolution, duration, and audio tracks. Step two: split into segments of a few seconds to a minute at keyframes. Step three: transcode each segment into an encoding ladder, such as 240p to 1080p or 4K at several bitrates, in parallel across a worker pool, so a two-hour film finishes in minutes rather than hours. Step four: stitch segments per rendition and package into HLS and DASH with manifests, plus thumbnails and captions. Step five: publish to the CDN origin and mark the video ready. The workflow tracks each step and segment, retries failures individually, and reports progress to the uploader. Workers autoscale on queue depth, using spot instances for cost where retries are cheap. Priority queues let paid or popular content jump ahead, and per-title encoding, choosing bitrates by content complexity, reduces storage and bandwidth.",
+  "points": [
+    {
+      "h": "Store first, process async",
+      "d": "Durable source in object storage; processing never blocks the upload."
+    },
+    {
+      "h": "Split into segments",
+      "d": "Keyframe-aligned chunks enable parallel transcoding and cheap retries."
+    },
+    {
+      "h": "Encoding ladder",
+      "d": "Multiple resolutions and bitrates for adaptive streaming; per-title tuning based on content complexity."
+    },
+    {
+      "h": "Workflow orchestration",
+      "d": "A workflow engine tracks steps and segments, retries failures, and reports progress."
+    },
+    {
+      "h": "Package for adaptive streaming",
+      "d": "HLS/DASH manifests, segments, thumbnails and captions published to the CDN origin."
+    },
+    {
+      "h": "Autoscaled, cost-aware workers",
+      "d": "Scale on queue depth; spot or preemptible instances for retry-tolerant work; GPUs where they pay off."
+    },
+    {
+      "h": "Priorities",
+      "d": "Separate queues so urgent or popular content isn't stuck behind bulk backlogs."
+    }
+  ],
+  "decision": "Segment-parallel transcoding orchestrated by a workflow engine, with spot capacity and priorities; managed transcoding services when volume or expertise doesn't justify building.",
+  "numbers": [
+    "Parallelism example: a 2-hour video split into 2-minute segments is 60 segments; with 60 workers each taking ~4 minutes per segment for the whole ladder, total time is a few minutes plus stitching."
+  ],
+  "pitfalls": [
+    "Single-machine serial transcoding.",
+    "Restarting the whole job when one segment fails.",
+    "One priority queue where bulk uploads starve important content.",
+    "Fixed bitrate ladders wasting bandwidth on simple content."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a corrupt upload?",
+      "a": "Probe and validate before transcoding; fail fast with a clear error to the uploader, keeping the source for diagnosis."
+    },
+    {
+      "q": "How do you make videos available quickly?",
+      "a": "Publish a low-resolution rendition first, then add higher renditions as they finish."
+    },
+    {
+      "q": "Live vs on-demand transcoding?",
+      "a": "Live requires real-time encoding with fixed latency budgets and redundancy; on-demand can be batch and optimised for quality and cost."
+    }
+  ],
+  "example": "A learning platform transcoded lecture videos on a single instance per upload, taking up to 3 hours for long recordings. Moving to segment-parallel transcoding on spot instances orchestrated by a workflow engine cut time to ready to about 10 minutes and halved compute cost.",
+  "related": [
+    "large-file-uploads",
+    "adaptive-bitrate-cdn-live",
+    "design-fan-out-fan-pipeline",
+    "track-status-long-running-jobs"
+  ],
+  "sources": [
+    {
+      "title": "Netflix Technology Blog: Per-title encode optimization",
+      "url": "https://netflixtechblog.com/per-title-encode-optimization-7e99442b62a2"
+    },
+    {
+      "title": "Apple: HTTP Live Streaming (HLS) authoring specification",
+      "url": "https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices"
+    }
+  ]
+}

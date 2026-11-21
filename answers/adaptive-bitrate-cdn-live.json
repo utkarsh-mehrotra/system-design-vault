@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Serve the video file from our servers with a CDN in front.\"",
+    "why": "A single file at one bitrate stalls on slow networks, live events create sudden simultaneous demand that can overwhelm origins, and CDN cache misses for new live segments hit the origin at once.",
+    "probe": "Adaptive bitrate streaming, segment caching, origin shielding, live latency trade-offs and multi-CDN.",
+    "say": "\"Video is packaged as small segments at several bitrates; players pick bitrates adaptively; CDNs cache segments with origin shielding and request collapsing so live events don't stampede the origin; and live latency is a deliberate trade-off against buffering.\""
+  },
+  "thesis": "Streaming at scale relies on adaptive bitrate (ABR): videos split into short segments at multiple bitrates, with players switching based on network conditions. CDNs cache those segments close to viewers, origin shielding and request collapsing protect origins during live spikes, and live latency is tuned against rebuffering.",
+  "pitch": "With HLS or DASH, each rendition is a sequence of segments a few seconds long, listed in manifests. The player measures throughput and buffer level and requests the next segment at the highest bitrate it can sustain, dropping down when the network weakens, so playback stays smooth. CDNs cache segments at edge locations; for on-demand content, popular titles achieve very high hit rates. Live is harder: every viewer wants the newest segment at the same moment, and it's not cached yet. Origin shielding puts a mid-tier cache between edges and origin, and request collapsing ensures many simultaneous misses for the same segment result in one origin fetch. Latency is a trade-off: standard HLS delays of 15 to 30 seconds give big buffers; low-latency HLS or DASH with partial segments get to a few seconds at higher rebuffering risk. For big events, multi-CDN with traffic steering adds capacity and resilience, and I'd monitor quality of experience: startup time, rebuffering ratio and average bitrate per region and CDN.",
+  "points": [
+    {
+      "h": "Segments and manifests",
+      "d": "Short media segments at multiple bitrates, listed in HLS or DASH manifests."
+    },
+    {
+      "h": "Player-driven ABR",
+      "d": "The player picks bitrates from measured throughput and buffer health, switching between segments."
+    },
+    {
+      "h": "CDN caching",
+      "d": "Segments are cacheable static objects; on-demand popularity gives high hit ratios."
+    },
+    {
+      "h": "Origin shielding and request collapsing",
+      "d": "A mid-tier cache and coalesced misses stop live-event spikes from overwhelming the origin."
+    },
+    {
+      "h": "Live latency trade-offs",
+      "d": "Longer buffers mean fewer stalls but more delay; low-latency modes reduce delay at higher risk."
+    },
+    {
+      "h": "Multi-CDN",
+      "d": "Steering traffic across CDNs for capacity, cost and resilience during big events."
+    },
+    {
+      "h": "QoE metrics",
+      "d": "Startup time, rebuffering ratio, bitrate and errors, sliced by region, device and CDN."
+    }
+  ],
+  "decision": "ABR packaging plus CDN with shielding for all streaming; low-latency live only where interactivity demands it; multi-CDN for large live events.",
+  "numbers": [
+    "Bandwidth sketch: 2 million concurrent viewers at an average 4 Mbit/s is 8 Tbit/s of egress, only feasible via CDNs; a 99% hit ratio still leaves 80 Gbit/s for origin and shield tiers."
+  ],
+  "pitfalls": [
+    "Single-bitrate files.",
+    "Live events without origin shielding, causing origin meltdowns at start time.",
+    "Chasing ultra-low latency for content that doesn't need it.",
+    "No QoE monitoring, so regional CDN problems go unseen."
+  ],
+  "followups": [
+    {
+      "q": "Millions join a live stream at the same second. What protects the origin?",
+      "a": "Shield tier caching, request collapsing at edges and shield, pre-warmed CDN capacity, and multi-CDN distribution."
+    },
+    {
+      "q": "How do you choose segment length?",
+      "a": "Shorter segments reduce latency and switch faster but add request overhead; typical values are 2 to 6 seconds."
+    },
+    {
+      "q": "How do you handle DRM?",
+      "a": "Encrypt segments and deliver licences via a licence server per DRM system, adding licence-server scale to the plan for big events."
+    }
+  ],
+  "example": "A sports streaming service's origin collapsed at kick-off when hundreds of thousands of viewers requested the first live segments simultaneously. Adding an origin shield with request collapsing and a second CDN with steering handled the next match's 3x larger audience with a rebuffering ratio under 0.5%.",
+  "related": [
+    "video-transcoding-pipeline",
+    "handle-cache-stampede-thundering-herd",
+    "should-cache-client-edge-service",
+    "live-classes-scale"
+  ],
+  "sources": [
+    {
+      "title": "Apple: HTTP Live Streaming",
+      "url": "https://developer.apple.com/streaming/"
+    },
+    {
+      "title": "DASH Industry Forum: Guidelines",
+      "url": "https://dashif.org/guidelines/"
+    }
+  ]
+}

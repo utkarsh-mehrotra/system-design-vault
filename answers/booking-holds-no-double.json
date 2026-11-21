@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Check availability when the user selects, then book when they pay.\"",
+    "why": "Between selection and payment, someone else can book the same unit; checking again at payment fails users who already entered card details. Without holds, double booking or bad experiences are guaranteed under concurrency.",
+    "probe": "Time-limited holds, atomic reservation, inventory per date, external supplier inventory and expiry handling.",
+    "say": "\"Selecting creates an atomic, time-limited hold on the specific inventory (room-night or seat), payment confirms the hold into a booking, and expired holds release automatically; for external suppliers, the hold maps to their own hold or is confirmed immediately.\""
+  },
+  "thesis": "Booking needs a hold-then-confirm flow: reserve specific inventory atomically for a short time when the customer commits to it, take payment against the hold, convert it to a booking, and release expired holds automatically. Model inventory at the granularity it's sold (seat, room-night) and integrate external suppliers' hold semantics.",
+  "pitch": "I'd model inventory at its selling unit: a seat on a flight, or a room type per night for hotels, since a three-night stay needs availability on all three nights. When the customer chooses, the system creates a hold atomically: for seats, a conditional update setting the seat to held with an expiry; for room types, decrementing available count for each night in one transaction, failing if any night is unavailable. The hold has an id and expiry, maybe 10 to 15 minutes, shown as a countdown. Payment is authorised against the hold; on success, the hold converts to a confirmed booking idempotently; on failure or timeout, it's released. A sweeper releases expired holds, and the conversion checks the hold is still valid, so a payment that completes after expiry is refunded or re-attempted. When inventory belongs to an external supplier, like an airline or channel manager, I'd use their hold API if available, or confirm with them before charging, and reconcile frequently because their inventory also sells elsewhere.",
+  "points": [
+    {
+      "h": "Model the selling unit",
+      "d": "Seat per flight, room type per night, slot per time; a multi-night stay touches several units."
+    },
+    {
+      "h": "Atomic holds",
+      "d": "Conditional updates or transactional decrements that fail if any required unit is unavailable."
+    },
+    {
+      "h": "Hold expiry",
+      "d": "Short, visible countdowns; automatic release by sweeper or TTL."
+    },
+    {
+      "h": "Payment against the hold",
+      "d": "Authorise payment referencing the hold; convert to booking only if the hold is still valid."
+    },
+    {
+      "h": "Idempotent confirmation",
+      "d": "Booking creation keyed by hold id so retries don't create duplicate bookings."
+    },
+    {
+      "h": "External supplier semantics",
+      "d": "Use supplier holds or confirm before charging; reconcile since suppliers sell through other channels."
+    },
+    {
+      "h": "Late payment handling",
+      "d": "If payment completes after expiry and the unit was resold, refund automatically or offer alternatives."
+    }
+  ],
+  "decision": "Hold-then-confirm with atomic reservations at the selling unit, short expiries and idempotent confirmation; supplier integration and reconciliation for inventory you don't own.",
+  "numbers": [
+    "Hold sizing trade-off: a 15-minute hold during peak demand, with 30% abandonment, keeps abandoned inventory out of sale for up to 15 minutes; shorter holds increase availability but pressure customers."
+  ],
+  "pitfalls": [
+    "Checking availability at selection and booking at payment without a hold.",
+    "Holding only the first night of a multi-night stay.",
+    "No expiry, so abandoned carts block inventory.",
+    "Charging the customer before confirming supplier inventory."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a flash sale of limited rooms?",
+      "a": "Same holds, plus a waiting room and per-customer limits; holds are the correctness guarantee, the waiting room protects load."
+    },
+    {
+      "q": "What if the supplier confirms the booking but your system crashes before recording it?",
+      "a": "Use idempotent supplier requests keyed by your hold id and reconcile, so a retry finds the existing supplier booking."
+    },
+    {
+      "q": "How do you show availability on search pages?",
+      "a": "From cached availability that may lag, labelled as approximate; the hold is the real check."
+    }
+  ],
+  "example": "A hotel platform double-booked rooms during peak periods because availability was checked only at selection. Introducing per-night atomic holds with 12-minute expiry, idempotent confirmation keyed by hold id, and a sweeper for expired holds ended double bookings; abandoned holds returned inventory automatically.",
+  "related": [
+    "flash-sale-never-oversell",
+    "isolation-levels-anomalies",
+    "stale-prices-external-inventory",
+    "overbooking-policy"
+  ],
+  "sources": [
+    {
+      "title": "PostgreSQL documentation: Explicit locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  ]
+}

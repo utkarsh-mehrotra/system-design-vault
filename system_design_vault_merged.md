@@ -4019,7 +4019,7 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Example:** After splitting the payments monolith, a staff engineer compared DORA metrics for the payments teams against two unmigrated teams over the same quarter: lead time dropped from 6 days to 2, deploy frequency tripled, and incidents were flat. The write-up also reported a 22% infrastructure cost increase, which led to rightsizing work.
    - **Sources:** [DORA: Software delivery performance metrics](https://dora.dev/guides/dora-metrics-four-keys/)
 
-## Domain Traps (24)
+## Domain Traps (33)
 
 ### Fintech & lending
 147. **Integrate a card payment provider: authorise, capture, refund, with webhooks. What does your payment state machine look like?** [mine · Advanced · Transactions, Reliability]
@@ -4656,10 +4656,244 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
    - **Sources:** [Martin Kleppmann et al.: Local-first software](https://www.inkandswitch.com/local-first/); [Shapiro et al.: Conflict-free replicated data types](https://inria.hal.science/inria-00609399/document)
 
 ### Media & streaming
+171. **Design the pipeline that turns uploaded videos into streamable formats at scale.** [mine · Intermediate · Messaging, Scaling]
+   - **Trap:** "When a video is uploaded, a server transcodes it into all formats and then publishes it." — _Why it fails:_ Transcoding a long video serially on one machine takes ages, one failure restarts everything, and GPUs or large instances sit idle between uploads. A pipeline needs chunking, parallelism, retries and prioritisation. — _Probing:_ Chunked parallel transcoding, a workflow with retries, an encoding ladder, and cost control. — _Say:_ "Upload to object storage, then a workflow splits the video into segments, transcodes segments in parallel into an encoding ladder on autoscaled workers, stitches and packages into HLS/DASH, and publishes, with per-step retries, priorities and progress tracking."
+   - **Thesis:** Transcoding is a compute-heavy batch workflow: store the source, split into segments, transcode segments in parallel into a bitrate ladder, package for adaptive streaming, and publish. Orchestrate it as a resumable workflow with retries, priorities and cost-aware scaling.
+   - **60-second answer:** Uploads land in object storage via presigned multipart uploads, and a storage event starts a workflow for that video. Step one: validate and probe the file for codec, resolution, duration, and audio tracks. Step two: split into segments of a few seconds to a minute at keyframes. Step three: transcode each segment into an encoding ladder, such as 240p to 1080p or 4K at several bitrates, in parallel across a worker pool, so a two-hour film finishes in minutes rather than hours. Step four: stitch segments per rendition and package into HLS and DASH with manifests, plus thumbnails and captions. Step five: publish to the CDN origin and mark the video ready. The workflow tracks each step and segment, retries failures individually, and reports progress to the uploader. Workers autoscale on queue depth, using spot instances for cost where retries are cheap. Priority queues let paid or popular content jump ahead, and per-title encoding, choosing bitrates by content complexity, reduces storage and bandwidth.
+   - **Key points:**
+     1. **Store first, process async.** Durable source in object storage; processing never blocks the upload.
+     2. **Split into segments.** Keyframe-aligned chunks enable parallel transcoding and cheap retries.
+     3. **Encoding ladder.** Multiple resolutions and bitrates for adaptive streaming; per-title tuning based on content complexity.
+     4. **Workflow orchestration.** A workflow engine tracks steps and segments, retries failures, and reports progress.
+     5. **Package for adaptive streaming.** HLS/DASH manifests, segments, thumbnails and captions published to the CDN origin.
+     6. **Autoscaled, cost-aware workers.** Scale on queue depth; spot or preemptible instances for retry-tolerant work; GPUs where they pay off.
+     7. **Priorities.** Separate queues so urgent or popular content isn't stuck behind bulk backlogs.
+   - **When to choose what:** Segment-parallel transcoding orchestrated by a workflow engine, with spot capacity and priorities; managed transcoding services when volume or expertise doesn't justify building.
+   - **Numbers:**
+     - Parallelism example: a 2-hour video split into 2-minute segments is 60 segments; with 60 workers each taking ~4 minutes per segment for the whole ladder, total time is a few minutes plus stitching.
+   - **Pitfalls:**
+     - Single-machine serial transcoding.
+     - Restarting the whole job when one segment fails.
+     - One priority queue where bulk uploads starve important content.
+     - Fixed bitrate ladders wasting bandwidth on simple content.
+   - **Follow-ups:**
+     - _How do you handle a corrupt upload?_ Probe and validate before transcoding; fail fast with a clear error to the uploader, keeping the source for diagnosis.
+     - _How do you make videos available quickly?_ Publish a low-resolution rendition first, then add higher renditions as they finish.
+     - _Live vs on-demand transcoding?_ Live requires real-time encoding with fixed latency budgets and redundancy; on-demand can be batch and optimised for quality and cost.
+   - **Example:** A learning platform transcoded lecture videos on a single instance per upload, taking up to 3 hours for long recordings. Moving to segment-parallel transcoding on spot instances orchestrated by a workflow engine cut time to ready to about 10 minutes and halved compute cost.
+   - **Sources:** [Netflix Technology Blog: Per-title encode optimization](https://netflixtechblog.com/per-title-encode-optimization-7e99442b62a2); [Apple: HTTP Live Streaming (HLS) authoring specification](https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices)
+172. **Deliver video to millions of viewers, on-demand and live, with smooth playback. How do adaptive bitrate and CDNs fit together?** [mine · Advanced · Caching, Latency]
+   - **Trap:** "Serve the video file from our servers with a CDN in front." — _Why it fails:_ A single file at one bitrate stalls on slow networks, live events create sudden simultaneous demand that can overwhelm origins, and CDN cache misses for new live segments hit the origin at once. — _Probing:_ Adaptive bitrate streaming, segment caching, origin shielding, live latency trade-offs and multi-CDN. — _Say:_ "Video is packaged as small segments at several bitrates; players pick bitrates adaptively; CDNs cache segments with origin shielding and request collapsing so live events don't stampede the origin; and live latency is a deliberate trade-off against buffering."
+   - **Thesis:** Streaming at scale relies on adaptive bitrate (ABR): videos split into short segments at multiple bitrates, with players switching based on network conditions. CDNs cache those segments close to viewers, origin shielding and request collapsing protect origins during live spikes, and live latency is tuned against rebuffering.
+   - **60-second answer:** With HLS or DASH, each rendition is a sequence of segments a few seconds long, listed in manifests. The player measures throughput and buffer level and requests the next segment at the highest bitrate it can sustain, dropping down when the network weakens, so playback stays smooth. CDNs cache segments at edge locations; for on-demand content, popular titles achieve very high hit rates. Live is harder: every viewer wants the newest segment at the same moment, and it's not cached yet. Origin shielding puts a mid-tier cache between edges and origin, and request collapsing ensures many simultaneous misses for the same segment result in one origin fetch. Latency is a trade-off: standard HLS delays of 15 to 30 seconds give big buffers; low-latency HLS or DASH with partial segments get to a few seconds at higher rebuffering risk. For big events, multi-CDN with traffic steering adds capacity and resilience, and I'd monitor quality of experience: startup time, rebuffering ratio and average bitrate per region and CDN.
+   - **Key points:**
+     1. **Segments and manifests.** Short media segments at multiple bitrates, listed in HLS or DASH manifests.
+     2. **Player-driven ABR.** The player picks bitrates from measured throughput and buffer health, switching between segments.
+     3. **CDN caching.** Segments are cacheable static objects; on-demand popularity gives high hit ratios.
+     4. **Origin shielding and request collapsing.** A mid-tier cache and coalesced misses stop live-event spikes from overwhelming the origin.
+     5. **Live latency trade-offs.** Longer buffers mean fewer stalls but more delay; low-latency modes reduce delay at higher risk.
+     6. **Multi-CDN.** Steering traffic across CDNs for capacity, cost and resilience during big events.
+     7. **QoE metrics.** Startup time, rebuffering ratio, bitrate and errors, sliced by region, device and CDN.
+   - **When to choose what:** ABR packaging plus CDN with shielding for all streaming; low-latency live only where interactivity demands it; multi-CDN for large live events.
+   - **Numbers:**
+     - Bandwidth sketch: 2 million concurrent viewers at an average 4 Mbit/s is 8 Tbit/s of egress, only feasible via CDNs; a 99% hit ratio still leaves 80 Gbit/s for origin and shield tiers.
+   - **Pitfalls:**
+     - Single-bitrate files.
+     - Live events without origin shielding, causing origin meltdowns at start time.
+     - Chasing ultra-low latency for content that doesn't need it.
+     - No QoE monitoring, so regional CDN problems go unseen.
+   - **Follow-ups:**
+     - _Millions join a live stream at the same second. What protects the origin?_ Shield tier caching, request collapsing at edges and shield, pre-warmed CDN capacity, and multi-CDN distribution.
+     - _How do you choose segment length?_ Shorter segments reduce latency and switch faster but add request overhead; typical values are 2 to 6 seconds.
+     - _How do you handle DRM?_ Encrypt segments and deliver licences via a licence server per DRM system, adding licence-server scale to the plan for big events.
+   - **Example:** A sports streaming service's origin collapsed at kick-off when hundreds of thousands of viewers requested the first live segments simultaneously. Adding an origin shield with request collapsing and a second CDN with steering handled the next match's 3x larger audience with a rebuffering ratio under 0.5%.
+   - **Sources:** [Apple: HTTP Live Streaming](https://developer.apple.com/streaming/); [DASH Industry Forum: Guidelines](https://dashif.org/guidelines/)
+173. **Count views for billions of videos and compute 'trending now'. How do you keep it accurate, fast and resistant to manipulation?** [mine · Intermediate · Databases, Messaging]
+   - **Trap:** "Increment a view counter in the database each time someone plays the video." — _Why it fails:_ Popular videos create hot rows that can't take the write rate, replays and bots inflate counts, and trending based on raw totals favours old videos instead of what's rising now. — _Probing:_ Event pipelines with dedupe and validity rules, sharded or batched counters, and time-decayed trending. — _Say:_ "Views are events processed through a pipeline that applies validity rules (minimum watch time, bot filtering, dedupe per user), aggregated in windows into counters, with trending computed from velocity with time decay rather than totals."
+   - **Thesis:** Views are events, not increments. Define what counts as a view, process events in a pipeline that dedupes and filters invalid traffic, aggregate in time windows into scalable counters, and compute trending from recent velocity with decay and anomaly detection.
+   - **60-second answer:** First the definition: a view might require 30 seconds of playback or a percentage of the video, one counted view per user per time window, excluding known bots. Players emit events; a stream processor validates and dedupes them and aggregates counts per video per minute. Counts are written as batched increments to a key-value store, sharded for hot videos, so one popular video isn't a single hot row. The displayed number can lag a little; platforms often freeze or delay counts while validation catches up. Trending isn't total views: it's velocity relative to expectations, such as views in the last hour compared with the video's previous hours and its category's baseline, with exponential time decay, and it's computed per region and refreshed every few minutes. Manipulation shows up as sudden bursts from few accounts or devices, so trending inputs pass through anomaly detection, and suspicious views are excluded or audited. Approximate structures like count-min sketches help find candidate trending items cheaply at large scale.
+   - **Key points:**
+     1. **Define a valid view.** Minimum watch time, one view per user per window, bot and fraud exclusions.
+     2. **Event pipeline.** Player events streamed, validated, deduplicated and aggregated, not direct database increments.
+     3. **Windowed aggregation.** Per-minute or per-hour counts by event time, merged into totals.
+     4. **Scalable counters.** Batched increments and sharded counters for very popular videos avoid hot rows.
+     5. **Displayed counts can lag.** Showing slightly delayed or validated counts is acceptable and harder to manipulate.
+     6. **Trending = velocity with decay.** Recent growth relative to the item's and category's baselines, with exponential decay, per region.
+     7. **Anomaly detection.** Bursts from narrow sources are flagged and excluded from counts and trending.
+   - **When to choose what:** Event-driven counting with validity rules, sharded batched counters, and velocity-based trending with anomaly filtering; exact public counts only after validation.
+   - **Numbers:**
+     - Hot-row math: a viral video at 50,000 views/s can't be a single-row increment; aggregating per second in the stream and writing one batched increment per shard reduces writes to a handful per second.
+   - **Pitfalls:**
+     - Synchronous database increments per play.
+     - Counting every play event, including replays and bots.
+     - Trending by all-time totals.
+     - No defence against view-buying bursts.
+   - **Follow-ups:**
+     - _Why do some platforms pause view counts at certain numbers?_ To let fraud validation catch up before publishing counts, trading freshness for accuracy and resistance to manipulation.
+     - _How do you compute trending per region cheaply?_ Windowed counts per video and region in the stream processor, with count-min sketches or top-K structures to find candidates before precise scoring.
+     - _How do creators see analytics without exposing fraud signals?_ Show validated counts and aggregated analytics; keep detection details internal.
+   - **Example:** A video platform's view counter row for viral videos caused database lock contention. Moving to stream aggregation with per-minute batched increments into sharded counters, a 30-second view threshold and bot filtering stabilised the database, and a velocity-based trending score stopped old viral videos dominating the trending page.
+   - **Sources:** [Evan Miller: Ranking items with time decay (Hacker News and Reddit style scoring)](https://www.evanmiller.org/rank-hotness-with-newtons-law-of-cooling.html)
 
 ### Social & messaging
+174. **Design a chat system with correct message order, delivery and read receipts, across multiple devices per user.** [mine · Advanced · Messaging, Consistency]
+   - **Trap:** "Order messages by the sender's timestamp and push them to the recipient's connected device." — _Why it fails:_ Device clocks differ, so ordering by client time misorders conversations; pushing only to connected devices loses messages for offline devices; and users with several devices need consistent history on all of them. — _Probing:_ Server-assigned per-conversation sequence numbers, durable storage before delivery, per-device sync cursors, and idempotent sends. — _Say:_ "Each conversation has a server-assigned sequence; messages are stored durably before fan-out; every device syncs from its last-seen sequence on reconnect; sends carry client message ids for idempotency; and receipts are per-user high-water marks."
+   - **Thesis:** Chat correctness comes from a durable per-conversation log: the server assigns each message a sequence number in its conversation, stores it before delivery, and every device syncs from its own cursor. Client-generated ids make sends idempotent, and receipts are per-user positions in the log.
+   - **60-second answer:** When a user sends a message, the client attaches a client-generated message id and sends it to the server, which assigns the next sequence number for that conversation, the single source of order, stores it durably, then acknowledges to the sender. The client id dedupes retries, so a flaky connection doesn't post twice. Fan-out then notifies recipients: online devices get it pushed over their connections; offline devices get a push notification. Each device keeps a cursor, the last sequence it has, and on reconnect asks for everything after it, so messages are never lost even if pushes were missed. That also gives multi-device consistency: a new laptop syncs history from the log. Delivery and read receipts are per user and conversation high-water marks, 'read up to sequence 1,042', rather than per-message flags, which keeps them cheap. For group chats with many members, fan-out is async, and very large groups or channels may switch to pull. End-to-end encryption changes where some of this runs, but the ordering and sync model stays similar.
+   - **Key points:**
+     1. **Server-assigned sequence per conversation.** Order comes from the conversation's owner, not device clocks; the conversation can be partitioned by id.
+     2. **Store before deliver.** Messages are durable before acknowledgement and fan-out, so a crash doesn't lose acknowledged messages.
+     3. **Client message ids.** Idempotent sends: retries return the existing message rather than creating a duplicate.
+     4. **Per-device sync cursors.** Each device fetches everything after its last seen sequence on reconnect.
+     5. **Push is a hint.** Live pushes and push notifications speed delivery, but correctness comes from cursor-based sync.
+     6. **Receipts as high-water marks.** Delivered-up-to and read-up-to positions per user and conversation.
+     7. **Group fan-out.** Async fan-out for small groups; pull-based reading for very large groups or channels.
+   - **When to choose what:** Durable per-conversation logs with server sequencing, idempotent sends and cursor-based multi-device sync; receipts as positions; push as an optimisation.
+   - **Numbers:**
+     - Receipt efficiency: a 200-member group reading 1,000 messages needs 200 high-water marks, not 200,000 per-message read flags.
+   - **Pitfalls:**
+     - Ordering by client timestamps.
+     - Delivering only to connected devices with no sync on reconnect.
+     - No client message ids, so retries duplicate messages.
+     - Per-message receipt rows exploding storage in groups.
+   - **Follow-ups:**
+     - _How do you scale the sequence assignment?_ Partition conversations across servers or shards; each conversation's sequence is assigned by its owning partition, so there's no global counter.
+     - _How does end-to-end encryption change this?_ The server stores and orders ciphertext and can't read content; key management and multi-device keys add complexity, but sequencing and sync work similarly.
+     - _How do you handle message edits and deletes?_ As new events in the log referencing the original message, so all devices apply them in order.
+   - **Example:** A chat app ordered messages by sender timestamp, and a user with a fast phone clock had replies appearing above the messages they answered. Moving to per-conversation server sequences, client message ids and cursor-based sync fixed ordering and duplicate messages, and new devices now load full history reliably.
+   - **Sources:** [Discord engineering: How Discord stores trillions of messages](https://discord.com/blog/how-discord-stores-trillions-of-messages)
+175. **Show who's online for millions of users. Why is presence harder than it looks?** [mine · Intermediate · Scaling, Messaging]
+   - **Trap:** "When a user's status changes, notify all their contacts." — _Why it fails:_ Presence changes constantly (app backgrounded, network flaps), and users can have thousands of contacts, so naive fan-out creates a flood of updates mostly to people not looking at them. — _Probing:_ Heartbeats with TTLs, debouncing, subscription-based fan-out only to interested viewers, and accepting staleness. — _Say:_ "Presence is soft state: heartbeats with TTLs in a fast store, debounced transitions, and updates fanned out only to clients currently viewing that user, with approximate 'last seen' for everyone else."
+   - **Thesis:** Presence is soft, frequently changing, low-value-per-update state. Track it with heartbeats and expiring entries, debounce flapping, publish changes only to clients that are actively watching, and accept seconds of staleness rather than paying for global real-time precision.
+   - **60-second answer:** Each connected client sends heartbeats, and the presence service stores user status in an in-memory store with a TTL slightly longer than the heartbeat interval, so a crashed or disconnected client goes offline automatically. Users have multiple devices, so a user is online if any device is. Transitions are debounced: going offline only after missing heartbeats for a short grace period, so a subway tunnel doesn't flash offline and online. Fan-out is where naive designs fail. Instead of pushing every change to every contact, clients subscribe to presence for the users currently visible on their screen, like the open conversation or the visible part of the contact list, and only those subscribers get updates. For large groups or channels, show aggregate counts or sample members rather than everyone's live status. Presence is regional for latency, with cross-region propagation for users who talk across regions, and it's fine for it to be a few seconds stale. Privacy settings, such as hiding online status, are enforced at the presence service.
+   - **Key points:**
+     1. **Heartbeats and TTLs.** Status entries expire unless refreshed, handling crashes and disconnects without explicit logout.
+     2. **Multi-device aggregation.** A user is online if any device is active; track per-device and aggregate.
+     3. **Debounce flapping.** Grace periods before marking offline avoid flicker from brief network losses.
+     4. **Subscription-based fan-out.** Only clients currently viewing a user receive their presence updates.
+     5. **Aggregate for large groups.** Show counts or partial lists for big channels instead of per-member live updates.
+     6. **Accept staleness.** Seconds of delay are fine; presence isn't worth strong consistency.
+     7. **Privacy controls.** Respect settings that hide status or last-seen, enforced server-side.
+   - **When to choose what:** Soft state with TTLs, debounced transitions, and subscription-scoped fan-out; approximate last-seen for everything not on screen.
+   - **Numbers:**
+     - Naive fan-out: 10 million online users with 300 contacts each, changing status a few times an hour, would generate billions of notifications per hour; subscription-scoped fan-out cuts this by orders of magnitude.
+   - **Pitfalls:**
+     - Fan-out of every change to every contact.
+     - No TTL, leaving ghost 'online' users after crashes.
+     - Flapping status from network blips.
+     - Treating presence as strongly consistent data.
+   - **Follow-ups:**
+     - _How do you implement 'last seen'?_ Record the last heartbeat time (coarsened for privacy) when a user goes offline, and serve it on request rather than pushing it.
+     - _How do typing indicators differ?_ Even more ephemeral: short-lived signals sent only to participants of the open conversation, never stored.
+     - _How do you scale the presence store?_ Shard by user id in an in-memory store, with connection servers updating it and a pub/sub layer for subscriptions.
+   - **Example:** A collaboration tool pushed presence changes to every workspace member, and large workspaces generated millions of updates per minute. Scoping updates to users visible on each client's screen and showing counts for big channels cut presence traffic by over 95% with no user-visible downside.
+   - **Sources:** [Slack engineering: Real-time messaging](https://slack.engineering/real-time-messaging/)
+176. **Design content moderation for user posts, images and messages at scale.** [mine · Intermediate · Security, Messaging]
+   - **Trap:** "Run every post through an ML classifier and delete anything it flags." — _Why it fails:_ Classifiers make mistakes in both directions, context and policy nuance matter, some content (like child abuse material) needs specialised handling, and over-removal harms users and trust. Purely automated deletion with no review or appeal fails on all counts. — _Probing:_ Layered detection, severity-based actions, human review queues, appeals and policy versioning. — _Say:_ "Layered checks: hash matching for known illegal content, classifiers with confidence thresholds, user reports; actions scaled to severity and confidence, from limiting distribution to removal; human review for the uncertain middle; appeals; and metrics on precision and reviewer load."
+   - **Thesis:** Moderation is a pipeline of detection, decision and enforcement shaped by policy. Combine hash matching, classifiers, user reports and behavioural signals; act according to severity and confidence; route uncertain cases to trained reviewers; support appeals; and measure quality continuously.
+   - **60-second answer:** At upload or post time, I'd run fast checks synchronously: hash matching against databases of known illegal content, such as PhotoDNA-style hashes for child sexual abuse material, which must be blocked and reported, and lightweight text and image classifiers. High-confidence severe violations are blocked immediately; low-confidence or borderline content is allowed with reduced distribution or queued for review; clearly fine content passes. Heavier models and context-aware checks run asynchronously after posting. User reports feed the same queues, prioritised by severity, reach and reporter reliability. Human reviewers work from queues with good tooling, clear policy guidelines and wellbeing protections, and their decisions are audited and used to retrain models. Enforcement is graduated: label, limit reach, remove, suspend, ban, with notices explaining which policy applied and an appeal path. Policies are versioned so decisions can be traced, and I'd track precision, recall estimates via sampling, time to action, appeal overturn rates and reviewer workload.
+   - **Key points:**
+     1. **Hash matching for known content.** Known illegal or previously removed content matched by perceptual hashes, blocked and reported as required by law.
+     2. **Classifiers with thresholds.** Confidence thresholds per policy and severity decide block, review or allow.
+     3. **Sync and async stages.** Fast checks at post time; heavier models and context checks after posting.
+     4. **Reports and prioritisation.** User reports prioritised by severity, reach and reporter trustworthiness.
+     5. **Human review.** Trained reviewers handle uncertain and high-impact cases with tooling, guidelines and wellbeing support.
+     6. **Graduated enforcement and appeals.** Labels, reach limits, removals and bans with explanations and an appeal process.
+     7. **Measure and retrain.** Precision, recall sampling, time to action, overturn rates; reviewer decisions feed model training.
+   - **When to choose what:** Layered automated detection with severity-based actions, human review for the uncertain middle, legal handling for illegal content, and appeals, all governed by versioned policies.
+   - **Numbers:**
+     - Review capacity sketch: 50 million posts a day with 0.5% routed to review is 250,000 items; at 300 items per reviewer per day that's over 800 reviewers, which is why thresholds and prioritisation matter.
+   - **Pitfalls:**
+     - Auto-deleting on classifier flags with no review or appeal.
+     - No special handling for legally mandated categories.
+     - Ignoring reviewer wellbeing and workload.
+     - Policies changing without versioning, making decisions untraceable.
+   - **Follow-ups:**
+     - _How do you handle viral harmful content quickly?_ Prioritise by reach velocity, hash the content once actioned so copies are caught automatically, and reduce distribution while review is pending.
+     - _How do you moderate end-to-end encrypted messages?_ The server can't inspect content, so rely on user reports (with reported messages shared by the reporter), metadata signals and client-side features, with significant privacy trade-offs.
+     - _How do you evaluate a new classifier?_ Offline on labelled data per policy, then shadow mode comparing with current decisions, then gradual rollout with reviewer feedback.
+   - **Example:** A community app auto-removed anything its toxicity model flagged and faced a backlash over removed posts about reclaimed slurs and medical topics. Switching to thresholds with a review queue for mid-confidence flags, reduced-reach for borderline posts and an appeal flow cut wrongful removals sharply while severe content still went down within minutes.
+   - **Sources:** [Microsoft: PhotoDNA](https://www.microsoft.com/en-us/photodna); [Santa Clara Principles on transparency and accountability in content moderation](https://santaclaraprinciples.org/)
 
 ### Travel & booking
+177. **Design hotel or seat booking so the same room or seat is never sold twice, including while the customer is paying.** [mine · Advanced · Consistency, Transactions]
+   - **Trap:** "Check availability when the user selects, then book when they pay." — _Why it fails:_ Between selection and payment, someone else can book the same unit; checking again at payment fails users who already entered card details. Without holds, double booking or bad experiences are guaranteed under concurrency. — _Probing:_ Time-limited holds, atomic reservation, inventory per date, external supplier inventory and expiry handling. — _Say:_ "Selecting creates an atomic, time-limited hold on the specific inventory (room-night or seat), payment confirms the hold into a booking, and expired holds release automatically; for external suppliers, the hold maps to their own hold or is confirmed immediately."
+   - **Thesis:** Booking needs a hold-then-confirm flow: reserve specific inventory atomically for a short time when the customer commits to it, take payment against the hold, convert it to a booking, and release expired holds automatically. Model inventory at the granularity it's sold (seat, room-night) and integrate external suppliers' hold semantics.
+   - **60-second answer:** I'd model inventory at its selling unit: a seat on a flight, or a room type per night for hotels, since a three-night stay needs availability on all three nights. When the customer chooses, the system creates a hold atomically: for seats, a conditional update setting the seat to held with an expiry; for room types, decrementing available count for each night in one transaction, failing if any night is unavailable. The hold has an id and expiry, maybe 10 to 15 minutes, shown as a countdown. Payment is authorised against the hold; on success, the hold converts to a confirmed booking idempotently; on failure or timeout, it's released. A sweeper releases expired holds, and the conversion checks the hold is still valid, so a payment that completes after expiry is refunded or re-attempted. When inventory belongs to an external supplier, like an airline or channel manager, I'd use their hold API if available, or confirm with them before charging, and reconcile frequently because their inventory also sells elsewhere.
+   - **Key points:**
+     1. **Model the selling unit.** Seat per flight, room type per night, slot per time; a multi-night stay touches several units.
+     2. **Atomic holds.** Conditional updates or transactional decrements that fail if any required unit is unavailable.
+     3. **Hold expiry.** Short, visible countdowns; automatic release by sweeper or TTL.
+     4. **Payment against the hold.** Authorise payment referencing the hold; convert to booking only if the hold is still valid.
+     5. **Idempotent confirmation.** Booking creation keyed by hold id so retries don't create duplicate bookings.
+     6. **External supplier semantics.** Use supplier holds or confirm before charging; reconcile since suppliers sell through other channels.
+     7. **Late payment handling.** If payment completes after expiry and the unit was resold, refund automatically or offer alternatives.
+   - **When to choose what:** Hold-then-confirm with atomic reservations at the selling unit, short expiries and idempotent confirmation; supplier integration and reconciliation for inventory you don't own.
+   - **Numbers:**
+     - Hold sizing trade-off: a 15-minute hold during peak demand, with 30% abandonment, keeps abandoned inventory out of sale for up to 15 minutes; shorter holds increase availability but pressure customers.
+   - **Pitfalls:**
+     - Checking availability at selection and booking at payment without a hold.
+     - Holding only the first night of a multi-night stay.
+     - No expiry, so abandoned carts block inventory.
+     - Charging the customer before confirming supplier inventory.
+   - **Follow-ups:**
+     - _How do you handle a flash sale of limited rooms?_ Same holds, plus a waiting room and per-customer limits; holds are the correctness guarantee, the waiting room protects load.
+     - _What if the supplier confirms the booking but your system crashes before recording it?_ Use idempotent supplier requests keyed by your hold id and reconcile, so a retry finds the existing supplier booking.
+     - _How do you show availability on search pages?_ From cached availability that may lag, labelled as approximate; the hold is the real check.
+   - **Example:** A hotel platform double-booked rooms during peak periods because availability was checked only at selection. Introducing per-night atomic holds with 12-minute expiry, idempotent confirmation keyed by hold id, and a sweeper for expired holds ended double bookings; abandoned holds returned inventory automatically.
+   - **Sources:** [PostgreSQL documentation: Explicit locking](https://www.postgresql.org/docs/current/explicit-locking.html)
+178. **Prices and availability come from slow, rate-limited external suppliers. How do you show fast search results without selling at wrong prices?** [mine · Intermediate · Caching, Reliability]
+   - **Trap:** "Cache supplier prices for a few hours and use them for booking." — _Why it fails:_ Supplier prices and availability change constantly; booking at a cached price leads to failed bookings or selling at a loss, while querying suppliers live on every search is too slow and exceeds rate limits. — _Probing:_ Tiered freshness: cached prices for search, live verification before booking, and handling price changes honestly. — _Say:_ "Search uses cached prices with known freshness; when the user selects an option, we re-price live with the supplier; if it changed, we show the new price before payment; and caching is tuned by look-to-book ratio and supplier limits."
+   - **Thesis:** With external inventory, use different freshness for different steps: cached or precomputed prices for search, live re-pricing when the customer selects, and confirmation at booking. Communicate price changes before charging, and tune caching to supplier rate limits and look-to-book ratios.
+   - **60-second answer:** In travel, millions of searches happen for every booking, the look-to-book ratio, and suppliers like airlines, hotel systems and global distribution systems are slow, rate-limited and charge per query. So search results come from a cache of recent prices, refreshed by a mix of what users actually search for and proactive refresh of popular routes and dates, each entry tagged with its age. Results show prices as 'from' or with a freshness indicator. When a user selects an option, the system re-prices it live with the supplier, which is fewer and more valuable calls; if the price or availability changed, the user sees that before entering payment, never after. At booking, the supplier confirms, ideally with a hold or the exact fare quote referenced. I'd monitor price accuracy, how often re-pricing differs from the cached price and by how much, per supplier and route, and use that to tune cache TTLs. Supplier calls go through a gateway with rate limiting, caching, timeouts and circuit breakers, since one slow supplier shouldn't slow all searches.
+   - **Key points:**
+     1. **Look-to-book economics.** Searches vastly outnumber bookings; live supplier queries per search are too slow and expensive.
+     2. **Cached search prices with age.** Store prices with timestamps; refresh popular items proactively and others on demand.
+     3. **Live re-price on selection.** Verify price and availability with the supplier when the user picks an option.
+     4. **Confirm at booking.** Book against the verified quote, using supplier holds where available.
+     5. **Honest price changes.** Show changes before payment, with clear messaging; never charge more than displayed.
+     6. **Measure accuracy.** Track cached vs live price differences per supplier and route to tune TTLs and refresh.
+     7. **Supplier gateway.** Rate limits, timeouts, circuit breakers and per-supplier isolation so one slow supplier doesn't degrade search.
+   - **When to choose what:** Cached prices for discovery, live verification for commitment, and transparent handling of differences; tune freshness per supplier using measured price accuracy.
+   - **Numbers:**
+     - Look-to-book example: 1,000 searches per booking. Live-querying a supplier for every search at 1 million searches a day means 1 million calls; caching with live re-pricing only on selection (say 5% of searches) cuts it to 50,000.
+   - **Pitfalls:**
+     - Booking at cached prices without re-pricing.
+     - Showing a price change only after payment details are entered or charged.
+     - Live supplier calls on every search.
+     - One slow supplier blocking the entire results page.
+   - **Follow-ups:**
+     - _How do you rank results if some prices are stale?_ Use cached prices with freshness weighting, and prefer options with recently verified prices when quality matters.
+     - _A supplier is down. What do users see?_ Results from that supplier marked unavailable or hidden, while other suppliers continue; cached prices aren't bookable until re-priced.
+     - _How do you handle currency and taxes from suppliers?_ Normalise at the gateway, record supplier currency and conversion, and show final totals including taxes at re-price time.
+   - **Example:** A travel site booked hotels at prices cached for 6 hours and had 7% of bookings fail or lose money. Adding live re-pricing on room selection, showing changes before payment, and per-supplier TTLs tuned by accuracy data cut failures below 1%.
+   - **Sources:** [AWS Builders' Library: Caching challenges and strategies](https://aws.amazon.com/builders-library/caching-challenges-and-strategies/)
+179. **Airlines and hotels deliberately overbook. How do you design a system that allows controlled overbooking?** [mine · Advanced · Consistency, Architecture]
+   - **Trap:** "Overbooking is just a bug we tolerate; let the count go negative." — _Why it fails:_ Uncontrolled overselling is unbounded and unplanned. Deliberate overbooking is a policy: a calculated limit based on no-show predictions, with a defined process when more customers show up than capacity. — _Probing:_ Separating physical capacity from sellable authorisation, forecasting, limits, and handling oversold situations. — _Say:_ "Physical capacity and the authorised selling limit are separate numbers; the limit comes from a no-show forecast and risk tolerance; bookings are atomic against the limit; and an oversale process (volunteers, compensation, rebooking) runs when needed."
+   - **Thesis:** Overbooking is a deliberate revenue policy: sell up to an authorised limit above physical capacity, set from forecast no-shows and cancellations and the cost of denied boarding or walking a guest. The system enforces the limit atomically, tracks the oversold risk, and has a defined process for when demand exceeds capacity.
+   - **60-second answer:** I'd keep two numbers per flight or room type and date: physical capacity, say 180 seats, and the authorised booking limit, maybe 188, set by a revenue management model from historical no-show and cancellation rates for that route, day and fare mix, balanced against the cost of bumping a passenger or relocating a guest. Bookings are accepted atomically against the authorised limit, exactly like normal inventory. As departure approaches, forecasts update and the limit adjusts, never below confirmed bookings. Near departure, the system projects show-ups and starts mitigation early: asking for volunteers with offers, upgrading to free capacity, or moving guests to partner hotels. Check-in reveals actual show-ups, and an oversale workflow handles denied boarding with compensation rules, which are often regulated, and rebooking. I'd log outcomes, such as no-show rates and denied boardings, to refine the model, and give operations dashboards of oversold exposure per flight or night.
+   - **Key points:**
+     1. **Capacity vs authorised limit.** Physical capacity is fixed; the selling limit can exceed it by a policy-determined amount.
+     2. **Forecast-driven limits.** No-show and cancellation forecasts by route, date and segment set the overbooking level.
+     3. **Cost trade-off.** Revenue from extra bookings versus expected cost of denied boarding, compensation and reputation.
+     4. **Atomic enforcement.** Bookings decrement against the authorised limit with the same concurrency safety as normal inventory.
+     5. **Dynamic adjustment.** Limits update as departure nears, never below confirmed bookings.
+     6. **Oversale process.** Volunteers, upgrades, partner capacity, compensation and rebooking, following regulations.
+     7. **Feedback loop.** Actual show-up and denied boarding data recalibrates forecasts.
+   - **When to choose what:** Deliberate, model-driven overbooking with atomic enforcement of an authorised limit and a regulated oversale workflow; uncontrolled overselling is never acceptable.
+   - **Numbers:**
+     - Example: 180 seats with a forecast 5% no-show rate (about 9 passengers) might justify selling 186–188, depending on variance and denied-boarding cost.
+   - **Pitfalls:**
+     - Treating overbooking as unbounded overselling.
+     - Static limits ignoring route and season differences.
+     - No early mitigation, so problems surface at the gate.
+     - Ignoring regulatory compensation requirements.
+   - **Follow-ups:**
+     - _Where else does controlled overbooking apply?_ Cloud resource overcommit, restaurant reservations, appointment slots and ticketing for events with typical no-shows.
+     - _How do you handle group bookings?_ Separate forecasting and limits for groups, which have different cancellation patterns, and contracts with release dates.
+     - _What metrics matter?_ Load factor, denied boardings per 10,000 passengers, spoilage (empty seats) and compensation cost.
+   - **Example:** A regional airline with fixed overbooking of 3% on every flight had empty seats on business routes and many denied boardings on holiday routes. A per-route model with dynamic limits and an early volunteer offer system raised load factor while reducing involuntary denied boardings.
+   - **Sources:** [US Department of Transportation: Bumping and oversales](https://www.transportation.gov/individuals/aviation-consumer-protection/bumping-oversales)
 
 ### SaaS & B2B
 

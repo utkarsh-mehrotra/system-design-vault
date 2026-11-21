@@ -1,0 +1,81 @@
+{
+  "trap": {
+    "wrong": "\"Run every post through an ML classifier and delete anything it flags.\"",
+    "why": "Classifiers make mistakes in both directions, context and policy nuance matter, some content (like child abuse material) needs specialised handling, and over-removal harms users and trust. Purely automated deletion with no review or appeal fails on all counts.",
+    "probe": "Layered detection, severity-based actions, human review queues, appeals and policy versioning.",
+    "say": "\"Layered checks: hash matching for known illegal content, classifiers with confidence thresholds, user reports; actions scaled to severity and confidence, from limiting distribution to removal; human review for the uncertain middle; appeals; and metrics on precision and reviewer load.\""
+  },
+  "thesis": "Moderation is a pipeline of detection, decision and enforcement shaped by policy. Combine hash matching, classifiers, user reports and behavioural signals; act according to severity and confidence; route uncertain cases to trained reviewers; support appeals; and measure quality continuously.",
+  "pitch": "At upload or post time, I'd run fast checks synchronously: hash matching against databases of known illegal content, such as PhotoDNA-style hashes for child sexual abuse material, which must be blocked and reported, and lightweight text and image classifiers. High-confidence severe violations are blocked immediately; low-confidence or borderline content is allowed with reduced distribution or queued for review; clearly fine content passes. Heavier models and context-aware checks run asynchronously after posting. User reports feed the same queues, prioritised by severity, reach and reporter reliability. Human reviewers work from queues with good tooling, clear policy guidelines and wellbeing protections, and their decisions are audited and used to retrain models. Enforcement is graduated: label, limit reach, remove, suspend, ban, with notices explaining which policy applied and an appeal path. Policies are versioned so decisions can be traced, and I'd track precision, recall estimates via sampling, time to action, appeal overturn rates and reviewer workload.",
+  "points": [
+    {
+      "h": "Hash matching for known content",
+      "d": "Known illegal or previously removed content matched by perceptual hashes, blocked and reported as required by law."
+    },
+    {
+      "h": "Classifiers with thresholds",
+      "d": "Confidence thresholds per policy and severity decide block, review or allow."
+    },
+    {
+      "h": "Sync and async stages",
+      "d": "Fast checks at post time; heavier models and context checks after posting."
+    },
+    {
+      "h": "Reports and prioritisation",
+      "d": "User reports prioritised by severity, reach and reporter trustworthiness."
+    },
+    {
+      "h": "Human review",
+      "d": "Trained reviewers handle uncertain and high-impact cases with tooling, guidelines and wellbeing support."
+    },
+    {
+      "h": "Graduated enforcement and appeals",
+      "d": "Labels, reach limits, removals and bans with explanations and an appeal process."
+    },
+    {
+      "h": "Measure and retrain",
+      "d": "Precision, recall sampling, time to action, overturn rates; reviewer decisions feed model training."
+    }
+  ],
+  "decision": "Layered automated detection with severity-based actions, human review for the uncertain middle, legal handling for illegal content, and appeals, all governed by versioned policies.",
+  "numbers": [
+    "Review capacity sketch: 50 million posts a day with 0.5% routed to review is 250,000 items; at 300 items per reviewer per day that's over 800 reviewers, which is why thresholds and prioritisation matter."
+  ],
+  "pitfalls": [
+    "Auto-deleting on classifier flags with no review or appeal.",
+    "No special handling for legally mandated categories.",
+    "Ignoring reviewer wellbeing and workload.",
+    "Policies changing without versioning, making decisions untraceable."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle viral harmful content quickly?",
+      "a": "Prioritise by reach velocity, hash the content once actioned so copies are caught automatically, and reduce distribution while review is pending."
+    },
+    {
+      "q": "How do you moderate end-to-end encrypted messages?",
+      "a": "The server can't inspect content, so rely on user reports (with reported messages shared by the reporter), metadata signals and client-side features, with significant privacy trade-offs."
+    },
+    {
+      "q": "How do you evaluate a new classifier?",
+      "a": "Offline on labelled data per policy, then shadow mode comparing with current decisions, then gradual rollout with reviewer feedback."
+    }
+  ],
+  "example": "A community app auto-removed anything its toxicity model flagged and faced a backlash over removed posts about reclaimed slurs and medical topics. Switching to thresholds with a review queue for mid-confidence flags, reduced-reach for borderline posts and an appeal flow cut wrongful removals sharply while severe content still went down within minutes.",
+  "related": [
+    "listing-review-fraud",
+    "llm-guardrails-abuse",
+    "audit-logs-tamper-evident",
+    "design-dead-letter-queues-retry"
+  ],
+  "sources": [
+    {
+      "title": "Microsoft: PhotoDNA",
+      "url": "https://www.microsoft.com/en-us/photodna"
+    },
+    {
+      "title": "Santa Clara Principles on transparency and accountability in content moderation",
+      "url": "https://santaclaraprinciples.org/"
+    }
+  ]
+}

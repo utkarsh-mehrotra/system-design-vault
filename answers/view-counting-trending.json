@@ -1,0 +1,77 @@
+{
+  "trap": {
+    "wrong": "\"Increment a view counter in the database each time someone plays the video.\"",
+    "why": "Popular videos create hot rows that can't take the write rate, replays and bots inflate counts, and trending based on raw totals favours old videos instead of what's rising now.",
+    "probe": "Event pipelines with dedupe and validity rules, sharded or batched counters, and time-decayed trending.",
+    "say": "\"Views are events processed through a pipeline that applies validity rules (minimum watch time, bot filtering, dedupe per user), aggregated in windows into counters, with trending computed from velocity with time decay rather than totals.\""
+  },
+  "thesis": "Views are events, not increments. Define what counts as a view, process events in a pipeline that dedupes and filters invalid traffic, aggregate in time windows into scalable counters, and compute trending from recent velocity with decay and anomaly detection.",
+  "pitch": "First the definition: a view might require 30 seconds of playback or a percentage of the video, one counted view per user per time window, excluding known bots. Players emit events; a stream processor validates and dedupes them and aggregates counts per video per minute. Counts are written as batched increments to a key-value store, sharded for hot videos, so one popular video isn't a single hot row. The displayed number can lag a little; platforms often freeze or delay counts while validation catches up. Trending isn't total views: it's velocity relative to expectations, such as views in the last hour compared with the video's previous hours and its category's baseline, with exponential time decay, and it's computed per region and refreshed every few minutes. Manipulation shows up as sudden bursts from few accounts or devices, so trending inputs pass through anomaly detection, and suspicious views are excluded or audited. Approximate structures like count-min sketches help find candidate trending items cheaply at large scale.",
+  "points": [
+    {
+      "h": "Define a valid view",
+      "d": "Minimum watch time, one view per user per window, bot and fraud exclusions."
+    },
+    {
+      "h": "Event pipeline",
+      "d": "Player events streamed, validated, deduplicated and aggregated, not direct database increments."
+    },
+    {
+      "h": "Windowed aggregation",
+      "d": "Per-minute or per-hour counts by event time, merged into totals."
+    },
+    {
+      "h": "Scalable counters",
+      "d": "Batched increments and sharded counters for very popular videos avoid hot rows."
+    },
+    {
+      "h": "Displayed counts can lag",
+      "d": "Showing slightly delayed or validated counts is acceptable and harder to manipulate."
+    },
+    {
+      "h": "Trending = velocity with decay",
+      "d": "Recent growth relative to the item's and category's baselines, with exponential decay, per region."
+    },
+    {
+      "h": "Anomaly detection",
+      "d": "Bursts from narrow sources are flagged and excluded from counts and trending."
+    }
+  ],
+  "decision": "Event-driven counting with validity rules, sharded batched counters, and velocity-based trending with anomaly filtering; exact public counts only after validation.",
+  "numbers": [
+    "Hot-row math: a viral video at 50,000 views/s can't be a single-row increment; aggregating per second in the stream and writing one batched increment per shard reduces writes to a handful per second."
+  ],
+  "pitfalls": [
+    "Synchronous database increments per play.",
+    "Counting every play event, including replays and bots.",
+    "Trending by all-time totals.",
+    "No defence against view-buying bursts."
+  ],
+  "followups": [
+    {
+      "q": "Why do some platforms pause view counts at certain numbers?",
+      "a": "To let fraud validation catch up before publishing counts, trading freshness for accuracy and resistance to manipulation."
+    },
+    {
+      "q": "How do you compute trending per region cheaply?",
+      "a": "Windowed counts per video and region in the stream processor, with count-min sketches or top-K structures to find candidates before precise scoring."
+    },
+    {
+      "q": "How do creators see analytics without exposing fraud signals?",
+      "a": "Show validated counts and aggregated analytics; keep detection details internal."
+    }
+  ],
+  "example": "A video platform's view counter row for viral videos caused database lock contention. Moving to stream aggregation with per-minute batched increments into sharded counters, a 30-second view threshold and bot filtering stabilised the database, and a velocity-based trending score stopped old viral videos dominating the trending page.",
+  "related": [
+    "approximate-counting-sketches",
+    "stream-windows-late-data",
+    "hot-partition-shows-up-2",
+    "ad-event-counting-attribution"
+  ],
+  "sources": [
+    {
+      "title": "Evan Miller: Ranking items with time decay (Hacker News and Reddit style scoring)",
+      "url": "https://www.evanmiller.org/rank-hotness-with-newtons-law-of-cooling.html"
+    }
+  ]
+}

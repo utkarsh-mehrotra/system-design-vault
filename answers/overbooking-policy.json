@@ -1,0 +1,76 @@
+{
+  "trap": {
+    "wrong": "\"Overbooking is just a bug we tolerate; let the count go negative.\"",
+    "why": "Uncontrolled overselling is unbounded and unplanned. Deliberate overbooking is a policy: a calculated limit based on no-show predictions, with a defined process when more customers show up than capacity.",
+    "probe": "Separating physical capacity from sellable authorisation, forecasting, limits, and handling oversold situations.",
+    "say": "\"Physical capacity and the authorised selling limit are separate numbers; the limit comes from a no-show forecast and risk tolerance; bookings are atomic against the limit; and an oversale process (volunteers, compensation, rebooking) runs when needed.\""
+  },
+  "thesis": "Overbooking is a deliberate revenue policy: sell up to an authorised limit above physical capacity, set from forecast no-shows and cancellations and the cost of denied boarding or walking a guest. The system enforces the limit atomically, tracks the oversold risk, and has a defined process for when demand exceeds capacity.",
+  "pitch": "I'd keep two numbers per flight or room type and date: physical capacity, say 180 seats, and the authorised booking limit, maybe 188, set by a revenue management model from historical no-show and cancellation rates for that route, day and fare mix, balanced against the cost of bumping a passenger or relocating a guest. Bookings are accepted atomically against the authorised limit, exactly like normal inventory. As departure approaches, forecasts update and the limit adjusts, never below confirmed bookings. Near departure, the system projects show-ups and starts mitigation early: asking for volunteers with offers, upgrading to free capacity, or moving guests to partner hotels. Check-in reveals actual show-ups, and an oversale workflow handles denied boarding with compensation rules, which are often regulated, and rebooking. I'd log outcomes, such as no-show rates and denied boardings, to refine the model, and give operations dashboards of oversold exposure per flight or night.",
+  "points": [
+    {
+      "h": "Capacity vs authorised limit",
+      "d": "Physical capacity is fixed; the selling limit can exceed it by a policy-determined amount."
+    },
+    {
+      "h": "Forecast-driven limits",
+      "d": "No-show and cancellation forecasts by route, date and segment set the overbooking level."
+    },
+    {
+      "h": "Cost trade-off",
+      "d": "Revenue from extra bookings versus expected cost of denied boarding, compensation and reputation."
+    },
+    {
+      "h": "Atomic enforcement",
+      "d": "Bookings decrement against the authorised limit with the same concurrency safety as normal inventory."
+    },
+    {
+      "h": "Dynamic adjustment",
+      "d": "Limits update as departure nears, never below confirmed bookings."
+    },
+    {
+      "h": "Oversale process",
+      "d": "Volunteers, upgrades, partner capacity, compensation and rebooking, following regulations."
+    },
+    {
+      "h": "Feedback loop",
+      "d": "Actual show-up and denied boarding data recalibrates forecasts."
+    }
+  ],
+  "decision": "Deliberate, model-driven overbooking with atomic enforcement of an authorised limit and a regulated oversale workflow; uncontrolled overselling is never acceptable.",
+  "numbers": [
+    "Example: 180 seats with a forecast 5% no-show rate (about 9 passengers) might justify selling 186–188, depending on variance and denied-boarding cost."
+  ],
+  "pitfalls": [
+    "Treating overbooking as unbounded overselling.",
+    "Static limits ignoring route and season differences.",
+    "No early mitigation, so problems surface at the gate.",
+    "Ignoring regulatory compensation requirements."
+  ],
+  "followups": [
+    {
+      "q": "Where else does controlled overbooking apply?",
+      "a": "Cloud resource overcommit, restaurant reservations, appointment slots and ticketing for events with typical no-shows."
+    },
+    {
+      "q": "How do you handle group bookings?",
+      "a": "Separate forecasting and limits for groups, which have different cancellation patterns, and contracts with release dates."
+    },
+    {
+      "q": "What metrics matter?",
+      "a": "Load factor, denied boardings per 10,000 passengers, spoilage (empty seats) and compensation cost."
+    }
+  ],
+  "example": "A regional airline with fixed overbooking of 3% on every flight had empty seats on business routes and many denied boardings on holiday routes. A per-route model with dynamic limits and an early volunteer offer system raised load factor while reducing involuntary denied boardings.",
+  "related": [
+    "booking-holds-no-double",
+    "flash-sale-never-oversell",
+    "available-to-promise-inventory"
+  ],
+  "sources": [
+    {
+      "title": "US Department of Transportation: Bumping and oversales",
+      "url": "https://www.transportation.gov/individuals/aviation-consumer-protection/bumping-oversales"
+    }
+  ]
+}
