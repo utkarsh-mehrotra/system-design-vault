@@ -4,14 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Staff Design Vault</title>
+<meta name="description" content="A working index of staff-level system design questions, grouped by topic, each with the points a strong answer covers.">
+<meta property="og:title" content="Staff Design Vault">
+<meta property="og:description" content="Staff-level system design questions with answer outlines, grouped by topic.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#f3f4f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101417" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a5c6b'/%3E%3Cpath d='M8 10h16M8 16h11M8 22h7' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("sdv-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <style>
-/* Layout idea: engineer's logbook. Left-aligned masthead, dense ruled index of questions, difficulty shown as a bar gauge, answer outlines open in place. */
+/* Engineer's logbook: left-aligned masthead, dense ruled index, difficulty as a bar gauge, outlines open in place. */
 :root{
   --bg:#f3f4f1; --surface:#ffffff; --ink:#15191d; --muted:#5c646b; --rule:#d9dcd6;
-  --accent:#0a5c6b; --accent-ink:#ffffff;
+  --accent:#0a5c6b; --accent-ink:#ffffff; --mark:#fbe7a1;
   --f:#2f7d4f; --i:#a86a00; --a:#b3321f;
   --display:"JetBrains Mono",ui-monospace,Menlo,monospace;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -20,20 +28,28 @@
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --bg:#101417; --surface:#171d21; --ink:#e8ecee; --muted:#9aa4ab; --rule:#2a3237;
-    --accent:#5cc4d6; --accent-ink:#06242a;
+    --accent:#5cc4d6; --accent-ink:#06242a; --mark:#5a4a12;
     --f:#6cc58f; --i:#e0a43d; --a:#f0806e; color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --bg:#101417; --surface:#171d21; --ink:#e8ecee; --muted:#9aa4ab; --rule:#2a3237;
-  --accent:#5cc4d6; --accent-ink:#06242a;
+  --accent:#5cc4d6; --accent-ink:#06242a; --mark:#5a4a12;
   --f:#6cc58f; --i:#e0a43d; --a:#f0806e; color-scheme:dark;
 }
 *{box-sizing:border-box}
+html{scroll-padding-top:64px}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--body)}
-.wrap{max-width:920px;margin:0 auto;padding:0 20px}
-header{padding:44px 0 24px;border-bottom:2px solid var(--ink)}
+.wrap{max-width:920px;margin:0 auto;padding:0 16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+mark{background:var(--mark);color:inherit;padding:0 1px;border-radius:2px}
+button{font:inherit;color:inherit}
+button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header{padding:40px 0 22px;border-bottom:2px solid var(--ink)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .eyebrow{font:700 12px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.theme{font:500 12px var(--display);padding:6px 10px;border:1px solid var(--rule);background:var(--surface);border-radius:999px;cursor:pointer}
 h1{font:700 clamp(28px,5vw,42px)/1.1 var(--display);margin:12px 0 10px;text-wrap:balance}
 .lede{max-width:62ch;color:var(--muted);margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:8px 28px;margin-top:22px;font:500 13px var(--display);font-variant-numeric:tabular-nums}
@@ -41,52 +57,82 @@ h1{font:700 clamp(28px,5vw,42px)/1.1 var(--display);margin:12px 0 10px;text-wrap
 .stats span{color:var(--muted)}
 .bar{height:4px;background:var(--rule);margin-top:18px}
 .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
-.controls{padding:20px 0 8px;display:grid;gap:12px}
+
+.catnav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--rule)}
+.catnav .wrap{display:flex;gap:6px;overflow-x:auto;padding-top:10px;padding-bottom:10px;scrollbar-width:thin}
+.catnav a{flex:0 0 auto;font:500 12px var(--display);color:var(--ink);text-decoration:none;padding:6px 10px;border:1px solid var(--rule);border-radius:999px;background:var(--surface);white-space:nowrap}
+.catnav a span{color:var(--muted);margin-left:6px;font-variant-numeric:tabular-nums}
+.catnav a.full{border-color:var(--accent)}
+
+.controls{padding:18px 0 4px;display:grid;gap:10px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 input[type=search],select{font:400 15px var(--body);padding:10px 12px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:4px;min-height:42px}
 input[type=search]{flex:1 1 260px}
 select{flex:0 1 280px}
+.filters{border:1px solid var(--rule);border-radius:4px;background:var(--surface)}
+.filters>summary{list-style:none;cursor:pointer;padding:10px 12px;font:600 13px var(--display);display:flex;justify-content:space-between;gap:8px}
+.filters>summary::-webkit-details-marker{display:none}
+.filters>summary .fc{color:var(--accent)}
+.filters>summary::after{content:"+";color:var(--muted)}
+.filters[open]>summary::after{content:"\2212"}
+.fbody{padding:4px 12px 12px;display:grid;gap:10px}
+.fbody .row>.row{flex:1 1 0;min-width:0}
+.glabel{font:700 11px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);width:64px;flex:0 0 auto}
 .chip{font:500 12px var(--display);padding:7px 11px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:999px;cursor:pointer}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.chip.clear{border-style:dashed;color:var(--muted)}
-button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.count{font:500 13px var(--display);color:var(--muted);padding:6px 0 10px}
-h2.cat{font:700 13px var(--display);letter-spacing:.06em;text-transform:uppercase;margin:28px 0 0;padding:8px 0;border-bottom:1px solid var(--ink);display:flex;justify-content:space-between}
-h2.cat span{color:var(--muted);font-weight:500}
+.chip.ghost{border-style:dashed;color:var(--muted)}
+
+.toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 6px}
+.count{font:500 13px var(--display);color:var(--muted)}
+.tools{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font:500 12px var(--display);padding:7px 11px;border:1px solid var(--rule);background:var(--surface);border-radius:4px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+h2.cat{font:700 13px var(--display);letter-spacing:.06em;text-transform:uppercase;margin:28px 0 0;padding:8px 0;border-bottom:1px solid var(--ink);display:flex;justify-content:space-between;gap:12px}
+h2.cat span{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
 h3.topic{font:600 13px var(--body);margin:18px 0 0;padding:0 4px 6px;color:var(--accent);display:flex;gap:8px;align-items:baseline}
 h3.topic span{font:500 11px var(--display);color:var(--muted)}
-details{border-bottom:1px solid var(--rule)}
-summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:start;padding:14px 4px}
-summary::-webkit-details-marker{display:none}
+details.qa{border-bottom:1px solid var(--rule)}
+details.qa>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:28px 1fr 16px;gap:12px;align-items:start;padding:14px 4px}
+details.qa>summary::-webkit-details-marker{display:none}
+details.qa:target>summary,details.qa.flash>summary{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .num{font:500 12px/1.9 var(--display);color:var(--muted);font-variant-numeric:tabular-nums}
 .q{font-weight:500;text-wrap:pretty}
 .meta{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font:500 11px var(--display);color:var(--muted)}
+.meta .ok{color:var(--accent)}
 .gauge{display:inline-flex;gap:2px;vertical-align:middle;margin-right:4px}
 .gauge u{width:10px;height:5px;background:var(--rule);text-decoration:none}
-.lvl-F .gauge u:nth-child(-n+1){background:var(--f)}
-.lvl-I .gauge u:nth-child(-n+2){background:var(--i)}
-.lvl-A .gauge u:nth-child(-n+3){background:var(--a)}
-.chev{font:700 14px var(--display);color:var(--muted);transition:transform .15s;padding-top:2px}
-details[open] .chev{transform:rotate(90deg)}
-.body{padding:2px 4px 18px 44px;max-width:70ch}
+.lvl-fundamental .gauge u:nth-child(-n+1){background:var(--f)}
+.lvl-intermediate .gauge u:nth-child(-n+2){background:var(--i)}
+.lvl-advanced .gauge u:nth-child(-n+3){background:var(--a)}
+.chev{width:14px;height:14px;margin-top:4px;color:var(--muted);transition:transform .15s}
+details.qa[open] .chev{transform:rotate(90deg)}
+.body{padding:2px 4px 18px 44px;max-width:72ch}
 .body p{margin:0 0 12px}
-.body .lbl{font:700 11px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.lbl{font:700 11px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+.also{margin:4px 0 14px;padding-left:18px;color:var(--muted);font-size:14px}
+.also li{margin:2px 0}
+.actions{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
 .done{font:500 12px var(--display);display:inline-flex;gap:8px;align-items:center;cursor:pointer}
 .done input{width:18px;height:18px;accent-color:var(--accent)}
+.link{font:500 12px var(--display);background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .empty{padding:40px 0;color:var(--muted)}
 footer{margin:48px 0;padding-top:16px;border-top:1px solid var(--rule);color:var(--muted);font-size:13px}
-@media (max-width:520px){.body{padding-left:4px}summary{grid-template-columns:24px 1fr 14px}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+footer .row{margin-top:10px}
+@media (max-width:520px){.body{padding-left:4px}details.qa>summary{grid-template-columns:24px 1fr 14px}.glabel{width:100%}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
 <header><div class="wrap">
-  <div class="eyebrow">Staff-level system design</div>
+  <div class="top"><div class="eyebrow">Staff-level system design</div><button class="theme" id="theme" type="button"></button></div>
   <h1>Staff Design Vault</h1>
-  <p class="lede">A working index of design questions for senior and staff interviews. Each one comes with the points a strong answer covers. Mark questions as reviewed and your progress stays in this browser.</p>
+  <p class="lede">A working index of design questions for senior and staff interviews. Each one comes with the points a strong answer covers. Progress is saved in this browser; export it to move between devices.</p>
   <div class="stats" id="stats"></div>
   <div class="bar" aria-hidden="true"><i id="prog"></i></div>
 </div></header>
+
+<nav class="catnav" aria-label="Categories"><div class="wrap" id="catnav"></div></nav>
 
 <main class="wrap">
   <div class="controls">
@@ -94,280 +140,168 @@ footer{margin:48px 0;padding-top:16px;border-top:1px solid var(--rule);color:var
       <input type="search" id="q" placeholder="Search questions, answer points, or tags" aria-label="Search">
       <select id="cat" aria-label="Category"></select>
     </div>
-    <div class="row" id="diffs" role="group" aria-label="Difficulty"></div>
-    <div class="row" id="tags" role="group" aria-label="Tags"></div>
+    <details class="filters" id="filters">
+      <summary>Filters <span class="fc" id="fc"></span></summary>
+      <div class="fbody">
+        <div class="row" role="group" aria-labelledby="g-lvl"><span class="glabel" id="g-lvl">Level</span><span class="row" id="lvls"></span></div>
+        <div class="row" role="group" aria-labelledby="g-src"><span class="glabel" id="g-src">Source</span><span class="row" id="srcs"></span></div>
+        <div class="row" role="group" aria-labelledby="g-st"><span class="glabel" id="g-st">Status</span><span class="row" id="status"></span></div>
+        <div class="row" role="group" aria-labelledby="g-tag"><span class="glabel" id="g-tag">Tags</span><span class="row" id="tags"></span></div>
+      </div>
+    </details>
   </div>
-  <div class="count" id="count" aria-live="polite"></div>
+  <div class="toolbar">
+    <div class="count" id="count" aria-live="polite"></div>
+    <div class="tools">
+      <button class="btn primary" type="button" id="random">Random unreviewed</button>
+      <button class="btn" type="button" id="expand">Expand all</button>
+      <button class="btn" type="button" id="collapse">Collapse all</button>
+    </div>
+  </div>
   <div id="list"></div>
 </main>
 
-<footer><div class="wrap">Private study copy. "Ref list" questions are titles from a third-party list; every answer outline here is written independently. Do not publish this page. Treat the outlines as a checklist to build your own answer from, not a script.</div></footer>
+<footer><div class="wrap">
+  <div>Questions marked "ref list" are titles from a third-party list; every answer outline is written independently. Use the outlines as a checklist to build your own answer from, not a script.</div>
+  <div class="row">
+    <button class="btn" type="button" id="export">Export progress</button>
+    <button class="btn" type="button" id="import">Import progress</button>
+    <input type="file" id="file" accept="application/json,.json" hidden>
+    <span id="msg" aria-live="polite"></span>
+  </div>
+</div></footer>
 
+<script src="data.js"></script>
 <script>
-var CATS=["Scale & Traffic","Data & Storage","Consistency & Transactions","Reliability & Failure","Streaming & Async","APIs & Boundaries","Observability & Operations","Judgment & Leadership","Caching & Performance","Evolution, Cost & Trade-offs"];
-var ORDER=[0,1,8,2,3,4,5,6,9,7];
-var LV={F:"Fundamental",I:"Intermediate",A:"Advanced"};
-// [category index, level, question, tags, what a strong answer covers]
-var D=[
-[0,"F","Walk one request from DNS to the database and back. Where does each millisecond go?",["Latency","Networking"],"Name every hop: DNS, TLS, CDN or edge, load balancer, service, cache, database. Give each hop a latency budget, then say which hops dominate p99 and why."],
-[0,"I","Read traffic grows 10x in one quarter. What do you change first, and what do you refuse to change?",["Scaling","Caching"],"Measure the bottleneck before acting. Cache and add read replicas before sharding. Hold the API contract and data model steady so clients and teams do not have to move."],
-[0,"I","When does splitting a monolith pay for itself?",["Scaling","Architecture"],"Team ownership lines, different deploy cadence, different scaling profiles. Price in the costs: network failure modes, distributed data, on-call load. A modular monolith is a valid answer."],
-[0,"A","Design admission control so a service stays up through a 20x spike.",["Load shedding","Reliability"],"Shed by priority, bound every queue, use adaptive concurrency limits, apply per-tenant quotas, and fail fast with Retry-After. Protect the critical path first, batch work last."],
-[0,"I","Choose a load balancing strategy for long-lived connections versus short RPCs.",["Load balancing","Networking"],"Round robin, least-request, power of two choices, consistent hashing. Connection draining, slow start for new instances, and what happens to sticky state on scale-in."],
-[0,"A","Size a system for 50,000 requests per second with a 100 ms hard deadline.",["Capacity","Latency"],"Back-of-envelope CPU, memory and network per request. Fan-out cost, timeout budget split across calls, 30 to 40 percent headroom, and what you drop when the deadline is about to be missed."],
-
-[1,"I","Pick a partition key for a multi-tenant ledger, then show how it fails.",["Sharding","Databases"],"Tenant, account or time as candidates. Failure cases: one giant tenant, time-based hot tail, cross-partition queries. Mitigate with composite keys, salting for heavy keys, and a resharding plan."],
-[1,"A","A hot partition shows up at 2 a.m. Diagnose it and fix it without downtime.",["Sharding","Incidents"],"Confirm skew from per-partition metrics. Short-term: cache the hot key, rate limit, split the range. Long-term: change the key, add a salt, rebalance online. Say how you verify the fix."],
-[1,"F","Where is the boundary between OLTP and OLAP, and how does data cross it?",["OLTP","OLAP"],"Row store for transactions, columnar store for analytics. Move data by change data capture, not dual writes. Cover lag, backfill, and schema drift between the two sides."],
-[1,"I","Design indexes for a table that takes 90 percent writes.",["Indexing","Databases"],"Every index taxes writes. Keep the few that serve real queries, prefer covering indexes, consider LSM engines, and push ad hoc reads to a replica or search store."],
-[1,"A","Migrate a billion-row table to a new schema with zero downtime.",["Migration","Reliability"],"Expand, dual write, throttled backfill, verify with checksums, shadow reads, cut over, then contract. Keep a rollback path until the old column has been unused for a full cycle."],
-[1,"I","Design retention, soft delete and legal erasure so they do not contradict each other.",["Compliance","Storage"],"Different clocks for each: soft delete for undo, retention for policy, erasure for law. Cover backups, derived stores, logs, and how you prove deletion happened."],
-
-[2,"F","Where is eventual consistency acceptable in a payments flow, and where is it never acceptable?",["Consistency","Payments"],"Balances and ledger postings need strong guarantees. Notifications, search views and analytics can lag. State the invariant first, then pick the weakest consistency that protects it."],
-[2,"A","Build idempotency for a write API that clients and your own gateway can both retry.",["Idempotency","APIs"],"Client-supplied key, atomic claim of the key with the write, stored response for replays, key expiry, and the in-flight duplicate case. Say what you do when the request body differs."],
-[2,"A","Replace a two-phase commit across three services.",["Transactions","Saga"],"Saga with compensations, transactional outbox, idempotent consumers. Be honest about what you give up: isolation. Show how a half-finished saga is visible and recoverable."],
-[2,"I","Give users read-your-writes when reads are served from replicas.",["Replication","Consistency"],"Route a user's reads to the primary for a short window, or carry a log position token and wait for replicas to reach it. Compare cost and complexity."],
-[2,"I","Generate unique IDs across regions without a central counter.",["IDs","Distributed systems"],"Snowflake-style, ULID, UUIDv7. Clock skew, sortability, index locality, and what breaks if a node reuses a worker id."],
-[2,"I","Where do Raft, Paxos, quorums and gossip appear in a system you would really build?",["Consensus","Distributed systems"],"Coordination and metadata on a consensus log, tunable quorums for data, gossip for membership and failure detection. Show that you use them, not reimplement them."],
-
-[3,"F","List the ways a three-tier service fails under real load before drawing any boxes.",["Failure modes","Reliability"],"Slow dependencies, retries, queue growth, GC pauses, connection pool exhaustion, bad deploys, clock drift, partial network partitions. Slow is worse than down."],
-[3,"I","Retries are amplifying an outage. Design retries that do not.",["Retries","Reliability"],"Retry budgets, exponential backoff with jitter, deadline propagation, retry at one layer only, idempotent operations only, and a kill switch."],
-[3,"I","Choose and size circuit breakers, bulkheads and timeouts.",["Resilience","Reliability"],"Timeout below the caller's deadline, bulkhead per dependency, breaker thresholds from observed error rate. Cover half-open probing and fallback behavior."],
-[3,"A","Fail over between two regions without split brain.",["Multi-region","Reliability"],"Single writer per partition, fencing tokens, health-based traffic shifting, data loss window (RPO) and recovery time (RTO) stated up front. Practice the failover, do not just draw it."],
-[3,"A","Define SLOs for a lending platform and derive alerts from the error budget.",["SLO","Observability"],"User-visible indicators such as approval latency and disbursal success. Multi-window burn rate alerts. Link budget exhaustion to a release freeze policy."],
-[3,"A","Plan a rollback for a release that has already migrated data.",["Release","Migration"],"Backward compatible schema, feature flags, forward-fix versus rollback decision rule, and data written by the new code that the old code must still read."],
-
-[4,"F","Event-driven or request-response for order placement? Decide and defend it.",["Events","Architecture"],"Customer needs an answer now, so the order write is synchronous. Downstream work (fulfilment, notifications) is asynchronous. Say where you need a durable event and where a call is enough."],
-[4,"A","Exactly-once in practice: what do Kafka and Flink give you, and what do you still own?",["Kafka","Flink"],"Idempotent producers, transactions, checkpointed state. The sink and any external side effect still need idempotency. Be precise: exactly-once processing, not exactly-once delivery."],
-[4,"A","A poison message blocks a partition. Design the handling.",["Kafka","Reliability"],"Bounded retries, retry topics with delay, dead-letter topic with context, alert on DLQ depth, and a safe replay tool. Decide when skipping is acceptable."],
-[4,"A","Keep ordering when you also need parallelism.",["Ordering","Kafka"],"Key by the entity whose order matters, choose partition count for peak consumers, sequence numbers per key, and what happens during rebalance."],
-[4,"A","Design a scheduler for millions of delayed jobs a day.",["Scheduling","Scalability"],"Time-bucketed storage, a sharded poller with leases, at-least-once execution with idempotent jobs, clock skew, backlog catch-up after an outage."],
-[4,"I","Evolve an event schema without breaking consumers.",["Schema","Events"],"Schema registry with compatibility mode, additive changes, tolerant readers, versioned topics only as a last resort, and a deprecation window with consumer inventory."],
-
-[5,"I","Draw service boundaries for a lending platform: origination, underwriting, servicing, collections.",["Boundaries","Domain design"],"Bound by data ownership and change rate, not by nouns. Decide which data is copied by event and which is queried live. Show where a loan's state machine lives."],
-[5,"F","Version a public API when you cannot force clients to upgrade.",["Versioning","APIs"],"Additive changes by default, explicit versions for breaking ones, a support policy with dates, usage telemetry per version, and contract tests."],
-[5,"I","Design per-tenant rate limits that do not punish well-behaved bursty clients.",["Rate limiting","APIs"],"Token bucket with burst allowance, shared counters in a fast store, local approximation to cut round trips, clear 429 responses, and tiered quotas."],
-[5,"A","One request fans out to five services and two fail. What do you return?",["Partial failure","APIs"],"Classify calls as required or optional, return degraded results with a marker, set per-call timeouts, never block the whole response on the slowest optional call."],
-[5,"I","Deprecate an endpoint safely.",["Deprecation","APIs"],"Find real callers from logs, announce with dates, add Sunset headers, brown-out in staging then production, and keep a path for stragglers."],
-[5,"I","Design a gateway that can evolve independently of the services behind it.",["Gateway","Architecture"],"Keep it thin: routing, auth, limits, observability. No business logic. Config-driven routes, canary support, and its own failure budget."],
-
-[6,"F","What should each layer log, and what must never be logged?",["Logging","Security"],"Structured logs with a request id at every layer. Never log secrets, tokens, full card numbers or personal data. Sampling for high-volume paths and retention by sensitivity."],
-[6,"A","Trace a request across 50 services without a runaway bill.",["Tracing","Cost"],"Context propagation everywhere, tail-based sampling that keeps errors and slow traces, span attributes that are queryable, and a budget per team."],
-[6,"A","p50 is flat but p99 doubled. How do you debug it?",["Latency","Debugging"],"Look for queueing, GC, noisy neighbors, a slow shard, retries, lock contention. Compare by instance, endpoint and dependency. Use exemplars to jump from a metric to a trace."],
-[6,"I","Alert on user pain, not on noise.",["Alerting","SLO"],"Page on symptoms such as error rate and latency against SLOs, ticket on causes. Every page needs an owner and a runbook link. Delete alerts that nobody acted on."],
-[6,"I","Rehearse failure before production does it for you.",["Chaos","Reliability"],"Game days, dependency fault injection, region evacuation drills, restore-from-backup tests. Start in staging with a hypothesis and a stop condition."],
-[6,"F","Write a runbook the on-call engineer can follow at 3 a.m.",["Runbooks","Operations"],"Symptom first, then checks in order, then safe actions with exact commands, then when to escalate. Tested by someone who did not write it."],
-
-[7,"I","Defend a design trade-off to a skeptical architect in five minutes.",["Communication","Trade-offs"],"State the constraint, the options you rejected and why, what would change your mind, and how you will find out cheaply if you are wrong."],
-[7,"I","How do you tell when a design is over-engineered?",["Judgment","Architecture"],"Components with no current requirement behind them, flexibility nobody has asked for, more moving parts than people to run them."],
-[7,"I","How do you tell when a design is dangerously under-engineered?",["Judgment","Reliability"],"No answer for the failure you can name, no way to roll back, no capacity numbers, one person who understands it."],
-[7,"A","Write a design doc that is still useful in three years.",["Documentation","Leadership"],"Context and constraints, alternatives considered, decisions with reasons, non-goals, and open questions. The reasons age better than the diagrams."],
-[7,"A","Review a peer's design deeply and still be easy to work with.",["Reviews","Leadership"],"Ask questions that expose assumptions, separate blocking concerns from preferences, propose an alternative when you object, and credit what is good."],
-[7,"I","Decide what to buy and what to build.",["Build vs buy","Trade-offs"],"Build what differentiates you and what you must control. Buy commodity. Count integration, lock-in, data egress and the people cost of running either."],
-
-/* Reference-list questions (source "r"): titles from a third-party list, outlines written independently. Private study copy. */
-[0,"F","What are the trade-offs between vertical and horizontal scaling?",["Scaling","Distributed systems"],"Vertical is simple and has a ceiling and a single point of failure. Horizontal needs statelessness or partitioning, adds coordination cost, and scales further. Most systems do vertical first, then horizontal where the data allows.","r"],
-[0,"I","How do I choose between synchronous and asynchronous communication?",["Message queues","Distributed systems"],"Synchronous when the caller needs the answer to proceed and latency is bounded. Asynchronous to decouple availability, absorb bursts and run slow work. Cost of async: eventual results, retries, duplicate handling.","r"],
-[0,"I","When should I use a queue versus direct RPC?",["Message queues","Distributed systems"],"Queue for buffering, fan-out, retries and independent consumer speed. RPC for request-scoped answers with a tight deadline. Never put a queue in a path that needs a synchronous response without a reply mechanism.","r"],
-[0,"A","How do I design for backpressure in a high-traffic system?",["Reliability","Scalability"],"Bounded queues, propagate pressure upstream (blocking, credits, 429s), shed load deliberately, and size consumers to drain bursts. Unbounded buffers only move the failure later.","r"],
-[0,"I","How do I design APIs so they can evolve without breaking clients?",["APIs","Scalability"],"Additive changes only, optional fields with defaults, tolerant readers, explicit versioning for breaks, and contract tests against real client usage.","r"],
-
-[1,"F","How do I decide between SQL, NoSQL, and search engines?",["Databases","Storage"],"Start from access patterns and consistency needs. Relational for transactions and ad hoc queries, key-value or wide-column for known-key scale, search engines for text and faceting as a derived index, never the source of truth.","r"],
-[1,"I","How do I shard data by user, tenant, region, or something else?",["Sharding","Databases"],"Shard on the dimension most queries filter by and that spreads load evenly. Cover cross-shard queries, rebalancing, and tenant or region affinity for locality and compliance.","r"],
-[1,"I","How do I handle multi-tenant data isolation?",["Multi-tenancy","Reliability"],"Row-level with tenant id on every query and enforced in the data layer, schema per tenant, or database per tenant. Trade isolation strength against cost and operational load. Plan noisy-neighbor controls and tenant export.","r"],
-[1,"A","How do I safely backfill data in production?",["Migration","Storage"],"Throttle against production load, make the job idempotent and resumable, process in key ranges, verify with counts and checksums, and keep it observable and stoppable.","r"],
-
-[8,"F","Where should I cache: client, edge, service, or DB layer?",["Caching","Networking"],"Closer to the user means lower latency and weaker control over invalidation. Match the layer to data volatility and sharing: edge for public static, service for computed results, DB layer for hot rows.","r"],
-[8,"F","How do I pick between write-through, write-back, and write-around caching?",["Caching"],"Write-through keeps cache and store aligned at write cost. Write-back is fast but risks loss on cache failure. Write-around avoids polluting the cache with data that is rarely read.","r"],
-[8,"I","How do I design cache invalidation rules that do not become a nightmare?",["Caching"],"Prefer TTLs with jitter plus event-driven invalidation for the few cases that need it. Version keys instead of deleting, keep key construction in one place, and accept bounded staleness explicitly.","r"],
-[8,"I","How do I handle cache stampede and thundering herd?",["Caching","Reliability"],"Request coalescing so one caller rebuilds, stale-while-revalidate, TTL jitter, early refresh, and a lock or lease with a short timeout.","r"],
-[8,"I","What is my caching story for hot keys and large objects?",["Caching","Scalability"],"Replicate hot keys across nodes or add a local near-cache, split large values, compress, and cap object size. Watch for one key saturating one cache shard.","r"],
-[8,"F","How do I measure whether a cache is actually helping?",["Caching","Observability"],"Hit ratio by key class, latency with and without, origin load saved, eviction rate, and cost per hit. A high hit ratio on cheap reads can still be pointless.","r"],
-[8,"I","How do I design pagination for massive datasets efficiently?",["Databases","Scalability"],"Keyset (cursor) pagination over offset, a stable sort key with a tiebreaker, bounded page size, and a plan for results that change between pages.","r"],
-
-[2,"I","How do I model consistency levels across services and data stores?",["Consistency","Distributed systems"],"Decide per data class: strong for money and inventory, read-your-writes for user-facing state, eventual for derived views. Document the guarantee at each service boundary.","r"],
-[2,"A","How do I design an outbox and inbox pattern for reliable events?",["Outbox","Message queues"],"Write the event in the same transaction as the state change, relay it to the broker, and dedupe on the consumer with an inbox table keyed by event id. Cover relay lag and ordering.","r"],
-[2,"I","How do I reconcile divergent data across systems?",["Reconciliation","Distributed systems"],"Pick a source of truth per field, run periodic comparison jobs, classify differences, auto-repair the safe ones, and route the rest for review. Track drift as a metric.","r"],
-[2,"I","How do I reason about CAP trade-offs for a given product requirement?",["CAP","Reliability"],"CAP only matters during a partition. For each operation decide whether it must refuse (consistency) or may proceed on stale or divergent data (availability), and what reconciliation follows.","r"],
-
-[3,"F","How do I design for graceful degradation instead of hard failure?",["Reliability"],"Rank features by importance, define a fallback for each dependency (cached, default, hidden), and test the degraded modes. Decide in advance what the user sees.","r"],
-[3,"A","How do I design for data center outage scenarios?",["Multi-region","Reliability"],"Spread across zones first, then regions. Know your capacity after losing one site, replicate data with a stated loss window, and keep traffic shifting and runbooks tested.","r"],
-[3,"A","How do I do schema changes without downtime?",["Migration","Databases"],"Expand and contract: add nullable, deploy code that writes both, backfill, switch reads, remove the old. Avoid long locks and test the online DDL path against production-size data.","r"],
-[3,"A","How do I make rebuild from scratch possible if everything is lost?",["Recovery","Storage"],"Infrastructure as code, tested backups with restore drills, a replayable event log as source of truth, documented bootstrap order, and a measured recovery time.","r"],
-
-[4,"I","How do I track the status of long-running jobs for users?",["Jobs","Message queues"],"A job record with state, progress and error, returned immediately with an id. Clients poll or subscribe. Make states resumable and make the record the source of truth, not the queue.","r"],
-[4,"A","How do I design a fan-out and fan-in pipeline for heavy computations?",["Scalability","Message queues"],"Split into idempotent tasks, track completion by counter or barrier, handle partial failure and stragglers, and bound concurrency to protect shared resources.","r"],
-
-[9,"F","How do I design something MVP-first that can still grow?",["Scalability","Architecture"],"Make the cheapest design that satisfies today's load, but keep the seams that are expensive to add later: identifiers, data ownership, API contracts and observability.","r"],
-[9,"I","How do I choose between building a platform and a one-off service?",["Architecture","Trade-offs"],"Build a platform when three or more teams need the same capability and the interface is stable. Otherwise ship the one-off and extract later from real usage.","r"],
-[9,"I","How do I design for cost visibility and optimization from day one?",["Cost","Observability"],"Tag every resource by team and service, expose cost per request or per tenant, set budgets and alerts, and review the top spenders on a schedule.","r"],
-[9,"A","How do I design systems that multiple teams can safely extend?",["Architecture","Leadership"],"Clear extension points, stable contracts, isolation so one team's plugin cannot take down others, and ownership documented per component.","r"],
-[9,"I","How do I design for backward compatibility with older clients?",["APIs","Compatibility"],"Support-window policy, version telemetry, feature negotiation, and server-side shims for the oldest supported clients. Know when you can finally stop supporting one.","r"],
-[9,"I","How do I plan for data residency and regional regulations?",["Compliance","Multi-region"],"Tag data by jurisdiction, pin storage and processing to regions, control cross-region replication and logs, and design deletion and access requests per region.","r"],
-[9,"I","How do I design to support experiments such as A/B tests and flags cleanly?",["Experimentation","Architecture"],"Central flag service with stable user bucketing, exposure logging, kill switches, and a cleanup process for dead flags. Keep experiment logic out of business code paths where possible.","r"],
-[9,"A","How do I design migration paths when the legacy system cannot just die?",["Migration","Architecture"],"Strangler pattern: route slices of traffic to the new system, keep both in sync during the overlap, migrate data by domain, and define an exit criterion for the old system.","r"],
-
-[5,"I","How do I handle breaking change scenarios with minimal disruption?",["APIs","Compatibility"],"Run old and new in parallel, migrate clients with tooling and dates, monitor who still calls the old path, and offer a rollback during the cutover.","r"],
-
-[6,"I","How do I design metrics that actually tell me system health?",["Metrics","Observability"],"Latency, traffic, errors and saturation per service and per dependency, with histograms rather than averages and business metrics alongside technical ones.","r"],
-[6,"I","How do I design dashboards that help during incidents?",["Dashboards","Incidents"],"One top-level health view, then drill-down by service and dependency. Put symptoms first, show deploy markers, and keep the layout the same across services.","r"],
-
-[7,"I","How do I explain my design to a junior developer so they truly get it?",["Communication"],"Start from the problem and one request path, add pieces only as the problem demands them, use a single diagram, and check understanding by asking them to predict a failure.","r"],
-[7,"A","How do I simplify a complex design without losing guarantees?",["Judgment","Reliability"],"List the guarantees that must hold, remove components that do not protect one, merge things that always change together, and prove the invariants still hold.","r"],
-[7,"A","How do I design systems that can be owned by teams, not heroes?",["Leadership","Operations"],"Documented runbooks, shared on-call, boring technology, clear ownership boundaries, and no component only one person understands.","r"],
-[7,"I","How do I design for boring reliability instead of cleverness?",["Judgment","Reliability"],"Choose proven components, minimize moving parts, prefer simple failure modes, and spend novelty budget only where it creates real advantage.","r"],
-[7,"I","How do I decide what not to build into a system?",["Judgment","Scalability"],"Tie each feature to a present requirement or measured risk, defer what is cheap to add later, and write the non-goals down.","r"],
-
-/* Remaining reference-list titles that overlap original topics; kept so the merge is complete. */
-[0,"A","How do I handle idempotency for write APIs?",["Databases","Reliability"],"Idempotency key per logical operation, atomically recorded with the write, replayed response on duplicates, a defined behavior for a duplicate that arrives while the first is still running, and key expiry.","r"],
-[1,"A","How do I design a migration strategy for a huge table?",["Migration","Storage"],"Expand and contract with dual writes, a throttled resumable backfill, verification before cutover, a rollback window, and cleanup only after the old path is provably idle.","r"],
-[0,"I","How do I decide when to split a monolith into services?",["Distributed systems","Scalability"],"Split along team and data ownership lines when deploy independence or scaling needs diverge. Cost: network failures, distributed data, operational load. A modular monolith may be enough.","r"],
-[0,"F","How does a request flow end-to-end through a production system?",["Distributed systems","Networking"],"DNS, edge or CDN, load balancer, gateway, service, cache, datastore, and back. State what each hop does, what can fail there, and where latency accumulates.","r"],
-[0,"I","How do I design a service that can handle 10x more traffic with minimal changes?",["Scalability","Caching"],"Stateless services behind a load balancer, caching for hot reads, replicas, partitionable data, and autoscaling with tested limits. Find the first bottleneck by load testing, not guessing.","r"],
-[0,"A","How do I protect downstream services from traffic spikes?",["Reliability","Load balancing"],"Rate limits and concurrency caps at the caller, queues that smooth bursts, circuit breakers, load shedding by priority, and caching in front of the dependency.","r"],
-[1,"F","How do I model data differently for OLTP versus OLAP workloads?",["Databases","Storage"],"OLTP: normalized rows, narrow transactions, point lookups. OLAP: denormalized wide tables or star schemas in columnar storage, loaded from OLTP by change data capture or batch.","r"],
-[1,"I","What does a good partition key look like in a distributed store?",["Databases","Storage"],"High cardinality, even access, aligned with the dominant query, and stable over time. Avoid monotonically increasing keys that create a hot tail.","r"],
-[1,"I","How do I avoid hot partitions and skew?",["Databases","Scalability"],"Choose a well-distributed key, salt or split heavy keys, cache hot reads, and monitor per-partition load so skew is seen before it becomes an outage.","r"],
-[1,"I","How should I index for read-heavy versus write-heavy workloads?",["Indexing","Storage"],"Read-heavy: more indexes, covering indexes, materialized views. Write-heavy: few indexes, append-friendly storage, deferred or asynchronous secondary structures.","r"],
-[1,"F","How do I design soft delete, archival, and retention?",["Databases","Storage"],"Deleted flag or tombstone for undo, tiered storage for old data, retention policies with automated purge, and explicit handling for legal deletion and backups.","r"],
-[8,"I","How do I design rate limiting that does not break good users?",["Reliability","Scalability"],"Token bucket with burst headroom, limits per identity rather than per IP where possible, clear 429 responses with retry hints, and separate limits for abusive and normal traffic.","r"],
-[2,"F","When do I accept eventual consistency versus strict consistency?",["Databases","Distributed systems"],"Strict where a violation causes money, safety or legal harm. Eventual where staleness is invisible or recoverable. Decide from the invariant, not from habit.","r"],
-[2,"A","How do I implement distributed transactions without 2PC pain?",["Transactions","Message queues"],"Sagas with compensating actions, outbox for reliable event emission, idempotent steps, and clear handling for stuck or partially complete flows.","r"],
-[2,"I","How do I handle read your own writes in a distributed system?",["Databases","Distributed systems"],"Sticky reads from the primary after a write, session tokens tracking a replica position, or client-side caching of the just-written value.","r"],
-[2,"I","How do I design id generation that works across regions?",["Distributed systems","Networking"],"Time-ordered unique ids (Snowflake, ULID, UUIDv7), per-node identifiers, clock skew handling, and index-friendly ordering. Avoid a global counter on the hot path.","r"],
-[2,"I","B. How do Raft, Paxos, gossip, and quorum based replication actually fit into my design?",["Distributed systems","Ordering"],"Consensus for leader election and metadata, quorum reads and writes for tunable consistency, gossip for membership and failure detection. Use proven implementations.","r"],
-[2,"A","How do Raft, Paxos, gossip, and quorum based replication actually fit into my design?",["PAXOS","RAFT","Reliability"],"Explain the guarantee each one provides, what it costs in latency and availability, and where it sits in the design (coordination service, replication layer, membership). Name a real system for each.","r"],
-[3,"F","What are all the ways my system can fail under real traffic?",["Monitoring","Reliability"],"Overload, slow or failing dependencies, resource exhaustion, bad deploys, data corruption, network partitions, cascading retries, and operator error. Group by blast radius.","r"],
-[3,"I","How do I implement retries without causing storms and loops?",["Distributed systems","Reliability"],"Capped attempts, exponential backoff with jitter, retry budgets, deadline propagation, retries at a single layer, and only for idempotent operations.","r"],
-[3,"I","How do I design circuit breakers and bulkheads correctly?",["Distributed systems","Reliability"],"Breaker opens on error or latency thresholds and probes in half-open state. Bulkheads isolate thread or connection pools per dependency. Tune from measured behavior and test them.","r"],
-[3,"A","How do I run in multiple regions and fail over cleanly?",["Networking","Reliability"],"Active-active or active-passive, a single writer per data partition, replication lag and loss window stated, health-driven DNS or traffic management, and regular failover drills.","r"],
-[3,"I","How do I design a rollback strategy for bad releases?",["Reliability"],"Canary and progressive rollout, automatic rollback on SLO regression, backward-compatible schemas, feature flags, and a clear rule for rolling back versus fixing forward.","r"],
-[3,"A","How do I define SLOs and design around them?",["Monitoring","Reliability"],"Pick user-visible indicators, set targets from user need and cost, track error budget, alert on burn rate, and let budget exhaustion change release behavior.","r"],
-[4,"F","When do I choose event-driven over request-response?",["Distributed systems","Message queues"],"When producers should not wait or know about consumers, when work can be asynchronous, when many consumers need the same fact, or when you need replay. Not when the caller needs an immediate answer.","r"],
-[4,"I","How do I design an event schema that can evolve safely?",["Distributed systems","Message queues"],"Schema registry with a compatibility rule, additive-only changes by default, tolerant readers, explicit versioning for breaks, and a plan to retire old versions.","r"],
-[4,"A","How do I handle exactly once versus at least once semantics in practice?",["Distributed systems","Message queues"],"Assume at-least-once delivery and make consumers idempotent. Use transactional or idempotent producers and checkpointed processing where available, and note that external side effects need their own dedupe.","r"],
-[4,"A","How do I design a job scheduler for millions of jobs a day?",["Scheduling","Scalability"],"Sharded time-bucketed storage, workers claiming jobs with leases, idempotent job execution, retry with backoff, and recovery of jobs held by crashed workers.","r"],
-[4,"I","How do I design dead-letter queues and retry policies?",["Message queues","Reliability"],"Bounded retries with backoff, delayed retry queues, a dead-letter queue carrying error context, alerting on its depth, and a safe replay path.","r"],
-[4,"A","How do I avoid processing the same event forever due to poison messages?",["Message queues","Reliability"],"Attempt counters, routing to a dead-letter destination after a limit, per-message isolation so one bad record does not block the stream, and alerts for investigation.","r"],
-[4,"A","How do I handle ordering of events when it matters?",["Ordering","Message queues"],"Partition by the key whose order matters, sequence numbers for detecting gaps and duplicates, single consumer per partition, and care during rebalances and retries.","r"],
-[5,"I","How do I define clear boundaries between services?",["Boundaries","Scalability"],"One owner per piece of data, interfaces that match business capabilities, low coupling on change, and a test: can a team ship without coordinating with others?","r"],
-[5,"F","How do I design versioning for public APIs?",["APIs","Scalability"],"Additive changes within a version, a new version for breaking changes, a published support policy, usage metrics per version, and clear deprecation dates.","r"],
-[5,"I","How do I design tenant-level rate limits and quotas?",["Rate limiting","Reliability"],"Limits per tenant and per plan, burst allowance, shared counters in a fast store, fair sharing under contention, and visibility so tenants see their usage.","r"],
-[5,"A","How do I handle partial failures in multi-service calls?",["Distributed systems","Reliability"],"Timeouts per call, required versus optional dependencies, degraded responses, compensations for completed steps, and idempotency so retries are safe.","r"],
-[5,"I","How do I design a gateway that can evolve independently of services?",["Distributed systems","Scalability"],"Thin gateway with routing, auth and limits only, declarative configuration, versioned routes, and no knowledge of service internals.","r"],
-[5,"I","How do I design for backward compatibility when schemas change?",["Distributed systems","Reliability"],"Additive fields, defaults for missing values, never reuse or repurpose a field, readers that ignore unknown fields, and compatibility checks in CI.","r"],
-[5,"I","How do I design a safe deprecation process?",["Distributed systems","Reliability"],"Identify callers from telemetry, announce with dates, warn in responses, run brownouts, support stragglers, and only then remove.","r"],
-[6,"F","What should I log at each layer, and what should I never log?",["Monitoring","Reliability"],"Structured logs with correlation ids, entry and exit of requests, errors with context, and decisions. Never secrets, tokens, full payment data or unnecessary personal data.","r"],
-[6,"A","How do I design tracing across 50+ microservices?",["Distributed systems","Monitoring"],"Standard context propagation, consistent span naming, tail-based sampling to keep slow and failed traces, and links from metrics and logs to traces.","r"],
-[6,"I","How do I design alerting that catches real issues but avoids noise?",["Monitoring","Reliability"],"Alert on user-facing symptoms and SLO burn, attach runbooks, deduplicate and group, review noisy alerts regularly, and delete the ones that never lead to action.","r"],
-[6,"A","How do I debug high tail latency in a distributed system?",["Distributed systems","Monitoring"],"Compare percentiles by instance, endpoint and dependency, look for queueing, GC, retries and hot shards, and use traces to find the slow span. Hedged requests can mask but not fix it.","r"],
-[6,"F","How do I design runbooks so on-call engineers can act fast?",["Monitoring","Reliability"],"Start from the alert, give ordered checks, exact commands, safe mitigations, escalation paths, and keep them tested and reviewed after incidents.","r"],
-[6,"I","How do I simulate failures before they hit production?",["Monitoring","Reliability"],"Fault injection for dependencies and infrastructure, game days, load and soak tests, and restore drills, starting with a hypothesis and a clear abort condition.","r"],
-[7,"I","How do I defend trade-offs to a sceptical architect?",["Distributed systems"],"State requirements and constraints, show alternatives with costs, say what you are giving up, and name the signal that would make you reverse the decision.","r"],
-[7,"A","How do I write a design doc that survives 3 years of evolution?",["Distributed systems","Reliability"],"Record context, goals and non-goals, alternatives considered, decisions and their reasons, and known risks. Date it, link follow-ups, and keep diagrams simple.","r"],
-[7,"A","How do I review someone else's design deeply but respectfully?",["Distributed systems"],"Understand the goal first, ask questions about failure and scale, separate must-fix from preference, suggest alternatives, and acknowledge what is solid.","r"],
-[7,"I","How do I know when a design is over-engineered?",["Distributed systems","Scalability"],"Complexity without a current requirement, abstractions with one user, more services than teams, and anything you cannot explain the need for in a sentence.","r"],
-[7,"I","How do I know when a design is dangerously under-engineered?",["Distributed systems","Scalability"],"No failure handling for known risks, no capacity estimate, no rollback or recovery path, unclear ownership, and a single point of failure on a critical path.","r"],
-[7,"A","How do I design so that mistakes are cheap, not catastrophic?",["Distributed systems","Reliability"],"Small blast radius, progressive rollout, reversible changes, backups and restore tests, feature flags, and guardrails on destructive operations.","r"],
-[9,"I","How do I decide what to buy versus what to build?",["Reliability","Scalability"],"Build what differentiates you or needs deep control. Buy commodity capability. Weigh lock-in, integration cost, data portability, and the ongoing cost of operating either choice.","r"]
-];
-var KEY="sdv-done-v1", done={};
-try{done=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){done={}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(done))}catch(e){}}
-var st={q:"",lvl:"",cat:"",src:"",tags:{}};
-var items=D.map(function(r,i){return{id:i,c:r[0],l:r[1],q:r[2],t:r[3],a:r[4],s:r[5]||"m"}});
-/* Topic clusters: [category index, topic name, lowercase substrings]. First match wins; rule order sets topic order. A match can move a question to the category where its siblings live. */
-var RULES=[
-[0,"Request path & scaling basics",["walk one request","request flow","10x","read traffic grows","vertical and horizontal","size a system","load balancing strategy"]],
-[0,"Monolith vs services",["monolith"]],
-[0,"Overload, backpressure & spikes",["admission control","backpressure","protect downstream"]],
-[0,"Sync, async & queues",["synchronous and asynchronous","queue versus direct"]],
-[1,"SQL, NoSQL & OLTP vs OLAP",["sql, nosql","oltp"]],
-[1,"Partitioning & hot keys",["partition key","hot partition","shard data"]],
-[1,"Indexing",["indexes for a table","index for read-heavy"]],
-[1,"Migrations & backfills",["migrate a billion","migration strategy for a huge","backfill","schema changes without downtime"]],
-[1,"Retention & deletion",["retention"]],
-[1,"Multi-tenancy",["multi-tenant data isolation"]],
-[8,"Caching strategy",["where should i cache","write-through","invalidation","stampede","hot keys","a cache is actually"]],
-[8,"Pagination",["pagination"]],
-[2,"Idempotency",["idempotency"]],
-[2,"Consistency models & CAP",["eventual consistency","model consistency levels","cap trade-offs","read your own writes","read-your-writes"]],
-[2,"Distributed transactions & reconciliation",["two-phase commit","2pc","outbox","reconcile"]],
-[2,"Consensus & distributed IDs",["raft","id generation","unique ids"]],
-[3,"Failure modes & degradation",["ways a three-tier","all the ways my system can fail","graceful degradation"]],
-[3,"Retries, breakers & bulkheads",["retries","circuit breaker"]],
-[3,"Multi-region & outages",["fail over","multiple regions","data center outage"]],
-[3,"Releases & rollback",["rollback"]],
-[3,"SLOs",["slos"]],
-[3,"Recovery",["rebuild from scratch"]],
-[4,"Event-driven design",["event-driven"]],
-[4,"Delivery semantics",["exactly-once","exactly once"]],
-[4,"Poison messages & dead letters",["poison","dead-letter"]],
-[4,"Ordering",["ordering"]],
-[4,"Schedulers & long-running jobs",["scheduler","long-running jobs","fan-out"]],
-[4,"Event schema evolution",["event schema"]],
-[5,"Service boundaries & gateway",["boundaries","gateway"]],
-[5,"Versioning, compatibility & deprecation",["version a public api","versioning","backward compatibility","breaking change","deprecat","apis so they can evolve","older clients"]],
-[5,"Rate limits & quotas",["rate limit"]],
-[5,"Partial failure",["partial failure","fans out to five"]],
-[6,"Logging & tracing",["each layer log","log at each layer","trace a request across","tracing"]],
-[6,"Metrics, dashboards & alerts",["metrics that","dashboards","alert"]],
-[6,"Latency debugging",["tail latency","p99"]],
-[6,"Runbooks & failure drills",["runbook","rehearse failure","simulate failures"]],
-[9,"MVP, platforms & cost",["mvp-first","one-off service","cost visibility"]],
-[9,"Build vs buy",["buy and what to build","buy versus"]],
-[9,"Extensibility, experiments & compliance",["multiple teams","experiments","data residency"]],
-[9,"Legacy migration",["legacy system"]],
-[7,"Trade-offs & design reviews",["defend a design trade-off","defend trade-offs","review a peer","review someone","explain my design"]],
-[7,"Simplicity & over/under-engineering",["over-engineered","under-engineered","simplify","what not to build","boring reliability","mistakes are cheap"]],
-[7,"Design docs & ownership",["design doc","owned by teams"]]
-];
-function classify(x){var q=x.q.toLowerCase();for(var i=0;i<RULES.length;i++){var r=RULES[i];for(var j=0;j<r[2].length;j++){if(q.indexOf(r[2][j])>=0){x.c=r[0];x.topic=r[1];x.ti=i;return}}}x.topic="Other";x.ti=999}
-items.forEach(classify);
-var allTags=[];items.forEach(function(x){x.t.forEach(function(t){if(allTags.indexOf(t)<0)allTags.push(t)})});
-allTags.sort();
+(function(){
+var V=window.VAULT;
+var LV={fundamental:"Fundamental",intermediate:"Intermediate",advanced:"Advanced"};
+var SRC={mine:"Original",ref:"Ref list"};
+var TOP_TAGS=8;
 var $=function(id){return document.getElementById(id)};
-function esc(s){return s.replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
 
-// controls
-var cs=$("cat");cs.innerHTML='<option value="">All categories</option>'+CATS.map(function(c,i){return'<option value="'+i+'">'+esc(c)+'</option>'}).join("");
+/* ---------- data ---------- */
+var cats={};V.categories.forEach(function(c,i){c.pos=i;cats[c.id]=c});
+var items=V.questions.map(function(q,i){q.num=i+1;return q});
+var byId={};items.forEach(function(q){byId[q.id]=q});
+var tagCount={};items.forEach(function(q){q.tags.forEach(function(t){tagCount[t]=(tagCount[t]||0)+1})});
+var tagsByUse=V.tags.filter(function(t){return tagCount[t]}).sort(function(a,b){return tagCount[b]-tagCount[a]||a.localeCompare(b)});
+
+/* ---------- progress (v2 keyed by stable id; migrates v1 index keys once) ---------- */
+var KEY="sdv-done-v2",done={};
+try{done=JSON.parse(store(KEY)||"{}")||{}}catch(e){done={}}
+(function migrate(){
+  var raw=store("sdv-done-v1");if(!raw||store(KEY))return;
+  try{var old=JSON.parse(raw);items.forEach(function(q){if(q.legacy.some(function(i){return old[i]}))done[q.id]=1});save()}catch(e){}
+})();
+function save(){store(KEY,JSON.stringify(done))}
+function nDone(list){return list.filter(function(q){return done[q.id]}).length}
+
+/* ---------- state <-> URL ---------- */
+var st={q:"",lvl:"",cat:"",src:"",todo:false,tags:{}};
+var moreTags=false;
+function readURL(){
+  var p=new URLSearchParams(location.search);
+  st.q=(p.get("q")||"").toLowerCase();st.lvl=LV[p.get("lvl")]?p.get("lvl"):"";
+  st.cat=cats[p.get("cat")]?p.get("cat"):"";st.src=SRC[p.get("src")]?p.get("src"):"";
+  st.todo=p.get("todo")==="1";st.tags={};
+  (p.get("tags")||"").split(",").forEach(function(t){if(tagCount[t])st.tags[t]=1});
+}
+function writeURL(){
+  var p=new URLSearchParams();
+  if(st.q)p.set("q",st.q);if(st.lvl)p.set("lvl",st.lvl);if(st.cat)p.set("cat",st.cat);
+  if(st.src)p.set("src",st.src);if(st.todo)p.set("todo","1");
+  var t=Object.keys(st.tags);if(t.length)p.set("tags",t.join(","));
+  var s=p.toString();
+  history.replaceState(null,"",location.pathname+(s?"?"+s:"")+location.hash);
+}
+function resetFilters(){st={q:"",lvl:"",cat:"",src:"",todo:false,tags:{}};$("q").value="";cs.value="";update()}
+function activeCount(){return (st.lvl?1:0)+(st.src?1:0)+(st.todo?1:0)+Object.keys(st.tags).length}
+
+/* ---------- theme ---------- */
+function themeLabel(){var t=store("sdv-theme")||"auto";$("theme").textContent="Theme: "+t;$("theme").setAttribute("aria-label","Theme: "+t+". Click to change.")}
+$("theme").onclick=function(){
+  var order=["auto","light","dark"],cur=store("sdv-theme")||"auto",next=order[(order.indexOf(cur)+1)%3];
+  store("sdv-theme",next);
+  if(next==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",next);
+  themeLabel();
+};
+themeLabel();
+
+/* ---------- controls ---------- */
+var cs=$("cat");
+cs.innerHTML='<option value="">All categories</option>'+V.categories.map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>'}).join("");
 function chip(label,pressed,fn,cls){var b=document.createElement("button");b.type="button";b.className="chip"+(cls?" "+cls:"");b.textContent=label;b.setAttribute("aria-pressed",pressed?"true":"false");b.onclick=fn;return b}
 function drawChips(){
-  var d=$("diffs");d.innerHTML="";
-  d.appendChild(chip("All levels",!st.lvl,function(){st.lvl="";render()}));
-  ["F","I","A"].forEach(function(k){d.appendChild(chip(LV[k],st.lvl===k,function(){st.lvl=st.lvl===k?"":k;render()}))});
-  [["m","Original"],["r","Ref list"]].forEach(function(p){d.appendChild(chip(p[1],st.src===p[0],function(){st.src=st.src===p[0]?"":p[0];render()}))});
+  var l=$("lvls");l.innerHTML="";
+  Object.keys(LV).forEach(function(k){l.appendChild(chip(LV[k],st.lvl===k,function(){st.lvl=st.lvl===k?"":k;update()}))});
+  var s=$("srcs");s.innerHTML="";
+  Object.keys(SRC).forEach(function(k){s.appendChild(chip(SRC[k],st.src===k,function(){st.src=st.src===k?"":k;update()}))});
+  var u=$("status");u.innerHTML="";
+  u.appendChild(chip("Unreviewed only",st.todo,function(){st.todo=!st.todo;update()}));
   var t=$("tags");t.innerHTML="";
-  allTags.forEach(function(g){t.appendChild(chip(g,!!st.tags[g],function(){if(st.tags[g])delete st.tags[g];else st.tags[g]=1;render()}))});
-  if(st.q||st.lvl||st.cat||st.src||Object.keys(st.tags).length){t.appendChild(chip("Clear filters",false,function(){st.q="";st.lvl="";st.cat="";st.src="";st.tags={};$("q").value="";cs.value="";render()},"clear"))}
+  var shown=moreTags?tagsByUse:tagsByUse.filter(function(g,i){return i<TOP_TAGS||st.tags[g]});
+  shown.forEach(function(g){t.appendChild(chip(g,!!st.tags[g],function(){if(st.tags[g])delete st.tags[g];else st.tags[g]=1;update()}))});
+  if(tagsByUse.length>TOP_TAGS)t.appendChild(chip(moreTags?"Fewer tags":"More tags ("+(tagsByUse.length-TOP_TAGS)+")",false,function(){moreTags=!moreTags;drawChips()},"ghost"));
+  var n=activeCount();
+  $("fc").textContent=n?n+" active":"";
+  if(n||st.q||st.cat)t.appendChild(chip("Clear all",false,resetFilters,"ghost"));
 }
-$("q").oninput=function(e){st.q=e.target.value.toLowerCase();render()};
-cs.onchange=function(e){st.cat=e.target.value;render()};
+var qTimer;
+$("q").oninput=function(e){clearTimeout(qTimer);qTimer=setTimeout(function(){st.q=e.target.value.trim().toLowerCase();update()},120)};
+cs.onchange=function(e){st.cat=e.target.value;update()};
+if(window.matchMedia("(min-width:720px)").matches)$("filters").open=true;
 
+/* ---------- filtering ---------- */
 function match(x){
-  if(st.lvl&&x.l!==st.lvl)return false;
-  if(st.src&&x.s!==st.src)return false;
-  if(st.cat!==""&&String(x.c)!==st.cat)return false;
-  for(var g in st.tags){if(x.t.indexOf(g)<0)return false}
-  if(st.q){var h=(x.q+" "+x.a+" "+x.t.join(" ")+" "+CATS[x.c]).toLowerCase();if(h.indexOf(st.q)<0)return false}
+  if(st.lvl&&x.level!==st.lvl)return false;
+  if(st.src==="mine"&&x.source==="ref")return false;
+  if(st.src==="ref"&&x.source==="mine")return false;
+  if(st.cat&&x.cat!==st.cat)return false;
+  if(st.todo&&done[x.id])return false;
+  for(var g in st.tags){if(x.tags.indexOf(g)<0)return false}
+  if(st.q){var h=(x.q+" "+x.also.join(" ")+" "+x.a.join(" ")+" "+x.tags.join(" ")+" "+x.topic+" "+cats[x.cat].name).toLowerCase();if(h.indexOf(st.q)<0)return false}
   return true;
 }
+function hl(s){
+  var e=esc(s);if(!st.q)return e;
+  var q=esc(st.q).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  return e.replace(new RegExp(q,"gi"),function(m){return"<mark>"+m+"</mark>"});
+}
+
+/* ---------- render ---------- */
+var CHEV='<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 var openIds={};
+function card(x){
+  var meta='<span class="lvl-'+x.level+'"><span class="gauge" aria-hidden="true"><u></u><u></u><u></u></span>'+LV[x.level]+'</span>'+
+    '<span>'+x.tags.map(esc).join(" · ")+'</span>'+
+    (x.source==="ref"?'<span>ref list</span>':"")+
+    (x.also.length?'<span>+'+x.also.length+' similar</span>':"")+
+    (done[x.id]?'<span class="ok">✓ reviewed</span>':"");
+  return '<details class="qa" id="'+x.id+'"'+(openIds[x.id]?" open":"")+'><summary>'+
+    '<span class="num">'+String(x.num).padStart(2,"0")+'</span>'+
+    '<span><span class="q">'+hl(x.q)+'</span><span class="meta">'+meta+'</span></span>'+CHEV+'</summary>'+
+    '<div class="body"><p class="lbl">A strong answer covers</p>'+x.a.map(function(p){return"<p>"+hl(p)+"</p>"}).join("")+
+    (x.also.length?'<p class="lbl">Also asked as</p><ul class="also">'+x.also.map(function(a){return"<li>"+hl(a)+"</li>"}).join("")+"</ul>":"")+
+    '<div class="actions"><label class="done"><input type="checkbox" data-done="'+x.id+'"'+(done[x.id]?" checked":"")+'> Mark as reviewed</label>'+
+    '<button type="button" class="link" data-copy="'+x.id+'">Copy link</button></div></div></details>';
+}
 function render(){
   drawChips();
-  var out=[],shown=0,seq=0;
-  ORDER.forEach(function(ci){
-    var name=CATS[ci];
-    var rows=items.filter(function(x){return x.c===ci&&match(x)});
+  var out=[],shown=0;
+  V.categories.forEach(function(c){
+    var rows=items.filter(function(x){return x.cat===c.id&&match(x)});
     if(!rows.length)return;
     shown+=rows.length;
-    out.push('<h2 class="cat">'+esc(name)+'<span>'+rows.length+'</span></h2>');
-    rows=rows.slice().sort(function(a,b){return a.ti-b.ti||a.id-b.id});
-    var tc={};rows.forEach(function(x){tc[x.topic]=(tc[x.topic]||0)+1});
-    var last=null;
-    rows.forEach(function(x,n){
-      if(x.topic!==last){out.push('<h3 class="topic">'+esc(x.topic)+'<span>'+tc[x.topic]+'</span></h3>');last=x.topic}
-      out.push('<details data-id="'+x.id+'"'+(openIds[x.id]?" open":"")+'><summary><span class="num">'+String(++seq).padStart(2,"0")+'</span><span><span class="q">'+esc(x.q)+'</span><span class="meta"><span class="lvl-'+x.l+'"><span class="gauge"><u></u><u></u><u></u></span>'+LV[x.l]+'</span>'+x.t.map(esc).join(" · ")+(x.s==="r"?' · ref list':'')+(done[x.id]?' · reviewed':'')+'</span></span><span class="chev" aria-hidden="true">&gt;</span></summary><div class="body"><p class="lbl">A strong answer covers</p><p>'+esc(x.a)+'</p><label class="done"><input type="checkbox" data-done="'+x.id+'"'+(done[x.id]?" checked":"")+'> Mark as reviewed</label></div></details>');
+    var all=items.filter(function(x){return x.cat===c.id});
+    out.push('<h2 class="cat" id="cat-'+c.id+'">'+esc(c.name)+'<span>'+(rows.length<all.length?rows.length+' shown · ':'')+'<span class="cd">'+nDone(all)+'/'+all.length+'</span> reviewed</span></h2>');
+    c.topics.forEach(function(t){
+      var tr=rows.filter(function(x){return x.topic===t});
+      if(!tr.length)return;
+      out.push('<h3 class="topic">'+esc(t)+'<span><span class="sr">, </span>'+tr.length+'</span></h3>');
+      tr.forEach(function(x){out.push(card(x))});
     });
   });
   $("list").innerHTML=out.length?out.join(""):'<div class="empty">No questions match these filters. Clear a filter or shorten the search.</div>';
@@ -375,20 +309,90 @@ function render(){
   stats();
 }
 function stats(){
-  var n=Object.keys(done).filter(function(k){return done[k]}).length;
-  var adv=items.filter(function(x){return x.l==="A"}).length;
-  $("stats").innerHTML='<div><b>'+items.length+'</b><span>questions</span></div><div><b>'+CATS.length+'</b><span>categories</span></div><div><b>'+adv+'</b><span>advanced</span></div><div><b>'+n+'</b><span>reviewed</span></div>';
+  var n=nDone(items),adv=items.filter(function(x){return x.level==="advanced"}).length;
+  $("stats").innerHTML='<div><b>'+items.length+'</b><span>questions</span></div><div><b>'+V.categories.length+'</b><span>categories</span></div><div><b>'+adv+'</b><span>advanced</span></div><div><b>'+n+'</b><span>reviewed</span></div>';
   $("prog").style.width=(n/items.length*100)+"%";
+  $("catnav").innerHTML=V.categories.map(function(c){
+    var all=items.filter(function(x){return x.cat===c.id}),d=nDone(all);
+    return '<a href="#cat-'+c.id+'" data-cat="'+c.id+'"'+(d===all.length?' class="full"':"")+'>'+esc(c.name)+'<span>'+d+'/'+all.length+'</span></a>';
+  }).join("");
 }
-$("list").addEventListener("toggle",function(e){var d=e.target;if(d.dataset&&d.dataset.id){openIds[d.dataset.id]=d.open}},true);
+function update(){writeURL();render()}
+
+/* ---------- interactions ---------- */
+$("list").addEventListener("toggle",function(e){var d=e.target;if(d.classList&&d.classList.contains("qa"))openIds[d.id]=d.open},true);
 $("list").addEventListener("change",function(e){
   var id=e.target.getAttribute("data-done");if(id===null)return;
   if(e.target.checked)done[id]=1;else delete done[id];
-  save();stats();
-  var m=e.target.closest("details").querySelector(".meta");
-  m.innerHTML=m.innerHTML.replace(/ · reviewed$/,"")+(done[id]?" · reviewed":"");
+  save();
+  var d=e.target.closest("details");
+  if(st.todo&&done[id]){render();return}
+  var tmp=document.createElement("div");tmp.innerHTML=card(byId[id]);
+  d.querySelector(".meta").innerHTML=tmp.querySelector(".meta").innerHTML;
+  stats();
+  // refresh this category's reviewed count in its heading
+  var h=$("cat-"+byId[id].cat);
+  if(h){var all=items.filter(function(x){return x.cat===byId[id].cat});h.querySelector(".cd").textContent=nDone(all)+"/"+all.length}
 });
+$("list").addEventListener("click",function(e){
+  var id=e.target.getAttribute&&e.target.getAttribute("data-copy");if(!id)return;
+  var url=location.origin+location.pathname+"#"+id,b=e.target;
+  function ok(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy link"},1500)}
+  if(navigator.clipboard)navigator.clipboard.writeText(url).then(ok,function(){prompt("Copy this link",url)});else prompt("Copy this link",url);
+});
+$("catnav").addEventListener("click",function(e){
+  var a=e.target.closest("a");if(!a)return;
+  if(!$("cat-"+a.dataset.cat)){e.preventDefault();resetFilters();$("cat-"+a.dataset.cat).scrollIntoView()}
+});
+$("expand").onclick=function(){document.querySelectorAll("details.qa").forEach(function(d){d.open=true})};
+$("collapse").onclick=function(){document.querySelectorAll("details.qa").forEach(function(d){d.open=false})};
+$("random").onclick=function(){
+  var pool=items.filter(function(x){return match(x)&&!done[x.id]});
+  if(!pool.length)pool=items.filter(function(x){return !done[x.id]});
+  if(!pool.length){$("count").textContent="Everything is reviewed. Nice.";return}
+  var x=pool[Math.floor(Math.random()*pool.length)];
+  if(!match(x))resetFilters();
+  focusQ(x.id,true);
+};
+function focusQ(id,push){
+  var d=$(id);if(!d)return;
+  d.open=true;openIds[id]=true;
+  if(push)history.replaceState(null,"",location.pathname+location.search+"#"+id);
+  d.scrollIntoView({block:"start"});
+  d.classList.add("flash");setTimeout(function(){d.classList.remove("flash")},1600);
+  d.querySelector("summary").focus({preventScroll:true});
+}
+function fromHash(){
+  var id=decodeURIComponent(location.hash.slice(1));if(!byId[id])return;
+  if(!$(id))resetFilters();
+  focusQ(id,false);
+}
+window.addEventListener("hashchange",fromHash);
+
+/* ---------- export / import ---------- */
+function msg(t){$("msg").textContent=t;setTimeout(function(){$("msg").textContent=""},3000)}
+$("export").onclick=function(){
+  var blob=new Blob([JSON.stringify({app:"staff-design-vault",version:2,exported:new Date().toISOString(),done:Object.keys(done)},null,2)],{type:"application/json"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="design-vault-progress.json";document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},0);
+};
+$("import").onclick=function(){$("file").click()};
+$("file").onchange=function(e){
+  var f=e.target.files[0];if(!f)return;
+  f.text().then(function(t){
+    var j=JSON.parse(t),ids=Array.isArray(j.done)?j.done:Object.keys(j.done||{}),n=0;
+    ids.forEach(function(id){if(byId[id]&&!done[id]){done[id]=1;n++}});
+    save();render();msg("Imported "+n+" new reviewed question"+(n===1?"":"s")+".");
+  }).catch(function(){msg("That file could not be read.")});
+  e.target.value="";
+};
+
+/* ---------- boot ---------- */
+readURL();$("q").value=st.q;cs.value=st.cat;
+if(activeCount())$("filters").open=true;
 render();
+if(location.hash)fromHash();
+})();
 </script>
 </body>
 </html>
