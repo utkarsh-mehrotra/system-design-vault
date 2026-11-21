@@ -52,7 +52,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .modes button{border:0;background:none;padding:6px 14px;border-radius:6px;font:600 13px "Inter",sans-serif;color:var(--muted);cursor:pointer}
 .modes button[aria-selected=true]{background:var(--raised);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
 .sync{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.prog{display:flex;flex-direction:column;gap:4px;min-width:128px;margin-right:4px}
+.prog{display:flex;flex-direction:column;gap:4px;min-width:64px;margin-right:4px}
 .prog b{font:600 13px "JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
 .prog b span{color:var(--muted);font-weight:400}
 .pbar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
@@ -266,9 +266,7 @@ body.resizing{cursor:col-resize;user-select:none}
 <div class="app">
 <header class="hdr">
   <div class="brand">
-    <span class="badge">Staff-level system design</span>
     <h1>System Design Vault</h1>
-    <p>The wrong answer to avoid, what to say instead, and the depth behind it.</p>
   </div>
   <div class="modes" role="tablist" aria-label="Mode">
     <button type="button" role="tab" id="tab-study" aria-selected="true" aria-controls="study">Study index</button>
@@ -277,7 +275,6 @@ body.resizing{cursor:col-resize;user-select:none}
   <div class="sync">
     <div class="prog" aria-live="polite"><b id="mastered"></b><div class="pbar" aria-hidden="true"><i id="mbar"></i></div></div>
     <span class="saved" id="saved" hidden></span>
-    <button type="button" class="ibtn" id="reset" aria-label="Reset all progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="lbl">Reset</span></button>
     <span class="auth" id="auth" hidden></span>
     <button type="button" class="ibtn sq" id="theme"></button>
     <span class="sr" id="msg" aria-live="polite"></span>
@@ -310,7 +307,7 @@ body.resizing{cursor:col-resize;user-select:none}
     </div>
     <p class="dscope" id="dscope"></p>
     <div class="dcard" id="dcard" aria-live="polite"></div>
-    <div class="dnav"><button type="button" class="tbtn" id="dprev"><kbd>←</kbd> Previous</button><span class="dstats hint-desk"><kbd>Space</kbd> reveal · <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> rate</span><button type="button" class="tbtn" id="dnext">Next <kbd>→</kbd></button></div>
+    <div class="dnav"><button type="button" class="tbtn" id="dprev"><kbd>←</kbd> Previous</button><button type="button" class="tbtn" id="dnext">Next <kbd>→</kbd></button></div>
     <p class="foot" id="dfoot"></p>
   </div>
 </main>
@@ -355,7 +352,7 @@ function saveAll(fromSync){store(KEY,JSON.stringify(done));store(CKEY,JSON.strin
 window.SDV={
   snapshot:()=>({done:JSON.parse(JSON.stringify(done)),conf:JSON.parse(JSON.stringify(conf)),drill:JSON.parse(JSON.stringify(drill))}),
   apply:s=>{done=s.done||{};conf=s.conf||{};drill=s.drill||{};saveAll(true);if(typeof render==="function")render()},
-  setSync:(label,state)=>{const el=$("saved");el.hidden=!label;el.textContent=label||"";el.classList.toggle("syncing",state==="syncing");el.classList.toggle("error",state==="error")},
+  setSync:(label,state)=>{const el=$("saved");el.hidden=state!=="error";el.textContent=state==="error"?label:"";el.classList.toggle("syncing",state==="syncing");el.classList.toggle("error",state==="error")},
   onLocalSave:null
 };
 const status=id=>conf[id]||(done[id]?"solid":"unseen");
@@ -406,7 +403,7 @@ $("theme").onclick=()=>{const t=document.documentElement.getAttribute("data-them
 themeUI();
 
 /* ---------- header progress ---------- */
-function progress(){const n=items.filter(x=>status(x.id)==="solid").length;$("mastered").innerHTML=n+' <span>/ '+items.length+' mastered</span>';$("mbar").style.width=(n/items.length*100)+"%"}
+function progress(){const n=items.filter(x=>status(x.id)==="solid").length;$("mastered").innerHTML=n+'<span>/'+items.length+'</span>';$("mastered").parentElement.title=n+" of "+items.length+" mastered";$("mbar").style.width=(n/items.length*100)+"%"}
 
 /* ---------- sidebar controls ---------- */
 function drawPills(){
@@ -461,7 +458,7 @@ function rowHTML(x){
   const s=status(x.id);
   return'<button type="button" class="qi" role="option" id="qi-'+x.id+'" data-id="'+x.id+'" aria-selected="'+(x.id===sel)+'"'+(x.id===sel?' aria-current="true"':"")+'>'+
     '<span class="dot '+s+'" title="'+cap(s)+'"><span class="sr">'+cap(s)+'</span></span>'+
-    '<span><span class="qt">'+hl(x.q)+'</span><span class="qm">'+gauge(x.level)+'<span>'+esc(SHORT[x.cat])+'</span><span>·</span><span>'+esc(x.topic)+'</span>'+(x.source==="ref"?'<span class="ref" title="'+REF_TIP+'">Ref list</span>':"")+'</span></span></button>';
+    '<span><span class="qt">'+hl(x.q)+'</span><span class="qm">'+gauge(x.level)+(x.source==="ref"?'<span class="ref" title="'+REF_TIP+'">Ref list</span>':"")+'</span></span></button>';
 }
 function drawList(){
   const vis=visible();
@@ -489,7 +486,7 @@ function sections(x){
   out.push({key:"decision",label:"When to choose what",html:"<p>"+hl(A.decision)+"</p>"});
   if(A.numbers&&A.numbers.length)out.push({key:"numbers",label:"Numbers",html:"<ul>"+A.numbers.map(n=>"<li>"+hl(n)+"</li>").join("")+"</ul>"});
   out.push({key:"pitfalls",label:"Pitfalls",html:"<ul>"+A.pitfalls.map(n=>"<li>"+hl(n)+"</li>").join("")+"</ul>"});
-  out.push({key:"followups",label:"Follow-ups you’ll get",html:'<p style="font-size:13px;color:var(--muted)">Answer each out loud first, then open it.</p>'+A.followups.map(f=>'<details class="fu"><summary>'+hl(f.q)+"</summary><p>"+hl(f.a)+"</p></details>").join("")});
+  out.push({key:"followups",label:"Follow-ups you’ll get",html:A.followups.map(f=>'<details class="fu"><summary>'+hl(f.q)+"</summary><p>"+hl(f.a)+"</p></details>").join("")});
   if(A.example)out.push({key:"example",label:"Example",html:"<p>"+hl(A.example)+"</p>"});
   if(A.deepDive)out.push({key:"deep",label:"Deep dive: "+esc(A.deepDive.title),html:'<ol class="pts">'+A.deepDive.steps.map(p=>"<li><b>"+hl(p.h)+"</b>"+hl(p.d)+"</li>").join("")+"</ol>"});
   if(x.also.length)out.push({key:"also",label:"Also asked as",html:"<ul>"+x.also.map(a=>"<li>"+hl(a)+"</li>").join("")+"</ul>"});
@@ -506,23 +503,22 @@ function drawPane(){
   const x=byId[sel],i=vis.indexOf(x),prev=i>0?vis[i-1]:null,next=i>=0&&i<vis.length-1?vis[i+1]:null,s=status(x.id);
   const secs=sections(x),shown=recall?secs.filter(c=>revealed.has(c.key)).length:secs.length;
   let h='<div class="pin"><button type="button" class="back" data-act="back">← Index</button>'+
-    '<div class="crumb"><span>Q'+pad(x.num)+'</span><span>·</span><span>'+esc(cats[x.cat].name)+'</span><span>/</span><span>'+esc(x.topic)+'</span></div>'+
+    '<div class="crumb">'+gauge(x.level)+'<span>'+esc(cats[x.cat].name)+'</span><span>/</span><span>'+esc(x.topic)+'</span>'+(x.source==="ref"?'<span class="ref" title="'+REF_TIP+'">Ref list</span>':"")+'</div>'+
     '<h2 class="pt" id="pt">'+hl(x.q)+'</h2>'+
-    '<div class="pm"><span class="tag">'+gauge(x.level)+LV[x.level]+'</span>'+x.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join("")+(x.source==="ref"?'<span class="ref" title="'+REF_TIP+'">Ref list</span>':"")+'</div>'+
     '<div class="tools">'+
       '<div class="seg conf" role="radiogroup" aria-label="Your confidence">'+["missed","shaky","solid"].map((c,k)=>'<button type="button" role="radio" data-conf="'+c+'" aria-checked="'+(s===c)+'" title="'+cap(c)+' (key '+(k+1)+')">'+cap(c)+'</button>').join("")+'</div>'+
-      '<button type="button" class="tbtn" data-act="recall" aria-pressed="'+recall+'" title="Hide the outline and test yourself (Space)">'+EYE+(recall?"Testing yourself":"Hide outline (test yourself)")+'</button>'+
+      '<button type="button" class="tbtn" data-act="recall" aria-pressed="'+recall+'" title="Hide the outline and test yourself (Space)">'+EYE+(recall?"Testing":"Test yourself")+'</button>'+
       '<span class="sp"></span>'+
       '<div class="seg" role="radiogroup" aria-label="Answer depth">'+["full","quick"].map(d=>'<button type="button" role="radio" data-depth="'+d+'" aria-checked="'+(depthMode===d)+'">'+(d==="full"?"Full":"Quick")+'</button>').join("")+'</div>'+
-      '<button type="button" class="tbtn" data-act="copy" aria-label="Copy as Markdown">'+COPY+'<span class="copy-lbl">Copy as Markdown</span></button>'+
+      '<button type="button" class="tbtn" data-act="copy" aria-label="Copy as Markdown" title="Copy as Markdown">'+COPY+'<span class="sr">Copy as Markdown</span></button>'+
     '</div>';
-  if(recall)h+='<div class="recallbar"><span><b>Test yourself.</b> Answer out loud, then reveal sections one by one.</span><span class="hint-desk"><kbd>Space</kbd> next section</span><span style="flex:1"></span><span class="mono" style="font-size:11.5px">'+shown+' / '+secs.length+' revealed</span><button type="button" class="revbtn" data-act="revealall">Reveal all</button></div>';
+  if(recall)h+='<div class="recallbar"><span>Answer out loud, then reveal.</span><span style="flex:1"></span><button type="button" class="revbtn" data-act="revealall">Reveal all</button></div>';
   h+='<div class="cards">'+secs.map((c,k)=>{
-    if(recall&&!revealed.has(c.key))return'<section class="card hidden-card" data-key="'+c.key+'"><h3><span class="num">'+pad(k+1)+'</span>'+c.label+'</h3><button type="button" class="revbtn" data-reveal="'+c.key+'">'+EYE+'Reveal</button></section>';
-    return'<section class="card '+(c.cls||"")+'" data-key="'+c.key+'"><h3><span class="num">'+pad(k+1)+'</span>'+c.label+'</h3>'+c.html+'</section>';
+    if(recall&&!revealed.has(c.key))return'<section class="card hidden-card" data-key="'+c.key+'"><h3>'+c.label+'</h3><button type="button" class="revbtn" data-reveal="'+c.key+'">'+EYE+'Reveal</button></section>';
+    return'<section class="card '+(c.cls||"")+'" data-key="'+c.key+'"><h3>'+c.label+'</h3>'+c.html+'</section>';
   }).join("")+'</div>';
   h+='<div class="pnav"><button type="button" class="tbtn" data-go="'+(prev?prev.id:"")+'"'+(prev?"":" disabled")+'><kbd>K</kbd> Previous</button><span class="mono">'+(i>=0?(i+1)+" of "+vis.length:"not in current filter")+'</span><button type="button" class="tbtn" data-go="'+(next?next.id:"")+'"'+(next?"":" disabled")+'>Next <kbd>J</kbd></button></div>';
-  h+='<p class="foot">'+FOOT+'</p></div>';
+  h+='<p class="foot">'+FOOT+' <button type="button" class="link" data-act="reset">Reset progress</button></p></div>';
   p.innerHTML=h;
 }
 function toMarkdown(x){
@@ -547,6 +543,7 @@ $("pane").addEventListener("click",e=>{
   if(a==="recall")toggleRecall();
   else if(a==="revealall"){sections(byId[sel]).forEach(c=>revealed.add(c.key));drawPane()}
   else if(a==="back")closePane();
+  else if(a==="reset")resetAll();
   else if(a==="copy"){const t=toMarkdown(byId[sel]),lbl=b.querySelector("span");const ok=()=>{lbl.textContent="Copied";msg("Copied as Markdown");setTimeout(()=>lbl.textContent="Copy as Markdown",1500)};if(navigator.clipboard)navigator.clipboard.writeText(t).then(ok,()=>prompt("Copy this Markdown",t));else prompt("Copy this Markdown",t)}
 });
 $("pane").addEventListener("keydown",e=>{const g=e.target.closest(".seg");if(!g||(e.key!=="ArrowLeft"&&e.key!=="ArrowRight"))return;e.preventDefault();e.stopPropagation();const bs=[...g.querySelectorAll("button")],i=bs.indexOf(e.target),n=bs[(i+(e.key==="ArrowRight"?1:bs.length-1))%bs.length];n.focus()});
@@ -606,13 +603,13 @@ function pickNext(pool){
 function drawKinds(){
   $("dkinds").innerHTML=[["trap","Traps"],["fu","Follow-ups"]].map(p=>'<button type="button" class="pill" data-kind="'+p[0]+'" aria-pressed="'+dKinds[p[0]]+'">'+p[1]+'</button>').join("");
   const parts=[];if(st.cat)parts.push(cats[st.cat].name);if(st.lvl)parts.push(LV[st.lvl]);Object.keys(st.tags).forEach(t=>parts.push(t));if(st.status!=="all")parts.push(STATUS[st.status]);if(st.q)parts.push("“"+st.q+"”");
-  $("dscope").textContent=parts.length?"Scope: "+parts.join(" · ")+" (from Study index filters)":"Scope: all categories";
+  $("dscope").textContent=parts.length?"Only: "+parts.join(" · "):"";$("dscope").hidden=!parts.length;
 }
 $("dkinds").addEventListener("click",e=>{const b=e.target.closest("[data-kind]");if(!b)return;const k=b.dataset.kind;dKinds[k]=!dKinds[k];if(!dKinds.trap&&!dKinds.fu)dKinds[k]=true;drawKinds();dHist=dHist.slice(0,dHi+1);showDrill(pickNext(drillItems()),true)});
 function fmtWait(ms){const h=ms/36e5;return h<1?Math.max(1,Math.round(ms/6e4))+" min":h<48?Math.round(h)+" h":Math.round(h/24)+" days"}
 function renderDrill(){
   const pool=drillItems(),s=drillStats(pool);
-  $("dstats").textContent=s.due+" due · "+s.fresh+" new · "+s.m+" mastered · "+s.total+" in pool";
+  $("dstats").textContent=(s.due?s.due+" due · ":"")+s.fresh+" new";
   $("dfoot").textContent=FOOT;
   $("dprev").disabled=dHi<=0;
   const c=$("dcard");
@@ -629,7 +626,7 @@ function renderDrill(){
     h+='<div class="dkind fol">Follow-up</div><p class="don">On: '+esc(x.q)+'</p><p class="dq">'+esc(it.f.q)+'</p><p class="dask">Answer out loud first, then reveal.</p>';
     if(dRevealed)h+='<div class="dans card"><h3>Answer</h3><p>'+esc(it.f.a)+'</p></div>';
   }
-  if(!dRevealed)h+='<div class="dacts"><button type="button" class="btn primary" data-d="reveal">Reveal trap &amp; architectural reasoning <kbd>Space</kbd></button></div>';
+  if(!dRevealed)h+='<div class="dacts"><button type="button" class="btn primary" data-d="reveal">Reveal <kbd>Space</kbd></button></div>';
   else h+='<div class="dacts"><span class="dstats" style="margin:0 6px 0 0">How did you do?</span><button type="button" class="btn miss" data-d="missed">Missed <kbd>1</kbd></button><button type="button" class="btn shaky" data-d="shaky">Shaky <kbd>2</kbd></button><button type="button" class="btn got" data-d="got">Got it <kbd>3</kbd></button><span style="flex:1"></span><button type="button" class="link" data-d="open">Open full card</button></div>';
   c.innerHTML=h;
 }
@@ -668,7 +665,7 @@ document.addEventListener("keydown",e=>{
 });
 
 /* ---------- reset ---------- */
-$("reset").onclick=()=>{if(!confirm("Reset all progress? Confidence ratings, mastered questions and drill history will be cleared from this browser."))return;done={};conf={};drill={};saveAll();dHist=[];dHi=-1;dCur=null;render();msg("Progress reset")};
+function resetAll(){if(!confirm("Reset all progress? Confidence ratings, mastered questions and drill history will be cleared from this browser."))return;done={};conf={};drill={};saveAll();dHist=[];dHi=-1;dCur=null;render();msg("Progress reset")}
 
 /* ---------- resizable split ---------- */
 (function(){
