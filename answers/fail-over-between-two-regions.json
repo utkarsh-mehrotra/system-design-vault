@@ -1,0 +1,76 @@
+{
+  "thesis": "Split brain happens when both regions believe they own the same data. Prevent it structurally: one writer per data partition at any time, ownership decided by a quorum or an explicit operator action, and fencing tokens so a deposed writer's late writes are rejected. State the data-loss window (RPO) and recovery time (RTO) up front.",
+  "pitch": "With two regions, the hard part isn't moving traffic, it's making sure only one region accepts writes for a given piece of data. I'd assign each data partition a single writer region. Failover changes that ownership through something that can't itself split: either a consensus service with a tiebreaker in a third location, or a deliberate operator decision, because two regions alone can't distinguish 'the other is dead' from 'the link is down'. Every ownership change increments an epoch, and storage rejects writes with an old epoch, which is fencing. With asynchronous replication, failover loses whatever hadn't replicated, so the RPO is roughly the replication lag; synchronous replication removes that loss but adds cross-region latency to every write. Then traffic shifting, health checks and, most importantly, regular failover drills.",
+  "points": [
+    {
+      "h": "Single writer per partition",
+      "d": "At any moment exactly one region may write a given partition. Reads can be served anywhere with known staleness. This is the structural defence against split brain."
+    },
+    {
+      "h": "Two regions can't vote alone",
+      "d": "If the link drops, each side sees the other as dead. Use a witness in a third location for quorum, or make failover a manual, deliberate action with a runbook."
+    },
+    {
+      "h": "Fencing with epochs",
+      "d": "Each ownership change increments an epoch or term. Writes carry it, and the storage layer rejects writes from older epochs, so a region that comes back still thinking it's primary can't corrupt data."
+    },
+    {
+      "h": "State RPO and RTO",
+      "d": "Async replication: RPO roughly equals replication lag at failure time. Sync: RPO near zero, but every write pays a cross-region round trip. RTO is detection plus decision plus promotion plus DNS or traffic shift time."
+    },
+    {
+      "h": "Traffic shifting",
+      "d": "Health-checked global load balancing or DNS with low TTLs, plus clients that respect it. Account for long-lived connections and DNS caching beyond the TTL."
+    },
+    {
+      "h": "Capacity in the surviving region",
+      "d": "The survivor must handle the full load. Either keep it provisioned (active-active at under 50% each) or have reliable fast scaling and test it."
+    },
+    {
+      "h": "Practise failover",
+      "d": "Run scheduled drills. Untested failover is a theory; the first real use usually uncovers stale runbooks, missing permissions and hidden dependencies on the failed region."
+    }
+  ],
+  "decision": "Active-passive with async replication and manual or witness-based failover is the common, defensible default. Active-active needs partitioned ownership (home region per account) or conflict-free data types. Synchronous cross-region replication only where zero data loss justifies the write latency.",
+  "numbers": [
+    "RPO example: async replication lag of 2 seconds at 1,000 writes/s means up to about 2,000 writes at risk on failover; they must be reconciled or are lost.",
+    "RTO budget example: 1 minute detection, 5 minutes decision, 2 minutes promotion, 5 minutes for traffic to move = about 13 minutes."
+  ],
+  "pitfalls": [
+    "Automatic failover based on one region's view of the other's health; flaky links cause flapping or split brain.",
+    "No fencing, so the old primary keeps accepting writes after it's been replaced.",
+    "Hidden dependencies on the failed region: auth service, secrets store, container registry, DNS control plane.",
+    "Never failing back: the procedure to return to the original region is untested too."
+  ],
+  "followups": [
+    {
+      "q": "What happens to the writes that didn't replicate?",
+      "a": "With async replication, they exist only in the failed region. When it comes back, they must be reconciled: replayed if safe, flagged for review if they conflict. Decide this before the incident."
+    },
+    {
+      "q": "Why not active-active everywhere?",
+      "a": "Concurrent writes to the same data in two regions need conflict resolution, which is wrong for invariants like balances. Active-active works when each account or partition has one home region."
+    },
+    {
+      "q": "How often would you drill?",
+      "a": "Quarterly at minimum for full failover; smaller component failovers more often. Measure actual RTO and RPO each time."
+    }
+  ],
+  "example": "A lending platform keeps each customer's data homed in one region with async replication to the other. A regional outage triggers an operator-approved failover: the coordination service bumps the epoch, the standby database is promoted, and global load balancing moves traffic. Measured RTO was 11 minutes, with about 3 seconds of writes to reconcile.",
+  "related": [
+    "design-data-center-outage-scenarios",
+    "raft-paxos-quorums-gossip-appear",
+    "reason-about-cap-trade-offs",
+    "rehearse-failure-before-production"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: How to do distributed locking (fencing tokens)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    },
+    {
+      "title": "AWS Well-Architected: Disaster recovery objectives (RTO and RPO)",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/disaster-recovery-dr-objectives.html"
+    }
+  ]
+}

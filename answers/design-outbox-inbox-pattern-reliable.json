@@ -1,0 +1,72 @@
+{
+  "thesis": "The outbox makes 'change state and publish an event' atomic by writing both in one local transaction; the inbox makes 'consume and apply' idempotent by recording processed event ids in the consumer's own transaction. Together they give effectively-once processing over at-least-once delivery.",
+  "pitch": "The problem is the dual write: updating the database and publishing to a broker are two systems, so a crash between them loses or invents events. With an outbox, the service writes its state change and an event row into an outbox table in the same transaction. A relay, either a poller or change data capture on the outbox table, publishes those rows to the broker and marks them sent. Delivery is at least once, so on the consumer side an inbox table keyed by event id is written in the same transaction as the consumer's state change; a duplicate hits the unique key and is skipped. I'd care about ordering, since a per-aggregate key and a single relay per partition preserve it, about relay lag as a metric, and about cleaning up old outbox and inbox rows.",
+  "points": [
+    {
+      "h": "Outbox: one transaction for state and event",
+      "d": "INSERT/UPDATE business rows and INSERT INTO outbox(id, aggregate_id, type, payload, created_at) in one transaction. Either both commit or neither does."
+    },
+    {
+      "h": "Relay: polling or CDC",
+      "d": "A poller selects unsent rows in order and publishes them; simple but adds load and latency. CDC tails the database log and streams outbox inserts; lower latency and load, more infrastructure."
+    },
+    {
+      "h": "Inbox: dedupe in the consumer's transaction",
+      "d": "The consumer inserts the event id into its inbox table with a unique constraint and applies the change in the same transaction. A redelivered event fails the insert and is acknowledged without reapplying."
+    },
+    {
+      "h": "Preserve per-aggregate ordering",
+      "d": "Use the aggregate id as the message key so events for one entity land on one partition, and publish outbox rows for that aggregate in commit order."
+    },
+    {
+      "h": "Monitor relay lag and backlog",
+      "d": "Alert on the age of the oldest unsent outbox row. A stuck relay looks like 'events stopped' downstream, which is easy to miss."
+    },
+    {
+      "h": "Retention and cleanup",
+      "d": "Delete or archive sent outbox rows after a period, and keep inbox ids at least as long as the broker can redeliver (its retention plus replay window)."
+    }
+  ],
+  "decision": "Use the outbox whenever a service must publish events about its own state changes. Choose a poller for modest volume and simplicity; CDC for high volume or low latency. Use an inbox (or a natural idempotency key) on every consumer that changes state.",
+  "numbers": [
+    "Poller tuning: polling every 100–500 ms adds that much latency on average; batch sizes of hundreds keep database load low. CDC latency is typically lower, bounded by log shipping.",
+    "Inbox size ≈ events/day × retention days × ~50–100 bytes per id row. At 10M events/day and 7 days, about 70M rows, which needs a cleanup job and an index on the id."
+  ],
+  "pitfalls": [
+    "Publishing directly to the broker inside the transaction 'just to be safe': the broker call can succeed while the transaction rolls back.",
+    "Multiple pollers without coordination publishing the same rows out of order.",
+    "Consumers that dedupe in a cache rather than in their own transaction; the cache and the state change can disagree.",
+    "Never cleaning the outbox, so the poller's query slows down over months."
+  ],
+  "followups": [
+    {
+      "q": "Why not just make the consumer idempotent and skip the outbox?",
+      "a": "Idempotency fixes duplicates, not loss. Without the outbox a crash after commit but before publish loses the event entirely."
+    },
+    {
+      "q": "How do you scale the relay?",
+      "a": "Partition the outbox by aggregate key and run one relay per partition, or use CDC, which reads the log sequentially and scales with the broker."
+    },
+    {
+      "q": "What if the consumer's side effect is external, like sending an email?",
+      "a": "Record the inbox entry and a 'to send' state in one transaction, then send with a provider idempotency key derived from the event id, and mark it sent."
+    }
+  ],
+  "example": "The order service writes order status 'paid' and an OrderPaid outbox row together. Debezium streams the row to Kafka keyed by order id. The fulfilment service inserts the event id into its inbox and creates a shipment in one transaction; a redelivery is skipped.",
+  "related": [
+    "replace-two-phase-commit-across",
+    "exactly-once-practice-kafka-flink",
+    "build-idempotency-write-api-clients",
+    "keep-ordering-also-need-parallelism"
+  ],
+  "sources": [
+    {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    },
+    {
+      "title": "Debezium: change data capture",
+      "url": "https://debezium.io/"
+    }
+  ]
+}

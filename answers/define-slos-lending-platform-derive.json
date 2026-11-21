@@ -1,0 +1,75 @@
+{
+  "thesis": "Pick a few indicators that reflect what borrowers and partners experience, set targets from user need and cost, and alert on how fast the error budget is burning rather than on raw thresholds. Tie budget exhaustion to a release policy so the SLO changes behaviour.",
+  "pitch": "For a lending platform I'd choose user-journey SLIs: application submission success rate and latency, time to credit decision for instant products, disbursal success within the promised window, repayment processing success, and availability of the account API for partners. Each SLI is measured close to the user, at the load balancer or from client telemetry. Targets come from user expectations and cost, for example 99.9% of applications submitted successfully over 28 days. The error budget is the allowed failure, 0.1%. Alerts use multi-window burn rates: page when the budget is burning fast enough to be exhausted in about two days, measured over both one hour and five minutes so alerts are fast and reset quickly; open a ticket for slow burns. And the policy: when the budget is spent, feature releases pause and reliability work takes priority until it recovers.",
+  "points": [
+    {
+      "h": "SLIs follow user journeys",
+      "d": "Submission success and latency, decision time, disbursal completed within the promised window, repayment posted correctly, partner API availability. Avoid CPU or pod counts; users don't feel those directly."
+    },
+    {
+      "h": "Measure near the user",
+      "d": "Use load balancer logs, API gateway metrics or client telemetry, not only server-side success counters, which miss requests that never arrived."
+    },
+    {
+      "h": "Targets from need and cost",
+      "d": "Each extra nine costs a lot more. 99.9% over 28 days allows about 40 minutes of full outage; 99.99% about 4 minutes. Choose per journey."
+    },
+    {
+      "h": "Error budget = 1 − target",
+      "d": "It quantifies acceptable unreliability and turns 'is it reliable enough?' into a number shared by product and engineering."
+    },
+    {
+      "h": "Burn-rate alerts",
+      "d": "Burn rate is how fast you consume budget relative to plan. Page on fast burns (for example 14.4x over 1 hour and 5 minutes, which spends about 2% of a 30-day budget in an hour), ticket on slow burns (for example 6x over 6 hours, 1x over 3 days)."
+    },
+    {
+      "h": "Policy with teeth",
+      "d": "Agree in advance: budget exhausted means release freeze for features, focus on reliability, and a review. Without a policy, SLOs become dashboards."
+    },
+    {
+      "h": "Asynchronous journeys need freshness SLIs",
+      "d": "Disbursal and repayment are often batch or event-driven; measure 'completed within X minutes of request' rather than request success alone."
+    }
+  ],
+  "decision": "Three to five SLOs per product, covering the journeys that cost money or trust when they fail. Page only on fast burn of a user-facing SLO; everything else becomes a ticket or dashboard. Revisit targets quarterly.",
+  "numbers": [
+    "99.9% over 30 days = 43.2 minutes of total downtime equivalent. 99.95% = 21.6 minutes. 99.99% = 4.3 minutes.",
+    "Fast-burn rule from the Google SRE workbook: burn rate 14.4 over a 1-hour window (with a 5-minute confirmation window) consumes 2% of a 30-day budget."
+  ],
+  "pitfalls": [
+    "SLOs on internal metrics (CPU, queue depth) that don't reflect user pain.",
+    "A target of 100%, which leaves no room for change and is never true.",
+    "Static threshold alerts that page on brief blips and miss slow, steady burns.",
+    "No release policy, so budget exhaustion changes nothing."
+  ],
+  "followups": [
+    {
+      "q": "How do you set an SLO for disbursal, which depends on a bank?",
+      "a": "Measure the part you own (request accepted and sent to the bank within X) separately from end-to-end completion, and track the bank's performance as a dependency SLI with its own report."
+    },
+    {
+      "q": "What if a partner demands 99.99%?",
+      "a": "Price it: show the architecture and cost needed, and offer an SLA below your internal SLO so there's margin."
+    },
+    {
+      "q": "Why multi-window alerts?",
+      "a": "The long window gives significance and avoids paging on blips; the short window makes the alert stop quickly once the problem is fixed."
+    }
+  ],
+  "example": "The instant-loan journey has an SLO of 99.5% of decisions within 30 seconds over 28 days. A slow credit bureau integration starts burning budget at 10x; the 1-hour/5-minute alert pages on-call, who enables a cached-score fallback for repeat customers while the bureau recovers.",
+  "related": [
+    "alert-user-pain-not-noise",
+    "design-metrics-actually-tell-me",
+    "p50-flat-but-p99-doubled"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE workbook: Alerting on SLOs",
+      "url": "https://sre.google/workbook/alerting-on-slos/"
+    },
+    {
+      "title": "Google SRE book: Service level objectives",
+      "url": "https://sre.google/sre-book/service-level-objectives/"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "thesis": "Replace 2PC with a saga: a sequence of local transactions, each publishing its outcome reliably through an outbox, with a compensating action for every step that can be undone. You give up isolation, so design for visible intermediate states.",
+  "pitch": "Two-phase commit across three services couples their availability: any participant or the coordinator being slow blocks everyone holding locks. I'd replace it with a saga. Each service does a local transaction and records an event in an outbox table in the same transaction, so state change and event can't diverge. The next step consumes that event idempotently. For each step I define a compensation, like releasing reserved stock or refunding a charge, that runs if a later step fails. I'd use orchestration, with one coordinator holding the saga's state machine, when there are more than two or three steps, because it makes progress and failures visible. The honest cost is isolation: other readers can see the order as 'pending' between steps, so the domain needs explicit pending states, and some steps, like sending an email, can't be compensated and should go last.",
+  "points": [
+    {
+      "h": "Why 2PC hurts across services",
+      "d": "Participants hold locks while waiting for the coordinator; a coordinator failure can leave them blocked. Every service's availability now depends on all the others, and many brokers and APIs don't support XA anyway."
+    },
+    {
+      "h": "Local transactions plus an outbox",
+      "d": "Each step commits its state change and an outgoing event row in one local transaction. A relay publishes the outbox to the broker. This removes the dual-write gap between database and message."
+    },
+    {
+      "h": "Idempotent consumers",
+      "d": "Events are delivered at least once, so each step dedupes by event or saga id (an inbox table or idempotency key) before acting."
+    },
+    {
+      "h": "Compensations, not rollbacks",
+      "d": "Every step that can be undone gets a semantic inverse: release stock, refund payment, cancel shipment. Compensations must themselves be idempotent and retryable."
+    },
+    {
+      "h": "Order steps by reversibility",
+      "d": "Put easily reversed steps first and irreversible ones (shipping, notifying the customer) last, after every step that can fail has succeeded."
+    },
+    {
+      "h": "Orchestration vs choreography",
+      "d": "Choreography (services react to each other's events) is fine for two or three steps. Beyond that, an orchestrator with an explicit state machine makes the flow, timeouts and stuck sagas observable."
+    },
+    {
+      "h": "Make stuck sagas visible",
+      "d": "Persist saga state with timestamps; alert on sagas stuck in a state too long; provide tooling to retry, compensate or resolve manually."
+    }
+  ],
+  "decision": "Use a saga with outbox and idempotent consumers for cross-service workflows. Keep 2PC only inside one database or between components that natively support it and share an availability fate. If an invariant truly needs atomicity across services, reconsider the service boundary instead.",
+  "numbers": [
+    "Latency: a saga's end-to-end time is the sum of steps plus broker hops, often tens to hundreds of milliseconds, so return to the client after the first step with a pending status rather than blocking on the whole saga."
+  ],
+  "pitfalls": [
+    "Publishing the event outside the local transaction (dual write): a crash between commit and publish loses the event.",
+    "Compensations that aren't idempotent, so a retried compensation refunds twice.",
+    "No timeouts: a saga waits forever on a step that will never answer.",
+    "Ignoring isolation: another flow reads the half-finished state and acts on it.",
+    "Putting the irreversible step in the middle."
+  ],
+  "followups": [
+    {
+      "q": "A compensation fails. Now what?",
+      "a": "Retry with backoff; compensations must be idempotent. If it keeps failing, park the saga in a 'needs attention' state with full context and alert. Some failures need a human and a runbook."
+    },
+    {
+      "q": "How do you handle the lack of isolation?",
+      "a": "Semantic locks (mark the order 'pending' so other flows wait or skip it), commutative updates where possible, and reading only committed final states for decisions."
+    },
+    {
+      "q": "Orchestrator or choreography for this case?",
+      "a": "Three services with compensations: orchestrator. It centralises the state machine, timeouts and visibility, while each service keeps its own data and logic."
+    }
+  ],
+  "example": "Order placement: the order service creates an order (pending) and an outbox event; inventory reserves stock; payment charges the card; then the order is confirmed and the confirmation email is sent last. If payment fails, the orchestrator triggers 'release stock' and marks the order failed.",
+  "related": [
+    "design-outbox-inbox-pattern-reliable",
+    "build-idempotency-write-api-clients",
+    "reconcile-divergent-data-across-systems",
+    "one-request-fans-out-five"
+  ],
+  "sources": [
+    {
+      "title": "microservices.io: Saga pattern",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    },
+    {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  ]
+}

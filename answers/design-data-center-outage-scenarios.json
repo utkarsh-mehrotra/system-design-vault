@@ -1,0 +1,76 @@
+{
+  "thesis": "Design for the loss of a whole site by spreading across failure domains (zones first, then regions), keeping enough capacity to survive the loss without scaling up, replicating data with a stated loss window, and proving it with regular drills.",
+  "pitch": "I'd treat it as a sequence of failure domains: instance, zone, region. Zone loss is common enough that the system should survive it with no human action: run in at least three zones, keep enough capacity that losing one leaves the rest under their limits, replicate data synchronously within the region, and avoid depending on control planes during the failure, which AWS calls static stability. Region loss is rarer and more expensive to handle; there I'd choose a strategy per service tier, from backup-and-restore for internal tools to warm standby or active-active for revenue-critical paths, each with a stated RPO and RTO. Then I'd look hard for hidden single points of failure, like DNS, identity, secrets, CI/CD and third-party SaaS, and run drills to measure real recovery times.",
+  "points": [
+    {
+      "h": "Failure domains in layers",
+      "d": "Instance, rack, zone, region, provider. Each layer is rarer and costlier to survive. Decide explicitly which layer each service must survive automatically."
+    },
+    {
+      "h": "N+1 capacity per zone",
+      "d": "With three zones, each should run at no more than about two thirds of its capacity so losing one leaves the other two able to absorb the load without new instances."
+    },
+    {
+      "h": "Static stability",
+      "d": "Keep the system working without control-plane actions during the failure: pre-provisioned capacity, cached configuration, no dependency on launching instances or changing DNS to survive a zone loss."
+    },
+    {
+      "h": "Data replication with stated loss",
+      "d": "Synchronous replication across zones (low latency, near-zero loss). Asynchronous across regions, with RPO equal to lag. Backups for the case where replication copies corruption too."
+    },
+    {
+      "h": "Tiered regional strategies",
+      "d": "Backup and restore (hours), pilot light (core data replicated, compute off), warm standby (scaled-down copy running), active-active (full capacity in both). Match each service's tier to its business impact."
+    },
+    {
+      "h": "Hunt hidden dependencies",
+      "d": "Authentication, secrets, DNS, container registry, CI/CD, monitoring and third-party APIs often live in one region. If they're down, your failover may be impossible."
+    },
+    {
+      "h": "Drill and measure",
+      "d": "Simulate zone loss regularly (block traffic to one zone), and region loss on a schedule. Track measured RTO and RPO against targets."
+    }
+  ],
+  "decision": "Every production service survives a zone loss automatically. Regional resilience is tiered by business impact, because full active-active everywhere is expensive. Backups and restore tests are mandatory regardless, since replication faithfully copies mistakes.",
+  "numbers": [
+    "Capacity rule: with N zones, run each at most (N − 1)/N of its capacity: 66% for three zones, 50% for two.",
+    "Cost intuition: warm standby for a region roughly adds a fraction of production cost; active-active roughly doubles infrastructure."
+  ],
+  "pitfalls": [
+    "Running at 80% in each of three zones and discovering a zone loss overloads the rest.",
+    "Failover that requires launching instances during a regional event, when the control plane is also struggling.",
+    "Monitoring and alerting hosted in the region that failed.",
+    "Treating replication as backup; a bad migration or deletion replicates instantly."
+  ],
+  "followups": [
+    {
+      "q": "How do you test zone loss without causing an outage?",
+      "a": "Start in staging, then shift traffic away from one zone in production during low-traffic hours with a quick rollback, and expand the scope as confidence grows."
+    },
+    {
+      "q": "Which services deserve active-active?",
+      "a": "Those where minutes of downtime cost more than doubling infrastructure: usually the core transaction path, not internal tools or batch analytics."
+    },
+    {
+      "q": "What's the most common surprise in regional drills?",
+      "a": "Hidden dependencies: an auth or secrets service that only runs in the primary region, or deploy tooling that can't reach the standby."
+    }
+  ],
+  "example": "A payments service runs in three zones at 60% utilisation with synchronous database replicas across zones. A zone outage removed a third of instances; the rest absorbed load with p99 rising from 120 to 180 ms and no errors, and no human action was needed.",
+  "related": [
+    "fail-over-between-two-regions",
+    "make-rebuild-scratch-possible-if",
+    "rehearse-failure-before-production",
+    "list-ways-three-tier-service"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Static stability using Availability Zones",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    },
+    {
+      "title": "AWS Well-Architected: Disaster recovery objectives",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/disaster-recovery-dr-objectives.html"
+    }
+  ]
+}

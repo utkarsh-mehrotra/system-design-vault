@@ -1,0 +1,70 @@
+{
+  "thesis": "CAP only bites during a network partition, and then it's a per-operation choice: refuse the request to stay consistent, or serve it and accept divergence you'll reconcile later. Most of the time the real trade-off is latency against consistency.",
+  "pitch": "I treat CAP as a question I ask per operation: when a partition separates replicas, should this operation fail or proceed? Placing an order against limited inventory should probably fail or queue rather than oversell. Adding an item to a cart or liking a post should proceed and merge later. Outside partitions, which is most of the time, the trade-off is latency against consistency, which is what PACELC adds: synchronous cross-region replication costs a round trip on every write. So for each operation I state what happens on a partition, what the user sees, and how divergent state is reconciled afterwards. 'We chose AP' as a system-wide label is usually too coarse to be useful.",
+  "points": [
+    {
+      "h": "CAP is about behaviour during partitions",
+      "d": "Partitions will happen, so the real choice is what each operation does when replicas can't talk: refuse (consistent) or proceed (available). It's not a choice between three properties."
+    },
+    {
+      "h": "Decide per operation",
+      "d": "Booking the last seat: refuse or queue. Updating a shopping cart: proceed and merge. Reading a product description: serve stale. Different operations in one product make different choices."
+    },
+    {
+      "h": "Most of the time it's latency vs consistency",
+      "d": "Without a partition you still pay for consistency: synchronous replication across zones or regions adds round-trip latency to every write. PACELC names this: else, latency or consistency."
+    },
+    {
+      "h": "Available choices need a reconciliation story",
+      "d": "If you accept writes on both sides, define how divergence resolves: last-writer-wins (loses data), merge functions or CRDTs, or flagging conflicts for a human."
+    },
+    {
+      "h": "Consistent choices need a user story",
+      "d": "If you refuse, decide what the user sees: an error, a retry later, or a queued request with a promise. 'Unavailable' must still be designed."
+    },
+    {
+      "h": "Shrink the blast radius",
+      "d": "Partition data so a network split only affects the slice whose owner is unreachable. A home region per account keeps most operations available and consistent."
+    }
+  ],
+  "decision": "Refuse during partitions when divergence would violate a money, safety or uniqueness invariant. Proceed when operations commute or merge cleanly (counters, sets, carts). For everything, state the normal-case latency cost of the consistency you pick.",
+  "numbers": [
+    "Synchronous replication cost: a cross-region round trip is often tens of milliseconds and can exceed 100 ms between distant continents, added to every consistent write. In-zone replication is typically around a millisecond or less."
+  ],
+  "pitfalls": [
+    "Labelling the whole system 'AP' or 'CP' and ignoring that operations differ.",
+    "Choosing availability without designing conflict resolution; last-writer-wins silently drops writes.",
+    "Forgetting the normal-case latency cost and blaming the database for slow writes.",
+    "Treating CAP's 'consistency' as the C in ACID; CAP's C means linearizability."
+  ],
+  "followups": [
+    {
+      "q": "Give an example where you'd choose availability.",
+      "a": "A shopping cart: accept adds on both sides of a partition and merge as a union, accepting that a removed item might reappear. Amazon's Dynamo paper describes this trade-off."
+    },
+    {
+      "q": "How do CRDTs help?",
+      "a": "They're data types whose concurrent updates merge deterministically (counters, sets, registers with defined rules), so replicas converge without coordination. They suit collaborative and counter-style data, not invariants like 'balance never negative'."
+    },
+    {
+      "q": "What does the user see when you choose consistency during a partition?",
+      "a": "Design it: a clear message, a retry with backoff, or accept the request into a durable queue and confirm later. Silent hangs are the worst choice."
+    }
+  ],
+  "example": "A ticketing system keeps seat reservation consistent (a partition makes the minority side refuse bookings) but keeps event browsing and wish-lists available from local replicas, merging wish-list changes afterwards.",
+  "related": [
+    "model-consistency-levels-across-services",
+    "fail-over-between-two-regions",
+    "raft-paxos-quorums-gossip-appear"
+  ],
+  "sources": [
+    {
+      "title": "Eric Brewer: CAP twelve years later",
+      "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"
+    },
+    {
+      "title": "DeCandia et al.: Dynamo, Amazon's highly available key-value store",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  ]
+}

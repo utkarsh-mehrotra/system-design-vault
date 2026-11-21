@@ -1,0 +1,75 @@
+{
+  "thesis": "Once new code has written data, rolling back the code isn't enough: the old version must still read what the new version wrote. Design releases so the schema and data formats are backward and forward compatible across adjacent versions, and decide in advance when you roll back versus fix forward.",
+  "pitch": "The rule I'd follow is that any release must be safe to run alongside, and roll back to, the previous version. That means separating schema changes from behaviour changes: expand the schema first in a release that doesn't use it yet, then ship code that writes the new shape while still writing or tolerating the old one, and only contract after the new code has been stable for a full cycle. New data formats are introduced behind a feature flag, so turning the flag off stops new writes without a deploy. Old code must ignore unknown fields and tolerate new enum values. If something goes wrong after data was written, I'd decide using a pre-agreed rule: roll back if the new data is readable by the old code and the issue is user-facing; fix forward if rollback would orphan or misread data. And keep a script ready to repair or translate the records written during the bad window.",
+  "points": [
+    {
+      "h": "N and N-1 must coexist",
+      "d": "During rollout and after a rollback, two versions run against the same data. Every change must be compatible in both directions across adjacent versions."
+    },
+    {
+      "h": "Expand, migrate, contract",
+      "d": "Release 1 adds nullable columns or new tables. Release 2 writes both old and new shapes. Release 3 reads new. Release 4 removes old, only after a full cycle with no rollback."
+    },
+    {
+      "h": "Feature flags for new data paths",
+      "d": "Gate new write formats behind flags so you can stop producing new-format data instantly, independent of a code rollback."
+    },
+    {
+      "h": "Tolerant readers",
+      "d": "Old code ignores unknown fields, handles new enum values with a safe default, and doesn't crash on nulls in new columns."
+    },
+    {
+      "h": "Rollback vs fix-forward rule",
+      "d": "Roll back when the old version can read everything written and the fix isn't trivial. Fix forward when rollback would misread new data or the fix is a small, low-risk change."
+    },
+    {
+      "h": "Repair tooling for the bad window",
+      "d": "Identify records written during the faulty period (by version tag or timestamp) and have a script to correct or translate them."
+    },
+    {
+      "h": "Test rollback in CI",
+      "d": "Run the previous version against a database migrated by the new one. If tests fail, the release isn't rollback-safe."
+    }
+  ],
+  "decision": "Make rollback-safety a release requirement, tested automatically. Destructive schema changes (dropping or renaming columns, changing types) always go in a separate, later release.",
+  "numbers": [
+    "Contract delay example: keep the old column until the new release has run for at least one full business cycle (often a week, or a month for monthly batch jobs) with no rollback."
+  ],
+  "pitfalls": [
+    "Renaming a column in the same release that starts using the new name: rollback breaks immediately.",
+    "Old code that crashes on an unknown enum value written by new code.",
+    "Contracting too early, then needing to roll back.",
+    "Assuming 'it's just a code rollback' when caches, queues and search indexes now hold new-format data."
+  ],
+  "followups": [
+    {
+      "q": "The new version wrote 50,000 records in a format the old version misreads. Now what?",
+      "a": "Don't roll back blindly. Disable the flag to stop new writes, fix forward or deploy a version of old code that can read both formats, then repair the 50,000 records with a script."
+    },
+    {
+      "q": "How do you enforce rollback-safety?",
+      "a": "A CI job that runs N-1 against the schema and data produced by N, plus migration linting that blocks destructive changes in the same release as code changes."
+    },
+    {
+      "q": "What about messages already in queues?",
+      "a": "Same rule: consumers of N-1 must handle messages produced by N, which is why event schemas need compatibility checks too."
+    }
+  ],
+  "example": "A release added a 'repayment_schedule_v2' JSON field and started writing it. Calculations were wrong for some products. Because v2 was behind a flag and the old field was still written, on-call turned the flag off, rolled back the code, and a repair job recomputed affected schedules from the old field.",
+  "related": [
+    "schema-changes-downtime",
+    "migrate-billion-row-table-new",
+    "evolve-event-schema-breaking-consumers",
+    "design-mistakes-cheap-not-catastrophic"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Ensuring rollback safety during deployments",
+      "url": "https://aws.amazon.com/builders-library/ensuring-rollback-safety-during-deployments/"
+    },
+    {
+      "title": "Martin Fowler: Parallel change (expand and contract)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  ]
+}

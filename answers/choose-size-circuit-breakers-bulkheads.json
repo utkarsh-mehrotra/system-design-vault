@@ -1,0 +1,72 @@
+{
+  "thesis": "Timeouts bound how long you wait, bulkheads bound how much of your capacity one dependency can consume, and circuit breakers stop calling a dependency that's clearly failing. Size each from measured behaviour, not defaults.",
+  "pitch": "I'd set timeouts first, because without them nothing else works. Each call's timeout sits a little above that dependency's healthy p99 and always below the caller's own remaining deadline. Then bulkheads: a separate connection or concurrency pool per dependency, sized by Little's law from its normal throughput and latency plus headroom, so a slow recommendation service can only exhaust its own slots, not the threads checkout needs. Then circuit breakers: open when the error or slow-call rate over a rolling window crosses a threshold with a minimum request count, fail fast while open, and after a cool-down let a few probe requests through in half-open state. When open, return the fallback. I'd validate the numbers with load tests and fault injection.",
+  "points": [
+    {
+      "h": "Timeouts from data",
+      "d": "Set each call's timeout slightly above the dependency's healthy p99 (for example p99 × 1.5), and never longer than the caller's remaining deadline. Defaults like 30 or 60 seconds are almost always wrong."
+    },
+    {
+      "h": "Bulkheads per dependency",
+      "d": "Separate pools (threads, connections, semaphores) so one slow dependency can't consume shared capacity. Critical dependencies get reserved capacity."
+    },
+    {
+      "h": "Size pools with Little's law",
+      "d": "Needed concurrency = throughput × latency. 500 calls/s at 40 ms is 20 concurrent; add headroom for spikes (say 2x) and cap there. A larger pool only queues more work behind a slow dependency."
+    },
+    {
+      "h": "Breaker trip conditions",
+      "d": "Open when the failure rate or slow-call rate over a rolling window exceeds a threshold (for example 50%), with a minimum number of calls so a handful of errors at low traffic doesn't trip it."
+    },
+    {
+      "h": "Half-open probing",
+      "d": "After a cool-down, allow a few trial calls; close on success, reopen on failure. Add jitter so many instances don't probe at the same instant."
+    },
+    {
+      "h": "Fallback while open",
+      "d": "Fail fast with a clear error, serve cached data, or degrade the feature. An open breaker without a fallback is still better than piling up timeouts."
+    }
+  ],
+  "decision": "Every remote call gets a timeout. Dependencies that are optional or historically flaky get a bulkhead and a breaker. Critical dependencies get reserved capacity and tight timeouts. Tune from production metrics and verify with fault injection.",
+  "numbers": [
+    "Example: dependency p99 = 120 ms healthy → timeout 200 ms. Throughput 300/s × 0.12 s = 36 concurrent → bulkhead of about 70.",
+    "Breaker example: rolling window of 20 seconds, minimum 50 calls, open at 50% failures or slow calls, 10-second cool-down, 5 probe calls in half-open."
+  ],
+  "pitfalls": [
+    "Timeouts longer than the caller's deadline, so work continues after nobody is waiting.",
+    "One shared thread pool for all dependencies, which defeats bulkheads.",
+    "Breakers with no minimum call count, flapping on low traffic.",
+    "Per-instance breakers that each need to see failures before opening; at large fleet sizes that's a lot of failed calls. Consider shared signals or outlier detection at the load balancer."
+  ],
+  "followups": [
+    {
+      "q": "How do you pick the breaker threshold?",
+      "a": "From the dependency's normal error rate: well above normal noise but low enough to trip before callers saturate. Validate by injecting failures and watching caller saturation."
+    },
+    {
+      "q": "Where should breakers live: client library, sidecar or gateway?",
+      "a": "Closest to the caller that knows the fallback, often the client library. A service mesh sidecar can provide timeouts and outlier ejection uniformly but doesn't know business fallbacks."
+    },
+    {
+      "q": "What do you do about retries with breakers?",
+      "a": "Retries count toward the breaker's window, and an open breaker should stop retries entirely."
+    }
+  ],
+  "example": "A product page calls pricing (critical) and recommendations (optional). Recommendations get a 20-slot bulkhead, an 80 ms timeout and a breaker; when it degrades, the breaker opens within seconds and the page renders without recommendations while pricing keeps its reserved pool.",
+  "related": [
+    "retries-amplifying-outage-design-retries",
+    "design-graceful-degradation-instead-hard",
+    "one-request-fans-out-five",
+    "list-ways-three-tier-service"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Circuit breaker",
+      "url": "https://martinfowler.com/bliki/CircuitBreaker.html"
+    },
+    {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "thesis": "Generate IDs locally from time plus node identity plus randomness or a sequence, so no request waits on a central counter. Choose the format for the properties you need: sortability, index locality, size, and how much clock skew you can tolerate.",
+  "pitch": "A central counter is a single point of failure and a cross-region round trip on every insert. Instead, each node generates IDs locally. The common choices are Snowflake-style 64-bit IDs (timestamp, worker id, per-millisecond sequence), which are compact and time-ordered but need unique worker ids and care with clock skew; ULID or UUIDv7, 128 bits with a timestamp prefix plus randomness, which need no coordination and are roughly time-ordered, so they index well; and random UUIDv4, which needs no coordination but scatters inserts across a B-tree. For most systems today I'd pick UUIDv7: no worker-id management, good index locality, and a standard. I'd choose Snowflake-style when 64 bits matter for storage or a downstream system requires integers.",
+  "points": [
+    {
+      "h": "Why not a central counter",
+      "d": "Every insert pays a network round trip, and the counter's availability caps the whole system's. Across regions that's tens of milliseconds per id and a cross-region dependency."
+    },
+    {
+      "h": "Snowflake-style 64-bit",
+      "d": "Timestamp in milliseconds, a worker id, and a sequence number per millisecond. Compact and sortable. Requires assigning unique worker ids (config, a lease in a coordination service) and handling clocks moving backwards."
+    },
+    {
+      "h": "UUIDv7 and ULID",
+      "d": "48-bit millisecond timestamp prefix followed by random bits. No coordination, roughly time-ordered, standard 128-bit format (UUIDv7 is specified in RFC 9562)."
+    },
+    {
+      "h": "Index locality matters",
+      "d": "Random UUIDv4 keys insert all over a B-tree, causing page splits and poor cache use at scale. Time-prefixed ids append near the right edge of the index."
+    },
+    {
+      "h": "Clock skew and regression",
+      "d": "Time-based ids assume clocks roughly agree. If a clock jumps back, a Snowflake generator must wait or refuse; UUIDv7 implementations typically keep a monotonic counter within a millisecond."
+    },
+    {
+      "h": "Don't leak information unintentionally",
+      "d": "Time-ordered ids reveal creation time and, with sequences, volume. For public identifiers that matters; use an opaque external id if needed."
+    }
+  ],
+  "decision": "Default: UUIDv7. Snowflake-style when you need 64-bit integers or strict per-node ordering and can manage worker ids. UUIDv4 when ordering is irrelevant and volume is low. Never a global counter on the hot path.",
+  "numbers": [
+    "Snowflake capacity: with a 12-bit sequence, one worker can mint 4,096 ids per millisecond, about 4 million per second.",
+    "UUIDv7 has 74 bits of randomness and version info beyond the 48-bit timestamp; collision risk within one millisecond is negligible at realistic rates."
+  ],
+  "pitfalls": [
+    "Reusing a worker id after a node is replaced, producing duplicates within the same millisecond.",
+    "Assuming time-ordered ids give a global order of events across regions; skew makes them only roughly ordered.",
+    "UUIDv4 primary keys on a very large, write-heavy table, then wondering why insert performance degrades.",
+    "Exposing sequential ids publicly, making enumeration and volume estimation trivial."
+  ],
+  "followups": [
+    {
+      "q": "How do you assign Snowflake worker ids safely?",
+      "a": "Lease them from a coordination service with a TTL, or derive them from stable infrastructure identity, and refuse to start if the lease can't be acquired."
+    },
+    {
+      "q": "Can you sort events across regions by these ids?",
+      "a": "Only approximately. If you need a true order, use a single sequencer per partition or a logical clock; physical time can't give a total order under skew."
+    },
+    {
+      "q": "What if the database wants integer keys?",
+      "a": "Snowflake-style 64-bit ids fit a bigint, or keep an internal bigint surrogate and expose a UUID externally."
+    }
+  ],
+  "example": "A multi-region order system switches from a central sequence service to UUIDv7 generated in each service. Insert latency drops by the cross-region round trip, the sequence service disappears as a dependency, and index locality stays good because ids are time-prefixed.",
+  "related": [
+    "raft-paxos-quorums-gossip-appear",
+    "pick-partition-key-multi-tenant"
+  ],
+  "sources": [
+    {
+      "title": "RFC 9562: Universally Unique IDentifiers (UUIDs), including UUIDv7",
+      "url": "https://www.rfc-editor.org/rfc/rfc9562"
+    },
+    {
+      "title": "ULID specification",
+      "url": "https://github.com/ulid/spec"
+    }
+  ]
+}

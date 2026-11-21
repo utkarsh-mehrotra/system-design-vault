@@ -1,0 +1,66 @@
+{
+  "thesis": "Divergence is inevitable between systems that share facts, so plan for it: pick a source of truth per field, compare systematically, classify differences, auto-repair the safe classes, and route the rest to people. Track drift as a metric, not a surprise.",
+  "pitch": "Whenever two systems hold the same fact, such as our ledger and the bank, the order service and the warehouse, or a database and its search index, they will drift because of bugs, missed events and partial failures. I'd first decide, per field, which system is the source of truth. Then run reconciliation jobs that compare the two on a schedule, matching on stable ids, and classify each difference: missing on one side, value mismatch, timing difference that will resolve itself, or genuinely unexplained. Safe classes, like a projection missing a record, are repaired automatically by replaying from the source of truth. Money-affecting or ambiguous ones go to a review queue with context. And I'd publish drift counts as a metric with an alert, because a sudden rise is often the first sign of a broken pipeline.",
+  "points": [
+    {
+      "h": "Source of truth per field, not per system",
+      "d": "The bank is authoritative for settled amounts; your ledger is authoritative for what you authorised. Ambiguity about authority is the root of most reconciliation pain."
+    },
+    {
+      "h": "Match on stable identifiers",
+      "d": "Carry a shared reference (payment id, order id, external transaction id) through every system. Fuzzy matching on amount and date is a last resort and a source of false matches."
+    },
+    {
+      "h": "Classify differences",
+      "d": "Missing in target, missing in source, value mismatch, timing (in flight, will settle), duplicate. Each class has a different owner and action."
+    },
+    {
+      "h": "Auto-repair the safe classes",
+      "d": "Replay missing events into projections, rebuild a search document from the database. Repairs must be idempotent and logged."
+    },
+    {
+      "h": "Human review for the rest",
+      "d": "Money mismatches and unexplained differences go to a queue with both records, history and suggested action. Track time to resolution."
+    },
+    {
+      "h": "Measure drift continuously",
+      "d": "Count differences per class per run; alert on spikes. Run incremental checks frequently and full scans less often."
+    }
+  ],
+  "decision": "Automate repair where the source of truth is clear and the fix is replayable. Escalate where money or customer impact is involved, or where authority is ambiguous. Run small, frequent incremental reconciliations plus periodic full ones.",
+  "numbers": [
+    "Cadence example: incremental reconciliation of the last 24 hours every hour, full reconciliation weekly. Use a grace window (for example 2 hours) so in-flight items aren't flagged as missing."
+  ],
+  "pitfalls": [
+    "No shared id, so matching relies on heuristics and produces false positives.",
+    "Auto-repairing in the wrong direction because authority wasn't defined.",
+    "Flagging in-flight records as mismatches and drowning reviewers in noise.",
+    "Treating reconciliation as a one-off cleanup instead of a permanent control."
+  ],
+  "followups": [
+    {
+      "q": "Reconciliation finds 0.1% of payments mismatched with the provider. What do you do?",
+      "a": "Classify first: timing, fees, currency rounding, duplicates, missing webhooks. Fix the systematic causes (often a missed webhook path or rounding rule) and send the residue to review."
+    },
+    {
+      "q": "How do you reconcile huge tables cheaply?",
+      "a": "Compare checksums of key ranges or time buckets first, and only diff rows inside buckets whose checksums differ (a Merkle-tree style approach)."
+    },
+    {
+      "q": "Who owns reconciliation?",
+      "a": "The team owning the source of truth owns the job and the metric; finance or operations often owns the review queue for money cases."
+    }
+  ],
+  "example": "A lender reconciles its loan ledger with the payment processor's daily settlement file. 98% match by transaction id; timing differences clear the next day; the remainder, mostly reversals the webhook never delivered, are auto-imported or queued for the finance team.",
+  "related": [
+    "eventual-consistency-acceptable-payments-flow",
+    "design-outbox-inbox-pattern-reliable",
+    "replace-two-phase-commit-across"
+  ],
+  "sources": [
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 12 (derived data and integrity)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "thesis": "Read-your-writes is a per-session guarantee, so solve it per session: either route a user's reads to the primary for a short window after they write, or carry a replication position with the session and only read from replicas that have caught up to it.",
+  "pitch": "With replicas, a user can write, refresh, and not see their own change, which feels like data loss. I wouldn't make all reads go to the primary; the guarantee only matters for the writer. The simple option is sticky-to-primary: after a write, mark the session and route that user's reads to the primary for a window a bit longer than typical replication lag. The precise option is a position token: the write returns the primary's log position, the client or session carries it, and a read is served only by a replica at or past that position, otherwise it waits briefly or falls back to the primary. For a single page you can also just render the value you wrote. I'd pick sticky-to-primary first and move to tokens if primary read load becomes a problem.",
+  "points": [
+    {
+      "h": "Scope the guarantee correctly",
+      "d": "Only the session that wrote needs to see the write immediately. Other users can tolerate lag. Making all reads strongly consistent wastes the replicas."
+    },
+    {
+      "h": "Option 1: sticky reads to the primary",
+      "d": "After a write, set a session flag or cookie with an expiry (for example 5–10 seconds, above p99 replication lag) and route that session's reads to the primary. Simple and robust; costs extra primary reads proportional to write rate."
+    },
+    {
+      "h": "Option 2: replication position tokens",
+      "d": "The write returns a log position (an LSN, GTID or commit timestamp). Reads carry it; the router picks a replica whose applied position is at least that, or waits up to a small timeout, then falls back to the primary."
+    },
+    {
+      "h": "Option 3: client-side echo",
+      "d": "The client renders the value it just wrote instead of re-reading it. Works for simple forms; breaks when the server computes derived fields or other devices are involved."
+    },
+    {
+      "h": "Monitor replication lag as a first-class metric",
+      "d": "Every option depends on lag staying bounded. Alert on p99 lag, and have the router stop using replicas that fall too far behind."
+    },
+    {
+      "h": "Cross-device needs a server-side session",
+      "d": "If the user writes on a phone and reads on a laptop, a cookie on one device doesn't help. Store the last-write position against the user id instead."
+    }
+  ],
+  "decision": "Sticky-to-primary when write volume is modest and primary has headroom. Position tokens when primary read capacity is the bottleneck or lag varies widely. Client echo for single-screen flows. Always pair with lag monitoring and replica eviction.",
+  "numbers": [
+    "Sticky window sizing: set it above p99 replication lag. If p99 lag is 800 ms, a 5 second window is generous and costs one primary read per page view for 5 seconds after each write.",
+    "Extra primary load ≈ writes/sec × reads per session in the window. 200 writes/sec × 10 reads in the window = 2,000 extra primary reads/sec."
+  ],
+  "pitfalls": [
+    "Fixed sticky window shorter than lag spikes: the bug reappears during peak, exactly when it's hardest to debug.",
+    "Ignoring cross-device and cross-service reads: a write through service A and a read through service B with its own replica.",
+    "Caches in front of replicas: the replica caught up but the cache still holds the old value.",
+    "Routing all reads to the primary after an incident 'temporarily' and never undoing it."
+  ],
+  "followups": [
+    {
+      "q": "What about monotonic reads, so a user never sees time go backwards?",
+      "a": "Pin a session to one replica, or carry the highest position seen and never read from a replica behind it. Position tokens give you both guarantees with one mechanism."
+    },
+    {
+      "q": "A replica falls 30 seconds behind. What happens?",
+      "a": "With tokens, reads for recent writers fall back to the primary automatically. The router should also eject the replica from rotation past a lag threshold."
+    },
+    {
+      "q": "How do you do this with a cache in front?",
+      "a": "Invalidate or update the cache on write in the same request path, or version cache entries with the position so a stale entry is detectable."
+    }
+  ],
+  "example": "A user updates their shipping address and is redirected to the profile page. The write sets a 'recent-write' marker valid for 5 seconds, so the profile read goes to the primary and shows the new address. After 5 seconds the user's reads return to replicas.",
+  "related": [
+    "model-consistency-levels-across-services",
+    "eventual-consistency-acceptable-payments-flow",
+    "design-cache-invalidation-rules-not"
+  ],
+  "sources": [
+    {
+      "title": "Jepsen: Read your writes",
+      "url": "https://jepsen.io/consistency/models/read-your-writes"
+    },
+    {
+      "title": "Martin Kleppmann: Designing Data-Intensive Applications, chapter 5 (Replication)",
+      "url": "https://dataintensive.net/"
+    }
+  ]
+}

@@ -326,7 +326,8 @@ function metaHTML(x){
     (x.answer?'<span class="deep-tag">in-depth</span>':"")+
     (done[x.id]?'<span class="ok">✓ reviewed</span>':"");
 }
-function depth(){return store("sdv-depth")||"full"}
+var depthMode="full";
+function depth(){return depthMode}
 function sec(t,h){return '<div class="sec"><p class="lbl">'+t+'</p>'+h+'</div>'}
 function ul(a){return '<ul>'+a.map(function(t){return"<li>"+hl(t)+"</li>"}).join("")+'</ul>'}
 function ansHTML(x){
@@ -398,7 +399,7 @@ function select(id,keepFocus){
 }
 function depthLabel(){$("depth").textContent="Depth: "+depth()}
 depthLabel();
-$("depth").onclick=function(){store("sdv-depth",depth()==="full"?"quick":"full");depthLabel();render()};
+$("depth").onclick=function(){depthMode=depthMode==="full"?"quick":"full";depthLabel();render()};
 $("layout").onclick=function(){store("sdv-layout",isSplit()?"list":"split");applyLayout();render()};
 WIDE.addEventListener("change",function(){applyLayout();render()});
 $("list").addEventListener("click",function(e){var b=e.target.closest("[data-sel]");if(b)select(b.dataset.sel)});

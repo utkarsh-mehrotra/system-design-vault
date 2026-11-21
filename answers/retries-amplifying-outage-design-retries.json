@@ -1,0 +1,76 @@
+{
+  "thesis": "Retries help with transient blips and hurt in overload. Make them safe by retrying at one layer only, with capped exponential backoff and jitter, a retry budget that limits retries to a small fraction of traffic, deadlines propagated end to end, and only for idempotent operations.",
+  "pitch": "Retries amplify outages because they multiply load exactly when a dependency is struggling. If five layers each retry three times, one user request can become 243 calls at the bottom. I'd fix it in layers. Retry at one place only, usually the edge closest to the failing call, and have everyone else fail fast. Use capped exponential backoff with jitter so retries spread out instead of arriving in synchronised waves. Add a retry budget, for example retries may be at most 10% of requests, so retries stop automatically when failures are widespread. Propagate a deadline so nobody retries work whose caller has already given up. Only retry idempotent operations or those with idempotency keys, and honour Retry-After and 429 or 503 signals. Finally, a kill switch to disable retries during an incident.",
+  "points": [
+    {
+      "h": "Understand the amplification",
+      "d": "Retries per layer multiply: 3 attempts at each of 5 layers is 3^5 = 243 attempts at the bottom for one request. Under overload that turns a slowdown into a collapse."
+    },
+    {
+      "h": "Retry at one layer",
+      "d": "Pick the layer closest to the failing dependency, or the client, and make intermediate layers pass errors through. Document the choice so new code doesn't add retries silently."
+    },
+    {
+      "h": "Capped exponential backoff with jitter",
+      "d": "Wait base × 2^attempt up to a cap, with randomisation (full jitter: a random value between 0 and that bound). Jitter prevents synchronised retry storms."
+    },
+    {
+      "h": "Retry budgets",
+      "d": "Track the ratio of retries to requests per client; stop retrying when it exceeds a threshold such as 10%. When most calls fail, retrying adds load without adding success."
+    },
+    {
+      "h": "Deadlines, not just timeouts",
+      "d": "Pass the remaining time budget downstream. A service shouldn't start or retry work if the caller's deadline has passed."
+    },
+    {
+      "h": "Only safe operations",
+      "d": "Retry reads and idempotent writes; for other writes use idempotency keys. Don't retry errors that won't change, such as 400 or 403."
+    },
+    {
+      "h": "Respect server signals and keep a kill switch",
+      "d": "Honour 429/503 with Retry-After. Give operators a flag to turn retries off or down during incidents."
+    }
+  ],
+  "decision": "Few attempts (2–3 total), one layer, jittered backoff, a budget, and deadline propagation. Prefer hedged requests only for idempotent reads with tight tail-latency needs, and only with a budget.",
+  "numbers": [
+    "Backoff example: base 100 ms, cap 2 s, full jitter, 3 attempts: waits are random in [0, 100 ms], then [0, 200 ms].",
+    "Budget example: allow retries up to 10% of request volume per client; above that, fail immediately."
+  ],
+  "pitfalls": [
+    "Library defaults that retry silently at every layer.",
+    "Backoff without jitter: all clients retry on the same schedule and hammer the server in waves.",
+    "Retrying non-idempotent writes, causing duplicates.",
+    "Retrying after the caller's deadline has passed, doing work nobody will use."
+  ],
+  "followups": [
+    {
+      "q": "Should the client or the server-side caller retry?",
+      "a": "Usually the layer closest to the failing dependency, because it knows the error type and has the shortest loop. The client retries only when the whole request failed and is idempotent."
+    },
+    {
+      "q": "How do circuit breakers relate to retry budgets?",
+      "a": "Both stop hammering a failing dependency. A budget limits extra load from retries; a breaker stops calls entirely when the error rate is high. Use both."
+    },
+    {
+      "q": "When are hedged requests appropriate?",
+      "a": "For idempotent reads where tail latency matters: send a second request after the p95 latency and take the first response, with a cap on the extra load."
+    }
+  ],
+  "example": "A payment service's database slowed; three layers each retried three times, so database load grew 27x and it fell over. The fix: retries only in the client SDK with jitter and a 10% budget, deadline headers between services, and fail-fast elsewhere. The next slowdown stayed a slowdown.",
+  "related": [
+    "choose-size-circuit-breakers-bulkheads",
+    "build-idempotency-write-api-clients",
+    "design-admission-control-service-stays",
+    "list-ways-three-tier-service"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    },
+    {
+      "title": "Google SRE book: Addressing cascading failures",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    }
+  ]
+}

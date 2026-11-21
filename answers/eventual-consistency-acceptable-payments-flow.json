@@ -1,0 +1,71 @@
+{
+  "thesis": "Start from the invariants, not the components. Anything that can create or lose money (balances, ledger postings, the authorisation decision) needs strong consistency; everything derived from those facts can lag.",
+  "pitch": "In a payments flow I'd first write down the invariants: a ledger entry is never lost or duplicated, debits equal credits, and a balance never goes below its limit because of a race. The ledger write and the balance check that guards it must be strongly consistent, usually a single transactional store with the check and the posting in one transaction. The decision returned to the merchant has to reflect that committed state. Everything downstream (notifications, the customer's transaction list, search, analytics, fraud features, the statement) is derived from the ledger and can be eventually consistent, as long as it converges and is idempotent. The rule is: pick the weakest consistency that still protects the invariant, and make the boundary explicit so nobody reads a derived view to make a money decision.",
+  "points": [
+    {
+      "h": "Name the invariants first",
+      "d": "No double spend, no lost or duplicated postings, debits equal credits, balance never below limit. Each component's consistency need follows from which invariant it protects. Without this list, consistency debates turn into taste."
+    },
+    {
+      "h": "Strong where money is decided",
+      "d": "The authorisation check and the ledger posting happen in one transaction against one source of truth, or under a per-account serialisation (single writer per account). This is where linearizable reads or serializable transactions earn their cost."
+    },
+    {
+      "h": "Eventual where state is derived",
+      "d": "Notifications, activity feeds, search indexes, analytics and reporting are projections of the ledger. They can lag seconds or minutes as long as they converge and replays don't double-count."
+    },
+    {
+      "h": "The dangerous middle: reads used for decisions",
+      "d": "A 'available balance' shown in the app can be stale; a balance used to approve a transfer cannot. Make sure decision paths read from the primary, not from a cache or replica built for display."
+    },
+    {
+      "h": "External systems are always eventually consistent",
+      "d": "Card networks, banks and payment providers settle later and sometimes disagree. Model states explicitly (pending, authorised, captured, settled, reversed) and reconcile against their reports daily."
+    },
+    {
+      "h": "Make the boundary visible",
+      "d": "Label stores and APIs with their guarantee, for example 'ledger: serializable' and 'activity feed: eventual, under 30 s typical'. Teams then can't accidentally build a money decision on a lagging view."
+    }
+  ],
+  "decision": "Strong consistency for anything that changes or authorises money and for reads that feed those decisions. Eventual consistency for projections, notifications and analytics, with idempotent consumers and reconciliation. If you can't say which invariant a component protects, it probably doesn't need strong consistency.",
+  "numbers": [
+    "Typical acceptable lag for derived views: seconds for a customer's activity list, minutes for analytics, a day for settlement reconciliation. State the number per view so it can be monitored."
+  ],
+  "pitfalls": [
+    "Approving a payment from a cached or replica balance: a race lets two payments both see enough funds.",
+    "Treating the payment provider's webhook as the source of truth without reconciliation; webhooks are delayed, duplicated and occasionally missing.",
+    "Making everything strongly consistent 'to be safe': it couples services, hurts availability and doesn't improve correctness for derived data.",
+    "Notifications sent before the ledger commit, so customers are told about payments that later roll back."
+  ],
+  "followups": [
+    {
+      "q": "Two transfers from the same account arrive at the same moment. How do you prevent overdraft?",
+      "a": "Serialise per account: a conditional update (balance >= amount) in one transaction, row locking, or routing all writes for an account to a single writer. The check and the debit must be atomic."
+    },
+    {
+      "q": "The ledger and the notification service disagree. Which wins?",
+      "a": "The ledger, always. Notifications are a projection; fix them by replaying from the ledger. That's why the projection must be idempotent."
+    },
+    {
+      "q": "Can the balance shown in the app be stale?",
+      "a": "Yes, if it's labelled and never used for decisions. Many products show 'available' and 'pending' separately for exactly this reason."
+    }
+  ],
+  "example": "A wallet app debits the ledger in a serializable transaction and returns success. An outbox event then updates the activity feed and sends a push notification within a few seconds. A nightly job reconciles the ledger against the bank's settlement file and flags mismatches for review.",
+  "related": [
+    "build-idempotency-write-api-clients",
+    "model-consistency-levels-across-services",
+    "reconcile-divergent-data-across-systems",
+    "design-outbox-inbox-pattern-reliable"
+  ],
+  "sources": [
+    {
+      "title": "Werner Vogels: Eventually consistent",
+      "url": "https://www.allthingsdistributed.com/2008/12/eventually_consistent.html"
+    },
+    {
+      "title": "Jepsen: Consistency models",
+      "url": "https://jepsen.io/consistency"
+    }
+  ]
+}

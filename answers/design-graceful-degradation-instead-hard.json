@@ -1,0 +1,71 @@
+{
+  "thesis": "Rank features by importance, decide in advance what each one does when its dependency fails, and test those degraded modes. Graceful degradation is a product decision implemented in code, not an emergent property.",
+  "pitch": "I'd start with a ranked list: what must work, like checkout and login, what's valuable but optional, like recommendations and reviews, and what's decoration. For every dependency of the critical path, define a fallback: a cached or default value, hiding the feature, a simplified version, or queueing the action to complete later. The core path must not depend on optional features at all, so recommendations timing out never blocks checkout. Implement it with tight timeouts on optional calls, circuit breakers, and feature flags that operators can flip to shed optional work under load. Then test the degraded modes deliberately, because a fallback that's never run tends to be broken when you need it.",
+  "points": [
+    {
+      "h": "Rank features explicitly",
+      "d": "Critical, important, optional. Do it with product owners, because the ranking is a business decision. It decides what gets shed first under load."
+    },
+    {
+      "h": "Define a fallback per dependency",
+      "d": "Serve stale from cache, return a sensible default, hide the widget, show a simplified page, or accept the request and process it later. Write down what the user sees."
+    },
+    {
+      "h": "Decouple the critical path",
+      "d": "Critical requests should never wait on optional calls. Fetch optional data in parallel with short timeouts, or load it client-side after the main content."
+    },
+    {
+      "h": "Operator controls",
+      "d": "Kill switches and load-shedding flags let on-call turn off expensive optional features within seconds during an incident."
+    },
+    {
+      "h": "Static stability",
+      "d": "Prefer designs that keep working with the last known good state when control planes or config services fail, instead of fallbacks that kick in only during failure."
+    },
+    {
+      "h": "Test degraded modes",
+      "d": "Fault-inject dependency failures in staging and in game days. Measure that the critical path's latency and success rate stay within SLO."
+    }
+  ],
+  "decision": "Degrade optional features first, then simplify important ones, and protect critical paths at all costs. Prefer fallbacks that are exercised regularly (cached data served all the time with refresh) over rarely used emergency code paths, which tend to be broken.",
+  "numbers": [
+    "Timeout budget example: page budget 500 ms; recommendations get 80 ms and are dropped if late; the critical product and price data get the rest."
+  ],
+  "pitfalls": [
+    "Fallbacks that call another dependency which fails the same way.",
+    "Degraded modes never tested, discovered broken during the incident.",
+    "Silent degradation with no metric, so the team doesn't notice a feature has been off for weeks.",
+    "Fallback paths that are more expensive than the normal path, adding load during overload."
+  ],
+  "followups": [
+    {
+      "q": "Isn't a fallback just more code that can fail?",
+      "a": "Yes, which is why the best fallbacks are always-on (serve from cache, refresh in background) or very simple (hide the feature). AWS's Builders' Library argues against complex rarely used fallbacks for this reason."
+    },
+    {
+      "q": "How does the user know something is degraded?",
+      "a": "Only when it matters to them: 'prices may be a few minutes old' or 'we'll email your receipt shortly'. Hiding a recommendation widget needs no message."
+    },
+    {
+      "q": "Who decides the ranking?",
+      "a": "Product and engineering together, written down before incidents, and revisited when features change."
+    }
+  ],
+  "example": "During a review-service outage, product pages hide the reviews section and show a cached average rating. Checkout never calls the review service. A dashboard counter shows how many pages were served in degraded mode.",
+  "related": [
+    "list-ways-three-tier-service",
+    "choose-size-circuit-breakers-bulkheads",
+    "one-request-fans-out-five",
+    "design-admission-control-service-stays"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Avoiding fallback in distributed systems",
+      "url": "https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/"
+    },
+    {
+      "title": "AWS Builders' Library: Static stability using Availability Zones",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  ]
+}

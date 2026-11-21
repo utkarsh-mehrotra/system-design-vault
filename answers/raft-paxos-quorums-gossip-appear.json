@@ -1,0 +1,72 @@
+{
+  "thesis": "You use these protocols, you don't implement them. Consensus (Raft, Paxos) sits under coordination and metadata, such as leader election, configuration and locks. Quorum replication sits in data stores to tune consistency against latency. Gossip spreads membership and failure detection where eventual agreement is enough.",
+  "pitch": "In a system I'd actually build, consensus shows up inside the coordination layer: etcd or ZooKeeper for leader election, configuration and service discovery, or inside a database that uses Raft per data range, like CockroachDB or TiKV. It gives a linearizable log with a majority, so it survives a minority of failures but needs a majority to make progress, and every write costs a round trip to a majority. Quorum replication, where W plus R exceeds N, appears in Dynamo-style stores like Cassandra, letting you trade consistency for latency per operation. Gossip appears in membership and failure detection, for example in Cassandra or Consul, where nodes converge on who is alive without a central authority. My point in an interview is placement: consensus for small, critical metadata; quorums or single-leader replication for bulk data; gossip for membership.",
+  "points": [
+    {
+      "h": "Consensus gives a single agreed log",
+      "d": "Raft and Multi-Paxos elect a leader and commit entries once a majority acknowledges. That yields linearizable reads and writes for small, critical state."
+    },
+    {
+      "h": "Where consensus belongs",
+      "d": "Leader election, distributed locks and leases (with fencing tokens), cluster configuration, schema and shard maps. Typically through etcd, ZooKeeper or Consul, or inside a database's replication layer."
+    },
+    {
+      "h": "Cost of consensus",
+      "d": "Every write needs a majority round trip; across regions that's slow. A cluster of 2f+1 nodes tolerates f failures and stops accepting writes without a majority."
+    },
+    {
+      "h": "Quorum replication for data",
+      "d": "Dynamo-style stores write to W replicas and read from R of N. W + R > N makes read and write sets overlap. Lower W or R trades consistency for latency per operation."
+    },
+    {
+      "h": "Gossip for membership",
+      "d": "Nodes periodically exchange state with random peers, so information spreads in roughly logarithmic rounds. Good for liveness and metadata where eventual agreement is fine; not for decisions needing a single answer."
+    },
+    {
+      "h": "Leases need fencing",
+      "d": "A node that believes it holds a lock can pause (GC, network) and act after the lease expired. Attach a monotonically increasing fencing token that the storage layer checks."
+    }
+  ],
+  "decision": "Use a consensus-backed service for anything that must have exactly one answer (who is leader, who holds the lock, what the config is). Use single-leader or quorum replication for bulk data depending on your consistency needs. Use gossip only for membership and soft state. Never write your own consensus implementation for production.",
+  "numbers": [
+    "Fault tolerance: 3 nodes tolerate 1 failure, 5 tolerate 2. Going from 3 to 5 adds resilience but also adds write latency because the commit needs 3 acknowledgements instead of 2.",
+    "Quorum example: N = 3, W = 2, R = 2 gives overlapping quorums; W = 1, R = 1 is fast but can read stale data."
+  ],
+  "pitfalls": [
+    "Putting bulk or high-volume data into the coordination store; etcd and ZooKeeper are built for small metadata.",
+    "Using a lock without fencing tokens and getting two writers after a pause.",
+    "Running an even number of consensus nodes, which adds cost without adding fault tolerance.",
+    "Assuming W + R > N alone gives linearizability; sloppy quorums, hinted handoff and concurrent writes can still produce anomalies."
+  ],
+  "followups": [
+    {
+      "q": "Why not run consensus across three regions for all writes?",
+      "a": "Every write would wait for a cross-region majority, adding tens to hundreds of milliseconds. Reserve it for metadata or data that truly needs global linearizability."
+    },
+    {
+      "q": "What happens to a Raft cluster during a network partition?",
+      "a": "The side with a majority keeps a leader and accepts writes; the minority side can't commit and its old leader steps down when it can't reach a quorum."
+    },
+    {
+      "q": "How does gossip detect failures?",
+      "a": "Nodes exchange heartbeats or use indirect probing (as in SWIM); a node is suspected after missed responses and declared dead after a timeout, trading detection speed for false positives."
+    }
+  ],
+  "example": "A job platform uses etcd leases to elect one scheduler leader per shard, with the lease revision as a fencing token on job claims. Job data lives in Postgres with a single primary, and worker membership spreads by gossip so workers find each other without a central registry.",
+  "related": [
+    "reason-about-cap-trade-offs",
+    "generate-unique-ids-across-regions",
+    "fail-over-between-two-regions",
+    "design-scheduler-millions-delayed-jobs"
+  ],
+  "sources": [
+    {
+      "title": "The Raft consensus algorithm",
+      "url": "https://raft.github.io/"
+    },
+    {
+      "title": "Martin Kleppmann: How to do distributed locking (fencing tokens)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  ]
+}

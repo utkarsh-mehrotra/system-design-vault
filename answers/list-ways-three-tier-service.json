@@ -1,0 +1,75 @@
+{
+  "thesis": "Before drawing boxes, list how it breaks, grouped by blast radius. Under real load the dangerous failures are rarely clean crashes; they're slowness, saturation and feedback loops, because slow is worse than down.",
+  "pitch": "For a load balancer, app tier and database, I'd list failures in three groups. Resource exhaustion: connection pools running dry, thread pools saturated, memory and GC pauses, disk filling up, file descriptors. Dependency problems: the database slowing under a bad query plan or lock contention, a downstream API timing out, DNS or certificate expiry. Feedback loops: retries multiplying load on a struggling dependency, queues growing without bound, cache expiry causing a stampede, autoscaling reacting too late or thrashing. Then the human and change causes: bad deploys, config pushes, schema migrations, which cause a large share of real incidents. The key insight is that a slow database is worse than a dead one: requests pile up holding connections and threads, and the failure spreads upward. So the design needs timeouts, bounded queues, load shedding and safe deploys before it needs more boxes.",
+  "points": [
+    {
+      "h": "Saturation and exhaustion",
+      "d": "Connection pools, thread pools, CPU, memory and GC, disk space, ephemeral ports, file descriptors. Each has a hard limit, and hitting it usually looks like latency first, then errors."
+    },
+    {
+      "h": "Slow dependencies are worse than dead ones",
+      "d": "A dead dependency fails fast; a slow one ties up callers' threads and connections until they also stall. Without timeouts, one slow query can take down the whole app tier."
+    },
+    {
+      "h": "Feedback loops amplify small problems",
+      "d": "Retries multiply load, queues grow until latency is unbounded, cache expiry sends a herd to the database, and autoscaling adds instances that all open new connections to an already struggling database."
+    },
+    {
+      "h": "Change is the biggest single cause",
+      "d": "Deploys, config changes, feature flags and migrations trigger many incidents. Progressive rollout and fast rollback matter as much as redundancy."
+    },
+    {
+      "h": "Partial and gray failures",
+      "d": "One instance with a bad disk, one zone with packet loss, a load balancer health check that passes while real requests fail. Averages hide these; per-instance metrics find them."
+    },
+    {
+      "h": "Time and expiry bombs",
+      "d": "Expiring TLS certificates, clock drift breaking token validation, leap-second and timezone bugs, credentials rotating without the app reloading them."
+    },
+    {
+      "h": "Group by blast radius",
+      "d": "Single request, single instance, one zone, whole service, all regions. The design response differs: retry, eject, fail over, shed load, or freeze changes."
+    }
+  ],
+  "decision": "Address failures in this order: change safety (canary, rollback), timeouts and bounded queues everywhere, load shedding and retry budgets, then redundancy. Redundancy without the first three just gives you more instances to fail identically.",
+  "numbers": [
+    "Little's law: concurrent requests = arrival rate × latency. At 1,000 requests/s and 50 ms latency you hold 50 in flight; if the database slows to 2 s, you need 2,000 concurrent slots. Pools of 200 exhaust immediately, which is why slowness cascades."
+  ],
+  "pitfalls": [
+    "Designing only for crash failures and ignoring slowness.",
+    "Health checks that test 'process is up' rather than 'can serve a real request'.",
+    "Retries at every layer, multiplying load during exactly the moments you can least afford it.",
+    "Unbounded queues that convert overload into ever-growing latency instead of fast, honest rejection."
+  ],
+  "followups": [
+    {
+      "q": "Which failure would you design for first?",
+      "a": "Slow database. It's common and it cascades. Timeouts, bounded pools, a circuit breaker and load shedding contain it."
+    },
+    {
+      "q": "How do you find gray failures?",
+      "a": "Per-instance and per-zone metrics, outlier detection in the load balancer, and synthetic requests that exercise real paths rather than a health endpoint."
+    },
+    {
+      "q": "How do you stop autoscaling from making it worse?",
+      "a": "Cap connections per instance and total, scale on saturation signals rather than latency alone, and make sure the database isn't the bottleneck new instances pile onto."
+    }
+  ],
+  "example": "A single missing index makes a popular query take 3 seconds under load. App threads block on database connections, the pool empties, health checks start failing, the load balancer removes instances, and the remaining ones fail faster. A 300 ms query timeout and load shedding would have kept the rest of the site up.",
+  "related": [
+    "retries-amplifying-outage-design-retries",
+    "choose-size-circuit-breakers-bulkheads",
+    "design-admission-control-service-stays",
+    "design-graceful-degradation-instead-hard"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Addressing cascading failures",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    },
+    {
+      "title": "AWS Builders' Library: Avoiding insurmountable queue backlogs",
+      "url": "https://aws.amazon.com/builders-library/avoiding-insurmountable-queue-backlogs/"
+    }
+  ]
+}

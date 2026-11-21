@@ -1,0 +1,71 @@
+{
+  "thesis": "Assign a consistency level to each kind of data, not to the whole system, and publish it as part of every service's contract. Strong for money and inventory, session guarantees for user-facing state, eventual for derived views.",
+  "pitch": "I'd classify data rather than services. Money, inventory counts and uniqueness constraints get strong consistency inside one owning service. User-facing state like profiles and settings gets session guarantees, read-your-writes and monotonic reads, which is what users actually notice. Derived data, such as search, feeds, recommendations and analytics, is eventual with a stated lag. Then I'd make the guarantee explicit at every boundary: an API that serves from a cache says so, an event stream states its ordering and delivery guarantees. Across services you generally can't have strong consistency without coupling, so cross-service flows use sagas and reconciliation, and each service owns the strong guarantees for its own data.",
+  "points": [
+    {
+      "h": "Classify data by invariant",
+      "d": "Money, inventory, uniqueness (usernames, seat bookings): strong. User-visible state: session guarantees. Derived and aggregated data: eventual. The class drives the store and the access path."
+    },
+    {
+      "h": "One owner per piece of strongly consistent data",
+      "d": "Strong consistency is cheap inside one database and expensive across many. Put each invariant inside one service's transactional boundary; others ask that service rather than copy the data."
+    },
+    {
+      "h": "Session guarantees are the user-facing sweet spot",
+      "d": "Read-your-writes, monotonic reads and consistent prefix cover most 'the app looks broken' complaints without global coordination."
+    },
+    {
+      "h": "State lag and ordering for every projection",
+      "d": "A search index or feed should publish its expected lag and whether it preserves per-entity ordering. That makes it monitorable and stops people treating it as a source of truth."
+    },
+    {
+      "h": "Document guarantees in the contract",
+      "d": "API docs and event schemas say: source of truth or projection, staleness bound, ordering, delivery semantics (at-least-once, deduplicate by id)."
+    },
+    {
+      "h": "Cross-service invariants use sagas and reconciliation",
+      "d": "If an invariant spans services, accept temporary inconsistency, drive convergence with sagas, and detect drift with reconciliation jobs."
+    }
+  ],
+  "decision": "Default to eventual plus idempotency across service boundaries. Upgrade to session guarantees where users see their own changes. Reserve strong consistency for invariants that cost money, safety or legal standing, and keep each one inside a single owner.",
+  "numbers": [
+    "Write the staleness bound as a number per view, for example 'search: p99 under 60 s', so it can be alerted on rather than argued about."
+  ],
+  "pitfalls": [
+    "One global setting ('we're eventually consistent') that's wrong for half the data.",
+    "Copying strongly consistent data into other services and making decisions from the copy.",
+    "Undocumented caches in an API path that silently weaken its guarantee.",
+    "Distributed transactions across services to get strong consistency that a single owner could provide."
+  ],
+  "followups": [
+    {
+      "q": "How do you enforce uniqueness, such as usernames, across regions?",
+      "a": "Route the uniqueness check to one authority (a single home region or a consensus-backed store), or partition the namespace so each region owns a slice. Uniqueness can't be eventual."
+    },
+    {
+      "q": "What's the difference between session guarantees and strong consistency for users?",
+      "a": "Session guarantees only promise that a user sees their own history consistently; strong consistency promises everyone sees one global order. The first is far cheaper and usually enough."
+    },
+    {
+      "q": "How would you test that the guarantees hold?",
+      "a": "Contract tests for the documented bounds, lag metrics with alerts, and fault-injection tests (partitions, replica lag) for the strong paths. Tools in the style of Jepsen exist for the latter."
+    }
+  ],
+  "example": "An e-commerce platform: orders and inventory are strongly consistent inside the order service; the product catalogue page reads from a cache with a 5-minute TTL; the customer's order history uses read-your-writes; search and recommendations lag by up to a minute.",
+  "related": [
+    "eventual-consistency-acceptable-payments-flow",
+    "give-users-read-writes-reads",
+    "reason-about-cap-trade-offs",
+    "replace-two-phase-commit-across"
+  ],
+  "sources": [
+    {
+      "title": "Jepsen: Consistency models",
+      "url": "https://jepsen.io/consistency"
+    },
+    {
+      "title": "Werner Vogels: Eventually consistent",
+      "url": "https://www.allthingsdistributed.com/2008/12/eventually_consistent.html"
+    }
+  ]
+}

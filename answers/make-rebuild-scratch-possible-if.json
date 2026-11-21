@@ -1,0 +1,75 @@
+{
+  "thesis": "Rebuilding from nothing requires three things to exist outside the failed environment: the definition of the infrastructure (as code), the data (as tested, isolated backups or a durable log), and the knowledge of order (a documented, rehearsed bootstrap). If any one is missing, the rebuild is a guess.",
+  "pitch": "I'd make everything reproducible from a small set of durable artefacts. Infrastructure and configuration as code in version control, so a new account or region can be provisioned by running pipelines, not by memory. Data backed up to an isolated location, in a different account with deletion protection, so ransomware or a compromised admin can't delete production and backups together, with restore tests on a schedule because untested backups are hopes. Where possible, an event log or ledger as the source of truth, so derived stores can be rebuilt by replay. Secrets and keys escrowed separately. Then a written bootstrap order, covering identity, networking, secrets, data stores, core services and edge, rehearsed in game days with a measured recovery time. The goal is that a different team could rebuild it from the runbook.",
+  "points": [
+    {
+      "h": "Infrastructure as code",
+      "d": "Networks, clusters, databases, DNS, IAM and configuration are defined in code and applied by pipelines. Manual console changes are detected as drift and reverted."
+    },
+    {
+      "h": "Isolated, immutable backups",
+      "d": "Backups in a separate account or provider with write-once or deletion-protection settings, so an attacker or mistake with production credentials can't destroy them."
+    },
+    {
+      "h": "Restore drills",
+      "d": "Regularly restore real backups into a clean environment and verify data integrity and application function. Measure time to restore."
+    },
+    {
+      "h": "Replayable source of truth",
+      "d": "An append-only event log or ledger lets you rebuild caches, search indexes and read models by replay instead of backing up each one."
+    },
+    {
+      "h": "Secrets and keys escrow",
+      "d": "Encryption keys, root credentials and break-glass access stored separately with documented recovery. Losing the key to encrypted backups is the same as losing the backups."
+    },
+    {
+      "h": "Documented bootstrap order",
+      "d": "Dependencies form an order: identity and networking, secrets, data stores, core services, edge and DNS. Circular dependencies (deploy tool needs the service it deploys) must be found and broken."
+    },
+    {
+      "h": "Measure recovery time",
+      "d": "Game days that rebuild a service or environment from scratch give a real RTO, which is usually much longer than assumed the first time."
+    }
+  ],
+  "decision": "Tier the effort: core data and the systems needed to rebuild everything else get the strongest isolation and the most frequent drills. Derived data relies on replay. Everything is code; nothing depends on one person's memory.",
+  "numbers": [
+    "Restore-time estimate: data size ÷ effective restore throughput. 10 TB at 500 MB/s is about 5.5 hours before indexes are rebuilt and the application is verified, which often doubles it."
+  ],
+  "pitfalls": [
+    "Backups in the same account as production, deletable with the same credentials.",
+    "Never testing restores, then discovering a backup format or key problem during the disaster.",
+    "Circular dependencies: the CI system, secrets store or auth service needed to rebuild is itself part of what was lost.",
+    "Console-created resources no one captured in code."
+  ],
+  "followups": [
+    {
+      "q": "How do you protect against ransomware specifically?",
+      "a": "Immutable backups with retention locks in an isolated account, separate credentials, monitoring for mass deletion or encryption, and practised restores."
+    },
+    {
+      "q": "What's the minimum restore drill?",
+      "a": "Quarterly restore of the most important database to an isolated environment, run application checks against it, and record time and issues."
+    },
+    {
+      "q": "How do you handle third-party SaaS data?",
+      "a": "Export it regularly to your own storage where possible, and document how to rebuild configuration if the vendor account is lost."
+    }
+  ],
+  "example": "A team runs an annual 'empty account' drill: a fresh cloud account, the infrastructure repo and the backup vault. The first drill took four days and found an IAM role created by hand and a secrets bootstrap loop. After fixes, the second took nine hours.",
+  "related": [
+    "design-data-center-outage-scenarios",
+    "fail-over-between-two-regions",
+    "rehearse-failure-before-production",
+    "design-systems-owned-teams-not"
+  ],
+  "sources": [
+    {
+      "title": "AWS Well-Architected: Disaster recovery objectives",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/disaster-recovery-dr-objectives.html"
+    },
+    {
+      "title": "Google SRE book: Data integrity",
+      "url": "https://sre.google/sre-book/data-integrity/"
+    }
+  ]
+}
