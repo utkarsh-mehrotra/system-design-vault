@@ -66,7 +66,7 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .ibtn.sq{width:32px;padding:0;justify-content:center}
 
 /* workspace */
-.ws{flex:1;min-height:0;display:grid;grid-template-columns:minmax(320px,35%) 1fr}
+.ws{flex:1;min-height:0;display:grid;grid-template-columns:minmax(320px,45%) 1fr}
 .ws[hidden]{display:none}
 .side{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--panel)}
 .ctl{flex:none;padding:14px 14px 10px;display:grid;gap:10px;border-bottom:1px solid var(--line)}
@@ -117,12 +117,12 @@ kbd{font:500 11px "JetBrains Mono",monospace;color:var(--muted);border:1px solid
 .list{flex:1;min-height:0;overflow:auto;padding:4px 8px 16px}
 .lh{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:baseline;padding:12px 8px 6px;background:var(--panel);font:600 10.5px "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .lh span{font-weight:400;letter-spacing:0}
-.qi{display:grid;grid-template-columns:18px 1fr;gap:10px;width:100%;padding:9px 8px;border:0;border-radius:8px;background:none;text-align:left;cursor:pointer}
+.qi{display:grid;grid-template-columns:18px 1fr;gap:12px;width:100%;padding:11px 10px;border:0;border-radius:8px;background:none;text-align:left;cursor:pointer}
 .qi:hover{background:var(--hover)}
 .qi[aria-current=true]{background:var(--accent-bg);box-shadow:inset 2px 0 0 var(--accent)}
-.qt{font:500 13.5px/1.4 "Inter",sans-serif;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.qm{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:4px;font:500 10.5px "JetBrains Mono",monospace;color:var(--faint)}
-.dot{width:14px;height:14px;margin-top:3px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center}
+.qt{font:500 15.5px/1.45 "Inter",sans-serif;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.qm{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:5px;font:500 11.5px "JetBrains Mono",monospace;color:var(--faint)}
+.dot{width:15px;height:15px;margin-top:4px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center}
 .dot.missed{border-color:var(--bad);background:var(--bad-bg)}
 .dot.shaky{border-color:var(--warn);background:var(--warn-bg)}
 .dot.solid{border-color:var(--ok);background:var(--ok)}
