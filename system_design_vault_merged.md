@@ -1543,80 +1543,461 @@ Generated from questions.json. [mine] = original question; [ref] = title from a 
 
 ### Service boundaries & gateway
 58. **Draw service boundaries for a lending platform: origination, underwriting, servicing, collections.** [mine + ref · Intermediate · APIs, Architecture]
-   - Bound by data ownership and change rate, not by nouns. Decide which data is copied by event and which is queried live. Show where a loan's state machine lives.
-   - One owner per piece of data, interfaces that match business capabilities, low coupling on change, and a test: can a team ship without coordinating with others?
+   - **Thesis:** Draw boundaries around data ownership and rate of change, not around nouns. Origination, underwriting, servicing and collections are good candidates because each owns distinct data and decisions and changes for different reasons, but the loan itself has one owner for its state machine, and everyone else reacts to its events.
+   - **60-second answer:** I'd map each area to the decisions it makes and the data it must own. Origination owns the application journey: applicant data, documents, consent, offers. Underwriting owns the credit decision: bureau data, models, policy rules, and the decision record, which must be auditable and reproducible. Servicing owns the active loan: the repayment schedule, balances, payments and the loan's lifecycle state machine. Collections owns arrears handling: contact strategies, promises to pay, hardship plans. The critical question is where the loan's state lives: I'd put it in servicing from disbursal onward, with origination owning it before that, so there's one writer at each stage. Other services consume events like LoanDisbursed, PaymentMissed and LoanSettled and keep their own read models. Some data is copied by event, such as collections holding a local view of balances; some is queried live, like the current payoff amount at the moment a customer pays. And I'd keep the ledger, the money truth, as its own component.
+   - **Key points:**
+     1. **Boundaries by ownership and change.** A good boundary owns its data, makes its own decisions, and changes for its own reasons (regulation, models, operations). If two areas always change together, they're one service.
+     2. **Origination.** Application flow, applicant data, KYC and documents, offers and acceptance. High change rate driven by product and marketing.
+     3. **Underwriting.** Decision engine: data retrieval (bureaus, bank data), models, policy rules. Produces an auditable decision record with inputs and versions. Changes with risk policy.
+     4. **Servicing.** Owns the loan after disbursal: schedule, interest, payments, fees, lifecycle state (active, in arrears, settled, written off). Changes slowly and must be correct.
+     5. **Collections.** Strategies and workflows for arrears: contact cadence, promises to pay, hardship and forbearance. Reads loan state; owns its own case data.
+     6. **The ledger is separate.** Double-entry ledger as the money source of truth, used by servicing and finance. Keeps accounting invariants in one place.
+     7. **Copy by event vs query live.** Copy data that's needed often and can lag (collections' view of arrears). Query live where correctness at the moment matters (payoff amount at payment time).
+   - **When to choose what:** One owner per piece of data and per state machine at each lifecycle stage, events for everything others need to know, synchronous queries only where freshness is required. Start with these as modules in one deployable if the team is small; split when ownership and deployment needs diverge.
+   - **Numbers:**
+     - Sanity check: if a typical feature touches more than two of these services, the boundaries are probably wrong or too fine.
+   - **Pitfalls:**
+     - A shared 'loan' table written by several services.
+     - Boundaries by entity (customer service, loan service, payment service) that force every feature to change several services.
+     - Underwriting decisions without stored inputs and model versions, which breaks auditability.
+     - Collections calling servicing synchronously for every case view, coupling availability.
+   - **Follow-ups:**
+     - _Who owns the customer?_ Usually a separate customer or identity service owns core identity and contact details; each domain keeps the customer data relevant to it, referenced by customer id.
+     - _How does a hardship plan in collections change the repayment schedule?_ Collections requests a schedule change through servicing's API or a command; servicing owns and applies it, then emits ScheduleChanged.
+     - _How do you keep underwriting reproducible?_ Store the decision with all inputs (bureau responses, features), the model and policy version, and the outcome, so it can be replayed for audit or disputes.
+   - **Example:** LoanDisbursed is emitted by servicing when funds are sent. Collections subscribes to PaymentMissed to open cases, while finance consumes ledger postings. A customer paying early calls servicing synchronously for an exact payoff amount, because a stale copy could mis-settle the loan.
+   - **Sources:** [Martin Fowler: Bounded context](https://martinfowler.com/bliki/BoundedContext.html); [Team Topologies: Key concepts](https://teamtopologies.com/key-concepts)
    - _Also asked as:_ How do I define clear boundaries between services?
 59. **Design a gateway that can evolve independently of the services behind it.** [mine + ref · Intermediate · APIs, Architecture]
-   - Keep it thin: routing, auth, limits, observability. No business logic. Config-driven routes, canary support, and its own failure budget.
-   - Thin gateway with routing, auth and limits only, declarative configuration, versioned routes, and no knowledge of service internals.
+   - **Thesis:** Keep the gateway thin and generic: routing, authentication, rate limits, request validation at the edge, and observability, all driven by configuration. No business logic, no knowledge of service internals. Then services and the gateway can change on their own schedules.
+   - **60-second answer:** A gateway becomes a bottleneck when it accumulates business logic: aggregation for one client, special-case transforms, feature rules. Then every product change needs a gateway change, and one team owns everyone's roadmap. I'd limit it to cross-cutting concerns: TLS termination, authentication and token validation, coarse authorisation, rate limiting and quotas, routing by path and version, request size limits, and consistent logging, metrics and tracing. Routes are declarative configuration, reviewed and deployed independently of gateway code, ideally owned by the service teams for their own paths. Canary and traffic-splitting support lets services roll out new versions behind stable public paths. If clients need aggregation, I'd use a backend-for-frontend owned by the client team rather than putting it in the shared gateway. And the gateway needs its own SLO and failure budget, because it's in front of everything.
+   - **Key points:**
+     1. **Cross-cutting concerns only.** TLS, authentication, rate limits, routing, size limits, CORS, observability. Everything that's the same across services.
+     2. **No business logic.** No aggregation, domain transforms or feature rules. Those belong in services or backends-for-frontend.
+     3. **Declarative, team-owned routes.** Routes as configuration in version control, owned by the teams whose services they point to, validated and deployed without a gateway release.
+     4. **Versioned public paths.** Public paths and versions are stable; the gateway maps them to whichever internal service version serves them, allowing services to move.
+     5. **Traffic management.** Canary releases, weighted routing and shadowing let services ship safely behind unchanged public endpoints.
+     6. **Backends-for-frontend for aggregation.** Mobile and web clients with different needs get their own thin aggregation layer, owned by the client team.
+     7. **Treat the gateway as critical infrastructure.** Own SLO, redundancy across zones, careful config rollout with validation and fast rollback; a bad route config can take down everything.
+   - **When to choose what:** One thin edge gateway for cross-cutting concerns; per-client BFFs for aggregation; services own their APIs and route config. Avoid custom code in the gateway unless it's genuinely universal.
+   - **Numbers:**
+     - Overhead target: gateway adds low single-digit milliseconds at p99; anything more suggests too much work at the edge.
+   - **Pitfalls:**
+     - Gateway aggregation logic for one client, which every other team then has to work around.
+     - A central team as the only one allowed to change routes, creating a queue.
+     - Config pushed globally without validation or canary, turning a typo into an outage.
+     - Gateway that knows internal service URLs and versions in code.
+   - **Follow-ups:**
+     - _Where does authorisation belong?_ Coarse checks (valid token, scope for this API) at the gateway; fine-grained resource-level authorisation in the service that owns the resource.
+     - _API gateway or service mesh?_ The gateway handles north-south traffic from clients; a mesh handles east-west traffic between services (mTLS, retries, telemetry). They complement each other.
+     - _How do you roll out a route change safely?_ Schema validation in CI, a canary to a fraction of traffic or one region, automatic rollback on error-rate increase.
+   - **Example:** A fintech moved card-specific response shaping out of the gateway into a mobile BFF. Route configs moved into each service's repository; gateway releases dropped from weekly to monthly, while services deployed daily behind unchanged public paths.
+   - **Sources:** [Sam Newman: Backends for frontends pattern](https://samnewman.io/patterns/architectural/bff/); [microservices.io: API gateway pattern](https://microservices.io/patterns/apigateway.html)
    - _Also asked as:_ How do I design a gateway that can evolve independently of services?
 
 ### Versioning, compatibility & deprecation
 60. **Version a public API when you cannot force clients to upgrade.** [mine + ref · Fundamental · APIs, Migration]
-   - Additive changes by default, explicit versions for breaking ones, a support policy with dates, usage telemetry per version, and contract tests.
-   - Additive changes within a version, a new version for breaking changes, a published support policy, usage metrics per version, and clear deprecation dates.
-   - Additive changes only, optional fields with defaults, tolerant readers, explicit versioning for breaks, and contract tests against real client usage.
+   - **Thesis:** Make additive change the default so most changes need no new version at all, reserve explicit versions for genuinely breaking changes, and back every version with a published support policy, per-version usage telemetry and contract tests. You can't force clients, so make staying compatible cheap and moving forward easy.
+   - **60-second answer:** Most API evolution should be additive: new optional fields, new endpoints, new optional parameters, with clients required to ignore unknown fields, so nothing breaks and nothing needs a version bump. For breaking changes, like removing or renaming fields, changing types or semantics, or changing error behaviour, I'd introduce an explicit version, either in the path like /v2 or in a header or dated version like Stripe's, and keep the old one working. Each version has a published support policy with dates. I'd measure usage per version and per client, so deprecation decisions are data-driven and I can contact the clients still on old versions. Contract tests, from consumer-driven contracts or recorded real traffic, catch accidental breaks before release. Internally, translating old versions into the current model at the edge keeps the core code from forking per version.
+   - **Key points:**
+     1. **Additive by default.** New optional fields and endpoints don't break well-behaved clients. Document that clients must ignore unknown fields and tolerate new enum values.
+     2. **Define what's breaking.** Removing or renaming fields, changing types or formats, making optional inputs required, changing defaults, semantics or error codes. Publish the list.
+     3. **Choose a versioning scheme.** Path versions (/v2) are visible and simple; header or date-based versions (pin each client to the version at signup) allow finer-grained evolution. Be consistent.
+     4. **Translate at the edge.** Keep one current internal model; adapters convert old request and response shapes. This avoids parallel codebases per version.
+     5. **Support policy with dates.** How long each version is supported after its successor ships, communicated in docs and changelogs.
+     6. **Per-version telemetry.** Track calls by version and client id. You can't deprecate safely without knowing who still depends on what.
+     7. **Contract tests.** Consumer-driven contracts or tests replaying real requests verify that changes don't break existing clients.
+   - **When to choose what:** Additive changes with no version bump whenever possible. A new version only for unavoidable breaking changes, with translation adapters, a dated support window, and telemetry-driven deprecation.
+   - **Numbers:**
+     - Support window example: a minimum of 12 months after a successor is available for external APIs, longer for mobile apps with slow upgrade curves.
+   - **Pitfalls:**
+     - Bumping the version for every change, multiplying versions to support.
+     - Silent semantic changes within a version (same field, different meaning).
+     - No per-client usage data, so deprecation is guesswork.
+     - Forking the codebase per version instead of translating at the edge.
+   - **Follow-ups:**
+     - _Path versioning or header versioning?_ Path is easier to see, cache and route; header or date-based versioning suits APIs with frequent small changes and lets each client pin. Either works if applied consistently.
+     - _How do you handle mobile apps that never update?_ Long support windows, server-side translation for old versions, minimum-version enforcement only for security-critical cases, with in-app upgrade prompts.
+     - _How do you change an enum safely?_ Add values as a documented possibility; clients must handle unknown values. Never repurpose an existing value.
+   - **Example:** A payments API pins each integration to the API version current at signup. Breaking changes ship as new dated versions; a translation layer converts responses for older versions. Usage dashboards show which merchants are on each version, and the team contacts the long tail before retiring anything.
+   - **Sources:** [Stripe blog: APIs as infrastructure, future-proofing Stripe with versioning](https://stripe.com/blog/api-versioning); [Martin Fowler: Tolerant reader](https://martinfowler.com/bliki/TolerantReader.html)
    - _Also asked as:_ How do I design versioning for public APIs? / How do I design APIs so they can evolve without breaking clients?
 61. **Deprecate an endpoint safely.** [mine + ref · Intermediate · Migration, APIs, Reliability]
-   - Find real callers from logs, announce with dates, add Sunset headers, brown-out in staging then production, and keep a path for stragglers.
-   - Identify callers from telemetry, announce with dates, warn in responses, run brownouts, support stragglers, and only then remove.
+   - **Thesis:** Deprecation is a process driven by data: find every real caller from logs, announce with a date, signal in-band with Deprecation and Sunset headers, run brownouts to flush out stragglers, and remove only when traffic is gone or the date has passed with everyone informed.
+   - **60-second answer:** I'd start with telemetry: who actually calls this endpoint, how often, and from which client versions, from access logs keyed by API key or client id. Then announce: docs, changelog, and direct contact with known callers, with a sunset date and a migration guide. In-band signals help automated clients notice: a Deprecation header and a Sunset header with the date, defined in RFC 8594, plus warnings in SDKs. Then brownouts: scheduled short windows where the endpoint returns an error, first in staging, then briefly in production, which reveals callers who ignored the emails. Track traffic weekly; chase the remaining callers individually. Remove after the date if traffic is at or near zero; if a critical caller remains, negotiate an extension rather than break them, but keep the pressure on. Afterwards, return a clear 410 Gone with a pointer to the replacement rather than a confusing 404.
+   - **Key points:**
+     1. **Find real callers.** Access logs by client id, API key, user agent and version. Unknown callers are the biggest risk; make every client identifiable before you need to deprecate.
+     2. **Announce with a date and a path.** Docs, changelog, email to owners of active keys, and a migration guide with examples for the replacement.
+     3. **In-band signals.** Deprecation and Sunset (RFC 8594) headers, plus a Link to the migration docs. SDKs log warnings when deprecated calls are made.
+     4. **Brownouts.** Planned short failure windows (minutes, then hours) announced in advance. Callers who missed the emails discover the dependency while there's still time.
+     5. **Track and chase.** Weekly traffic reports; personal outreach to the remaining callers, sorted by volume and importance.
+     6. **Remove with a clear response.** After the sunset date, return 410 Gone with a message pointing to the replacement. Keep monitoring for surprise callers.
+   - **When to choose what:** Every deprecation follows the same playbook with dates set by caller population: weeks for internal endpoints with known callers, months or more for public APIs and mobile clients.
+   - **Numbers:**
+     - Example timeline for a public endpoint: announce at T, Deprecation header from T, brownouts at T+3 and T+5 months, removal at T+6 months, extended only for documented exceptions.
+   - **Pitfalls:**
+     - Deprecating based on assumptions about who uses an endpoint.
+     - Announcing once and then removing on the date without checking traffic.
+     - Anonymous clients that can't be contacted.
+     - Removing the endpoint and returning 404, leaving callers confused about why.
+   - **Follow-ups:**
+     - _A large customer can't migrate by the date. What do you do?_ Agree an extension for their key only, with a firm new date and engineering help, while removing access for everyone else as planned.
+     - _How do you deprecate fields rather than endpoints?_ Same steps: telemetry on field usage (harder; requires logging which fields clients read or send), docs, SDK warnings, and removal in a new version.
+     - _Internal endpoints?_ Service-to-service calls are easier to find via tracing; the same process applies, faster, and owners of calling services get tickets.
+   - **Example:** Retiring /v1/transactions: logs showed 14 active clients. After emails, headers and two one-hour brownouts, 12 migrated; the remaining two were contacted directly and moved within a month. The endpoint now returns 410 with a link to /v2.
+   - **Sources:** [RFC 8594: The Sunset HTTP header field](https://www.rfc-editor.org/rfc/rfc8594); [IETF: The Deprecation HTTP header field (RFC 9745)](https://www.rfc-editor.org/rfc/rfc9745)
    - _Also asked as:_ How do I design a safe deprecation process?
 62. **How do I design for backward compatibility with older clients?** [ref · Intermediate · APIs, Migration]
-   - Support-window policy, version telemetry, feature negotiation, and server-side shims for the oldest supported clients. Know when you can finally stop supporting one.
+   - **Thesis:** Older clients will keep calling for longer than you expect, so build compatibility into the server: a published support window, telemetry on client versions, capability negotiation so clients and servers agree on features, and server-side shims for the oldest supported versions. Know the conditions under which you can finally drop one.
+   - **60-second answer:** Mobile apps, embedded devices and partner integrations upgrade slowly or never. I'd first set a support policy: which client versions are supported and for how long. Clients send their version and capabilities on every request, which feeds telemetry on how many users are on each version and lets the server tailor responses. Instead of forking endpoints, the server negotiates features: a client that doesn't support a new card type gets a fallback rendering; a client that doesn't know a new payment method doesn't see it offered. For the oldest supported versions, small server-side shims translate responses into shapes they understand. And I'd keep a minimum-supported-version mechanism, a forced upgrade prompt, for security-critical cases, used sparingly. A version can be retired when its usage is below an agreed threshold and the support window has passed.
+   - **Key points:**
+     1. **Support window policy.** For example, support the last N app versions or versions released in the past 18 months. Publish it internally so teams know what they must keep working.
+     2. **Client identification on every request.** App version, platform, SDK version and declared capabilities in headers. Without this you can't measure, negotiate or retire.
+     3. **Capability negotiation.** Clients declare what they can render or handle; servers only send features the client supports, with sensible fallbacks.
+     4. **Server-side shims.** Small adapters that transform responses for specific old versions, kept separate from core logic and deleted when the version is retired.
+     5. **Never repurpose fields or values.** Old clients interpret them the old way. Add new fields instead.
+     6. **Minimum version enforcement.** A forced upgrade path for security or legal reasons, with clear user messaging. Using it for convenience burns user trust.
+     7. **Retirement criteria.** Usage below a threshold (for example under 0.5% of active users) and the support window elapsed.
+   - **When to choose what:** Telemetry plus capability negotiation as the default mechanism; shims for the oldest versions; forced upgrades only for security. Review the supported-version list quarterly.
+   - **Numbers:**
+     - Retirement example: drop a version when it's below 0.5% of weekly active users and older than 18 months, after in-app prompts for 60 days.
+   - **Pitfalls:**
+     - Server changes tested only against the latest client.
+     - No version header, so you can't tell which clients break.
+     - Shims accumulating forever because nobody tracks retirement.
+     - Forced upgrades for minor features, frustrating users.
+   - **Follow-ups:**
+     - _How do you test against old clients?_ Keep recorded request and response contracts per supported version and run them in CI against the new server; also keep old app builds for manual or automated smoke tests.
+     - _What if an old client has a bug that misbehaves with new data?_ Detect the version and avoid sending the triggering data, or use a shim to sanitise it, until the version is retired.
+     - _How is this different from API versioning?_ Versioning creates explicit API versions; this handles many client versions within one API version through negotiation and shims, which suits apps with continuous releases.
+   - **Example:** A lending app sends app-version and a capabilities header. When a new 'instant payout' option launched, only clients declaring that capability saw it; older ones still saw standard bank transfer. A shim for app versions older than 4.0 converted new date formats until those versions dropped below 0.3% of users.
+   - **Sources:** [Martin Fowler: Tolerant reader](https://martinfowler.com/bliki/TolerantReader.html); [Stripe blog: API versioning](https://stripe.com/blog/api-versioning)
 63. **How do I handle breaking change scenarios with minimal disruption?** [ref · Intermediate · APIs, Migration]
-   - Run old and new in parallel, migrate clients with tooling and dates, monitor who still calls the old path, and offer a rollback during the cutover.
+   - **Thesis:** When a breaking change is unavoidable, run old and new side by side, migrate clients with tooling and dates, measure who still uses the old path, and keep a rollback during cutover. The disruption comes from surprises, so remove them.
+   - **60-second answer:** I'd first confirm the change really must break, because often an additive alternative exists. If it must, I'd ship the new behaviour alongside the old: a new endpoint, version or field, with the old one unchanged. Then make migration easy: a guide with before-and-after examples, updated SDKs, maybe a compatibility mode or automated codemod for SDK users. Communicate the timeline with dates. Track usage of the old path per client, and contact heavy users directly. During cutover, move traffic gradually, for example by client cohort or behind a flag, and keep the ability to switch back quickly. Only remove the old path when usage is near zero and the date has passed. For internal breaking changes, the same applies but faster: change consumers first if possible, or expand-and-contract so both shapes work during the transition.
+   - **Key points:**
+     1. **Challenge the need.** Can it be additive (new field, new endpoint) instead? Many 'breaking' changes are really naming preferences.
+     2. **Run old and new in parallel.** New version or endpoint alongside the old. Both work against the same underlying data and logic where possible.
+     3. **Make migration cheap.** Migration guides, SDK updates with deprecation warnings, examples, test environments, and help for large customers.
+     4. **Dates and communication.** Announce the timeline, repeat it in-band (headers), and send reminders as dates approach.
+     5. **Measure old-path usage.** Dashboards by client; outreach sorted by impact.
+     6. **Gradual cutover with rollback.** Shift clients or traffic in cohorts, keep the old path warm, and have a switch to revert if the new path misbehaves.
+     7. **Internal changes: expand and contract.** Producers support both shapes; consumers migrate; then the old shape is removed.
+   - **When to choose what:** Breaking changes are rare, scheduled events with parallel running, tooling and telemetry. Internal changes use expand-and-contract; external changes use versions with long overlap.
+   - **Numbers:**
+     - Overlap example: 6–12 months of parallel running for external APIs, a few weeks for internal services with known consumers.
+   - **Pitfalls:**
+     - Big-bang switch with no parallel period.
+     - Underestimating client effort; a 'small' change can mean a mobile release cycle for them.
+     - No rollback path during cutover.
+     - Leaving the old path running indefinitely because nobody owns removal.
+   - **Follow-ups:**
+     - _How do you handle a security fix that requires a breaking change quickly?_ Shorten timelines, communicate urgently, provide a mitigation in the old path if possible, and enforce on a date with direct outreach to affected clients.
+     - _How do you share logic between old and new paths?_ One internal implementation with adapters for each external shape, so fixes apply to both.
+     - _How do you know cutover is safe?_ Error rates and business metrics for migrated cohorts compared with the old path, plus contract tests.
+   - **Example:** Changing money amounts from decimal strings to integer minor units: v2 shipped with the new format, v1 kept working via an adapter, SDKs added conversion helpers, and usage dashboards drove outreach. v1 was removed 9 months later after traffic fell to zero.
+   - **Sources:** [Martin Fowler: Parallel change (expand and contract)](https://martinfowler.com/bliki/ParallelChange.html); [Stripe blog: API versioning](https://stripe.com/blog/api-versioning)
 64. **How do I design for backward compatibility when schemas change?** [ref · Intermediate · Migration, APIs]
-   - Additive fields, defaults for missing values, never reuse or repurpose a field, readers that ignore unknown fields, and compatibility checks in CI.
+   - **Thesis:** Schema changes stay compatible when you add rather than change: new optional fields with defaults, readers that ignore unknown fields and supply defaults for missing ones, and never reusing or repurposing a field. Enforce it with compatibility checks in CI, not good intentions.
+   - **60-second answer:** Whether it's a database schema, an API payload or a message format, the rules are the same. Add fields as optional with sensible defaults; never remove, rename or change the type of a field that's in use; never reuse a field name or Protobuf field number for something else; and make readers tolerant, ignoring fields they don't know and defaulting fields that are missing. With Protobuf that means reserving retired field numbers; with Avro, giving new fields defaults; with JSON, documenting optionality and not failing on unknown properties. Changing meaning is the subtle failure: a field that switches from dollars to cents breaks consumers silently, so it needs a new name. I'd enforce compatibility with automated checks: schema registry compatibility modes, buf breaking for Protobuf, or OpenAPI diff tools in CI. And for databases, expand-and-contract across releases.
+   - **Key points:**
+     1. **Add optional fields with defaults.** Old writers don't send them, old readers ignore them, new readers default them. Safe in every direction.
+     2. **Never remove or rename in-use fields.** Deprecate first, stop reading, stop writing, then remove after all readers are gone.
+     3. **Never reuse names or field numbers.** In Protobuf, reserve retired field numbers and names. Reusing them makes old data decode as the wrong field.
+     4. **Tolerant readers.** Ignore unknown fields; default missing ones; handle unknown enum values gracefully.
+     5. **Meaning changes need new fields.** Units, formats, time zones and business meaning. Changing them in place passes every schema check and breaks every consumer.
+     6. **Automate compatibility checks.** Registry compatibility modes, buf breaking, OpenAPI diff, and migration linting in CI.
+     7. **Databases: expand and contract.** Additive migration, dual write, backfill, switch reads, drop old later.
+   - **When to choose what:** Additive-only evolution as the rule, automated checks as the enforcement, and versioned replacements (new field, new type, new endpoint) when something must truly change.
+   - **Numbers:**
+     - Check cost: compatibility checks run in seconds in CI and catch breaking changes before review, far cheaper than a production incident.
+   - **Pitfalls:**
+     - Changing a field's type from int to string because 'it's more flexible'.
+     - Reusing a Protobuf field number for a new field.
+     - Strict JSON deserialisers that reject unknown properties.
+     - Changing semantics without changing the name.
+   - **Follow-ups:**
+     - _How do you make a required field optional, or vice versa?_ Making a required input optional is usually safe for servers; making an optional input required breaks old clients. For outputs, it's the reverse. Think about which side reads it.
+     - _What's the difference between backward and forward compatibility?_ Backward: new code reads old data. Forward: old code reads new data. Independent deployments need both.
+     - _How do you clean up deprecated fields eventually?_ Track readers (telemetry, consumer inventory), remove reads, then writes, then the field, reserving its name or number.
+   - **Example:** A Protobuf message replaced 'amount' (double) with 'amount_minor' (int64). 'amount' was deprecated, still populated for a year, then removed with its field number reserved. buf breaking in CI blocked an attempt to reuse that number six months later.
+   - **Sources:** [Protocol Buffers documentation: Updating a message type](https://protobuf.dev/programming-guides/proto3/#updating); [Confluent documentation: Schema evolution and compatibility](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html)
 
 ### Rate limits & quotas
 65. **Design per-tenant rate limits that do not punish well-behaved bursty clients.** [mine + ref · Intermediate · APIs, Reliability, Scaling]
-   - Token bucket with burst allowance, shared counters in a fast store, local approximation to cut round trips, clear 429 responses, and tiered quotas.
-   - Limits per tenant and per plan, burst allowance, shared counters in a fast store, fair sharing under contention, and visibility so tenants see their usage.
-   - Token bucket with burst headroom, limits per identity rather than per IP where possible, clear 429 responses with retry hints, and separate limits for abusive and normal traffic.
+   - **Thesis:** Use token buckets per tenant: a sustained rate plus a burst allowance, so short spikes from good clients pass while sustained abuse is limited. Keep counters in a fast shared store with local approximation to avoid a round trip per request, return clear 429s with Retry-After, and tier quotas by plan.
+   - **60-second answer:** Fixed-window limits punish bursty clients: a client that sends 100 requests in one second and nothing for the rest of the minute looks abusive. A token bucket fits better: tokens refill at the sustained rate, the bucket holds a burst capacity, and each request takes a token. Good clients with occasional bursts never notice; a client sending at a sustained high rate drains the bucket and gets limited. I'd key buckets by tenant and optionally by endpoint class, since writes or expensive endpoints get tighter limits. For a distributed fleet, the state lives in Redis or similar, updated atomically with a script, but calling Redis on every request adds latency, so I'd have each instance hold a local share of the tenant's budget and sync periodically, accepting small overshoot. Responses include 429 with Retry-After and rate-limit headers showing remaining quota. Limits come from the tenant's plan, and I'd add a global concurrency or load-shedding layer above it, because per-tenant limits don't protect you if every tenant bursts at once.
+   - **Key points:**
+     1. **Token bucket semantics.** Refill rate = sustained limit; bucket size = burst allowance. A request consumes tokens; an empty bucket means 429.
+     2. **Key by tenant and cost class.** Separate buckets for cheap reads and expensive writes or reports, or weight requests by cost.
+     3. **Shared counters.** Atomic token updates in Redis (Lua scripts) give a fleet-wide view. Plan for Redis being unavailable: fail open with local limits, usually.
+     4. **Local approximation.** Each instance gets a slice of the tenant's budget or syncs counts every few hundred milliseconds. Cuts latency and load on the store, at the cost of slight overshoot.
+     5. **Clear client feedback.** 429 with Retry-After, plus headers for limit, remaining and reset. Document the limits so clients can design for them.
+     6. **Tiered quotas.** Limits by plan, with overrides for specific tenants and a process for temporary increases.
+     7. **A global safety layer.** Per-tenant limits don't cap total load. Keep service-wide admission control and load shedding too.
+   - **When to choose what:** Token bucket per tenant with burst headroom for API rate limits; concurrency limits for long-running or expensive operations; global load shedding underneath. Fail open on limiter outages for most APIs, closed for abuse-prone endpoints such as login.
+   - **Numbers:**
+     - Example plan: 100 requests/s sustained with a burst of 500. A client sending 400 requests in one second after being idle passes; sustained 200 requests/s drains the bucket within a few seconds and is limited to 100/s.
+     - Local approximation: with 20 instances syncing every 250 ms, worst-case overshoot is roughly the tokens consumed in one sync interval across instances.
+   - **Pitfalls:**
+     - Fixed one-minute windows allowing double the limit around window boundaries and punishing bursts.
+     - Per-IP limits for B2B APIs where many tenants share NAT gateways, or one tenant uses many IPs.
+     - A Redis round trip on every request in the hot path.
+     - 429s without Retry-After, causing clients to retry immediately.
+   - **Follow-ups:**
+     - _Token bucket or sliding window?_ Sliding window counters are good for 'N per period' quotas (daily limits); token bucket is better for rate plus burst behaviour. Many systems use both: a token bucket for rate, a daily quota for volume.
+     - _What happens when Redis is down?_ Fall back to per-instance local limits (limit divided by instance count) so you neither block everyone nor remove protection entirely.
+     - _How do you rate-limit fairly when overloaded?_ Combine per-tenant limits with weighted fair queueing or shedding by tenant share, so a big tenant can't take all remaining capacity.
+   - **Example:** A B2B API moved from 6,000 requests per minute fixed windows to a token bucket of 100/s with a 1,000-token burst. Batch jobs that sent spikes at the top of each hour stopped getting 429s, while a misbehaving client looping at 400/s was held to 100/s.
+   - **Sources:** [Stripe blog: Scaling your API with rate limiters](https://stripe.com/blog/rate-limiters); [RFC 6585: Additional HTTP status codes (429 Too Many Requests)](https://www.rfc-editor.org/rfc/rfc6585)
    - _Also asked as:_ How do I design tenant-level rate limits and quotas? / How do I design rate limiting that does not break good users?
 
 ### Partial failure
 66. **One request fans out to five services and two fail. What do you return?** [mine + ref · Advanced · Reliability, APIs]
-   - Classify calls as required or optional, return degraded results with a marker, set per-call timeouts, never block the whole response on the slowest optional call.
-   - Timeouts per call, required versus optional dependencies, degraded responses, compensations for completed steps, and idempotency so retries are safe.
+   - **Thesis:** Classify each call as required or optional before you build the endpoint. If a required call fails, fail the request clearly (or compensate if it wrote something); if optional calls fail, return a degraded response with markers saying what's missing. Per-call timeouts make sure the slowest optional call never holds the response hostage.
+   - **60-second answer:** I'd decide in advance which of the five calls the response can't exist without and which are enrichments. Say a product page needs product details and price (required) and adds reviews, recommendations and stock badges (optional). Calls run in parallel with individual timeouts inside the overall deadline. If an optional call fails or times out, I return the response without that section and mark it, for example a field saying reviews are unavailable, so clients render a placeholder instead of guessing. If a required call fails, the request fails with a clear error, but only after retrying idempotent reads within budget, maybe serving a cached copy if that's acceptable. If the fan-out includes writes, a partial failure leaves some steps done, so the operation needs compensation or should be a saga with an idempotency key so the client can retry safely. And I'd measure degraded responses as a metric, because a feature silently degraded for a week is an incident nobody noticed.
+   - **Key points:**
+     1. **Required vs optional, decided up front.** Document per endpoint which dependencies are required. This drives timeouts, error handling and client expectations.
+     2. **Parallel calls with per-call timeouts.** Independent calls run concurrently; each has a timeout below the overall deadline. Optional calls get tighter timeouts.
+     3. **Degraded responses with markers.** Return what you have and say what's missing (a 'partial' flag or per-section status) so clients render accordingly.
+     4. **Fallbacks for required data.** Cached or stale data, if acceptable, can turn a failure into a degraded success. Otherwise fail clearly.
+     5. **Partial writes need compensation.** If some calls wrote state, failing the request leaves inconsistency. Use idempotency keys, sagas or compensations so retries and failures converge.
+     6. **Status codes.** Success with partial content flagged in the body is common for reads; avoid returning 500 when the core data is present. Fail with 5xx or 503 when required data is missing.
+     7. **Observe degradation.** Count degraded responses per dependency and alert on sustained degradation.
+   - **When to choose what:** Reads: degrade on optional failures, fail on required failures after bounded retries or cache fallback. Writes: avoid multi-service fan-out in one request where possible; otherwise saga plus idempotency key and a clear pending or failed status.
+   - **Numbers:**
+     - Budget example: 300 ms overall; required calls 200 ms timeout; optional calls 100 ms; response assembled by 250 ms with whatever arrived.
+   - **Pitfalls:**
+     - Waiting for every call, so the slowest optional service sets the response time.
+     - Returning 500 because one widget failed.
+     - Silent partial responses that clients interpret as 'no reviews exist'.
+     - Fan-out writes without idempotency, so client retries duplicate the steps that succeeded.
+   - **Follow-ups:**
+     - _Two required services failed. What do you return?_ A clear error (503 if transient, with Retry-After), never a misleading partial success. Log which dependencies failed for debugging.
+     - _How should clients handle partial responses?_ Render available sections and placeholders for missing ones; optionally retry the missing section separately.
+     - _GraphQL makes this easier?_ GraphQL returns data plus an errors array per field, which models partial failure naturally, but you still need timeouts and required/optional decisions in resolvers.
+   - **Example:** A loan dashboard calls loan details and balance (required) plus offers, documents and rewards (optional). Rewards times out; the response includes loans and balances, omits rewards, and sets rewards.status = 'unavailable'. The app shows 'Rewards temporarily unavailable'.
+   - **Sources:** [AWS Builders' Library: Timeouts, retries and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/); [Jeff Dean and Luiz Barroso: The tail at scale](https://research.google/pubs/the-tail-at-scale/)
    - _Also asked as:_ How do I handle partial failures in multi-service calls?
 
 ## Observability & Operations (8)
 
 ### Logging & tracing
 67. **What should each layer log, and what must never be logged?** [mine + ref · Fundamental · Observability, Cost & compliance, Reliability]
-   - Structured logs with a request id at every layer. Never log secrets, tokens, full card numbers or personal data. Sampling for high-volume paths and retention by sensitivity.
-   - Structured logs with correlation ids, entry and exit of requests, errors with context, and decisions. Never secrets, tokens, full payment data or unnecessary personal data.
+   - **Thesis:** Every layer emits structured logs carrying a shared request or trace id, recording what a responder needs: what was requested, what was decided, what failed, with enough context to act. Never log secrets, credentials, full card numbers or unnecessary personal data. Control volume with levels and sampling, and retain by sensitivity.
+   - **60-second answer:** I'd standardise structured JSON logs with common fields: timestamp, service, environment, version, trace and request id, tenant, and a stable event name. Per layer: the edge logs request line, status, latency, client identity and bytes; the gateway logs authentication outcomes and rate-limit decisions; services log business decisions and their reasons, like 'loan declined, policy rule X', calls to dependencies with latency and outcome, and errors with stack traces and relevant identifiers; data access logs slow queries and errors, not every query. What must never be logged: passwords, tokens, API keys, session cookies, full card numbers and CVVs, national ids, and free-text personal data you don't need. I'd enforce that with allow-lists of fields, redaction in the logging library, and scanning in the pipeline. Volume is controlled by log levels, sampling of high-volume success logs, and moving high-cardinality analytics to metrics or traces. Retention depends on sensitivity and regulation, with access controlled because logs are data.
+   - **Key points:**
+     1. **Structured logs with correlation ids.** JSON with consistent field names and a trace or request id propagated across services, so one request's logs can be joined.
+     2. **Edge and gateway.** Access logs: method, path template, status, latency, bytes, client id, user agent, rate-limit and auth outcomes.
+     3. **Services.** Business decisions with reasons, state transitions, dependency calls with latency and result, and errors with stack traces and entity ids.
+     4. **Data layer.** Slow queries above a threshold, errors, deadlocks and connection pool exhaustion, not every successful query.
+     5. **Never log sensitive data.** Credentials, tokens, secrets, full payment card data, government ids, health data and raw personal free text. Mask or tokenise identifiers where needed.
+     6. **Enforce, don't hope.** Logging libraries with field allow-lists and redaction, linting for risky patterns, and pipeline scanners that detect secrets and card numbers.
+     7. **Volume and retention.** Levels, sampling of high-volume success paths, retention tiers by sensitivity, and access controls on log stores.
+   - **When to choose what:** Logs for discrete events and debugging context, metrics for aggregates, traces for request flow. Log decisions and failures richly; sample successes; never log secrets or unneeded personal data.
+   - **Numbers:**
+     - Cost check: 10,000 req/s × 1 KB of logs per request ≈ 860 GB/day. Sampling successful request logs at 10% cuts most of that while keeping all errors.
+   - **Pitfalls:**
+     - Logging full request and response bodies, capturing tokens and personal data.
+     - Unstructured messages that can't be searched or aggregated.
+     - No correlation id, so incidents become log archaeology.
+     - Debug logging left on in production, blowing up cost and drowning signal.
+   - **Follow-ups:**
+     - _A secret was logged. What do you do?_ Rotate the secret immediately, purge or restrict the affected logs, find and fix the code path, and add a redaction rule and test so it can't recur.
+     - _How do you debug a specific customer's issue without logging personal data?_ Log stable pseudonymous ids (customer id, not name or email), and look up details in the source system with proper access controls.
+     - _Logs or traces for latency debugging?_ Traces show where time went across services; logs give detail within a span. Link them by trace id.
+   - **Example:** A lending service logs 'decision_made' with application id, policy version, outcome and reason codes, but not bureau data or income values. A redaction filter masks any field matching card or token patterns, and success logs are sampled at 5% while all errors are kept.
+   - **Sources:** [OWASP: Logging cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html); [OpenTelemetry: Logs](https://opentelemetry.io/docs/concepts/signals/logs/)
    - _Also asked as:_ What should I log at each layer, and what should I never log?
 68. **Trace a request across 50 services without a runaway bill.** [mine + ref · Advanced · Observability, Cost & compliance]
-   - Context propagation everywhere, tail-based sampling that keeps errors and slow traces, span attributes that are queryable, and a budget per team.
-   - Standard context propagation, consistent span naming, tail-based sampling to keep slow and failed traces, and links from metrics and logs to traces.
+   - **Thesis:** Propagate trace context everywhere with a standard (W3C Trace Context via OpenTelemetry), keep the traces that matter with tail-based sampling (errors and slow requests at 100%, a small sample of normal ones), make span attributes queryable, and give teams a budget. You want every interesting trace, not every trace.
+   - **60-second answer:** First, propagation: every service, queue and async hop must carry trace context, or traces break into fragments. I'd standardise on OpenTelemetry SDKs and W3C traceparent headers, including in message headers for Kafka or SQS. Second, sampling: head-based sampling decides at the start and is cheap, but randomly drops the rare slow or failed requests you most need. Tail-based sampling buffers spans in collectors and decides after the trace completes: keep all errors, all traces above a latency threshold, and maybe 1% of the rest. That keeps costs proportional to interesting traffic. Third, useful spans: consistent naming, attributes like tenant, endpoint and result that you can filter on, and links from metrics exemplars and logs to traces. Fourth, cost governance: per-team volume budgets, limits on attribute cardinality and span counts, and dropping noisy internal spans.
+   - **Key points:**
+     1. **Context propagation everywhere.** W3C Trace Context headers over HTTP and gRPC, and in message metadata for queues. A single service that drops context breaks every trace through it.
+     2. **Standard instrumentation.** OpenTelemetry SDKs and auto-instrumentation for frameworks, clients and databases, with shared conventions for span names and attributes.
+     3. **Head sampling: cheap but blind.** Decides at trace start with a fixed probability. Simple, low overhead, but misses rare failures unless rates are high.
+     4. **Tail sampling: keep what matters.** Collectors buffer spans and decide per trace: keep errors, slow traces and a baseline sample. Needs collector capacity and trace-aware routing.
+     5. **Queryable attributes.** Endpoint, tenant tier, region, version and outcome as span attributes so you can ask 'slow traces for tenant X after deploy Y'.
+     6. **Connect signals.** Metric exemplars point to example traces; logs include trace ids; dashboards link to trace search.
+     7. **Budgets and hygiene.** Per-team span volume budgets, caps on spans per trace, and removing high-volume low-value spans (health checks, tight loops).
+   - **When to choose what:** OpenTelemetry with W3C context everywhere; tail-based sampling at the collector for production; head sampling only as a pre-filter at very high volumes. Measure trace completeness as a health metric.
+   - **Numbers:**
+     - Volume example: 20,000 req/s × 30 spans per trace = 600,000 spans/s. Keeping 100% of errors (say 0.5%), slow traces (1%) and 1% of the rest keeps about 2.5% of traces, roughly 15,000 spans/s.
+     - Tail sampling buffer: collectors hold spans for the decision window (for example 10–30 seconds), which sizes their memory.
+   - **Pitfalls:**
+     - Async hops (queues, thread pools) that lose context.
+     - Head sampling at 1% and wondering why no failed traces are captured.
+     - High-cardinality attributes (user ids in span names) exploding storage and indexing.
+     - Each team choosing different span names and attributes, making cross-service queries useless.
+   - **Follow-ups:**
+     - _How does tail sampling work with spans arriving at different collectors?_ Route all spans of a trace to the same collector instance (load-balance by trace id), then decide when the trace completes or times out.
+     - _How do you trace through Kafka?_ Put trace context in message headers; the consumer starts a span linked to the producer's span, since processing may happen much later.
+     - _What's a good baseline sampling rate?_ Enough to see normal behaviour per endpoint: often 1–5% of successful traces, adjusted per service by volume.
+   - **Example:** A payments platform with 60 services moved from 0.1% head sampling to tail sampling that keeps all errors and all traces above 1 second plus 2% of the rest. Tracing cost fell 40% while engineers could now find a trace for nearly every customer-reported failure.
+   - **Sources:** [OpenTelemetry: Sampling](https://opentelemetry.io/docs/concepts/sampling/); [W3C: Trace Context](https://www.w3.org/TR/trace-context/)
    - _Also asked as:_ How do I design tracing across 50+ microservices?
 
 ### Metrics, dashboards & alerts
 69. **Alert on user pain, not on noise.** [mine + ref · Intermediate · Observability, Reliability]
-   - Page on symptoms such as error rate and latency against SLOs, ticket on causes. Every page needs an owner and a runbook link. Delete alerts that nobody acted on.
-   - Alert on user-facing symptoms and SLO burn, attach runbooks, deduplicate and group, review noisy alerts regularly, and delete the ones that never lead to action.
+   - **Thesis:** Page a human only for symptoms users feel, measured against SLOs, and only when someone needs to act now. Causes such as high CPU or a full disk become tickets or dashboard signals unless they're about to cause user pain. Every page has an owner and a runbook, and alerts that never lead to action get deleted.
+   - **60-second answer:** Noise comes from paging on causes: CPU above 80%, a pod restart, a queue above a number. Most of those don't hurt users, and the ones that do will show up as symptoms. So I'd page on symptoms tied to SLOs: error rate and latency for key user journeys, ideally as error-budget burn rate, which naturally ignores short blips and catches slow burns. Cause-based alerts that predict imminent pain, like a disk filling within four hours or a certificate expiring in seven days, are fine as tickets or business-hours alerts. Every alert must answer: who owns it, what does the responder do, and why now? Each links to a runbook. Then hygiene: track alert volume per on-call shift and the fraction that led to action; review regularly; delete or downgrade alerts that are routinely acknowledged and ignored; group and deduplicate related alerts so one incident means one page.
+   - **Key points:**
+     1. **Page on symptoms.** User-facing error rates, latency and availability for key journeys. These capture all causes, including ones you didn't predict.
+     2. **Use SLO burn rates.** Multi-window burn-rate alerts page when the error budget is being consumed fast and resolve quickly when it stops. They ignore brief blips.
+     3. **Causes as tickets.** Capacity trends, single-instance failures, certificate expiry and disk growth become tickets or daytime notifications unless user impact is imminent.
+     4. **Actionable and owned.** Each alert has an owning team, a severity, and a runbook link. If there's nothing to do, it shouldn't page.
+     5. **Deduplicate and group.** One incident should produce one page, with related alerts grouped under it. Alert storms bury the signal.
+     6. **Measure alert quality.** Pages per shift, percent actionable, time to acknowledge, and repeat offenders. Review in on-call handoffs.
+     7. **Delete aggressively.** Alerts that were ignored repeatedly are removed or downgraded. Keeping them trains people to ignore pages.
+   - **When to choose what:** Pages: SLO burn-rate and hard user-facing outages only. Tickets: predictive cause-based signals. Dashboards: everything else. Revisit alert rules after every incident and every few months.
+   - **Numbers:**
+     - On-call health target from the Google SRE book: at most about two incidents per 12-hour shift, so each gets proper attention.
+     - Fast-burn example: page when burning 14.4x budget over both 1 hour and 5 minutes; slow-burn ticket at 1x over 3 days.
+   - **Pitfalls:**
+     - Static thresholds on CPU or memory that page at night with no user impact.
+     - Alerts without runbooks, so responders improvise.
+     - Duplicate alerts from every layer for the same outage.
+     - Never deleting alerts, so the on-call rotation learns to ignore the pager.
+   - **Follow-ups:**
+     - _How do you catch problems that aren't covered by SLOs?_ Add synthetic checks for important paths, and review incidents to see whether a missing SLI should be added.
+     - _What about batch jobs?_ Alert on symptoms too: job didn't complete by its deadline, or output freshness exceeded its target.
+     - _How do you reduce a noisy rotation quickly?_ Pull a month of pages, classify actionable vs not, delete or downgrade the non-actionable ones, and fix the top recurring causes.
+   - **Example:** A team receiving 40 pages a week replaced 60 threshold alerts with burn-rate alerts on four SLOs plus ticketed capacity warnings. Pages dropped to about four a week, and every one was a real customer-facing problem.
+   - **Sources:** [Google SRE book: Monitoring distributed systems](https://sre.google/sre-book/monitoring-distributed-systems/); [Google SRE workbook: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)
    - _Also asked as:_ How do I design alerting that catches real issues but avoids noise?
 70. **How do I design metrics that actually tell me system health?** [ref · Intermediate · Observability]
-   - Latency, traffic, errors and saturation per service and per dependency, with histograms rather than averages and business metrics alongside technical ones.
+   - **Thesis:** Measure each service the way users experience it (rate, errors, duration) and each resource by how close it is to its limit (utilisation, saturation, errors), with histograms rather than averages, broken down by dependency, and alongside a few business metrics. Health is 'users succeed quickly and nothing is near its limit'.
+   - **60-second answer:** I'd combine two well-known methods. For every service and endpoint, the RED method: request rate, error rate, and duration as a histogram so you can read p50, p95 and p99. For every resource, like CPU, memory, connection pools, thread pools, queues and disks, the USE method: utilisation, saturation such as queue length or waiting, and errors. Saturation is the early warning that averages hide. Then per-dependency metrics: rate, errors and latency for every outbound call, so you can see which dependency is slow without guessing. Then business metrics, such as applications submitted, payments completed and sign-ups, because they catch problems that technical metrics miss, like a broken button that produces no errors at all. I'd keep label cardinality under control and put deploy markers on every graph.
+   - **Key points:**
+     1. **RED for services.** Rate, Errors, Duration per endpoint. Duration as histograms, never only averages; percentiles reveal tail behaviour.
+     2. **USE for resources.** Utilisation, Saturation, Errors for CPU, memory, disks, network, pools and queues. Saturation (waiting work) predicts trouble before utilisation hits 100%.
+     3. **Per-dependency client metrics.** Each outbound call: rate, errors, latency, timeouts and circuit-breaker state. Tells you who's slow during an incident.
+     4. **Business metrics.** Orders per minute, sign-ups, conversion. A drop with no technical errors often means a functional bug or upstream problem.
+     5. **Histograms and percentiles.** Averages hide the tail. Use histograms so percentiles can be computed and aggregated correctly.
+     6. **Control cardinality.** Labels like endpoint, status class, region and version are fine; user ids and raw URLs are not. High cardinality explodes cost and slows queries.
+     7. **Context on graphs.** Deploy and config-change markers, and SLO thresholds drawn on charts.
+   - **When to choose what:** RED plus USE plus per-dependency plus a handful of business metrics for every service, using shared libraries so naming and labels are consistent. SLOs are built on the RED metrics of key journeys.
+   - **Numbers:**
+     - Cardinality math: a metric with labels endpoint (50) × status (5) × region (3) × version (2) = 1,500 series; adding a user_id label with 1 million users makes it 1.5 billion.
+   - **Pitfalls:**
+     - Average latency as the main metric.
+     - Only resource metrics, so you know CPU is high but not whether users are affected.
+     - Unbounded label values (ids, full URLs) causing cost explosions.
+     - No business metrics, missing silent functional failures.
+   - **Follow-ups:**
+     - _Why can't you average percentiles across instances?_ Percentiles aren't additive; averaging per-instance p99s gives a meaningless number. Aggregate histograms, then compute percentiles.
+     - _What's a saturation metric for a thread pool?_ Queue length or time tasks spend waiting for a thread, plus active threads versus maximum.
+     - _How do you spot a functional regression with metrics?_ Business metrics compared with the same time last week; a drop in completions without a rise in errors suggests a broken flow.
+   - **Example:** Checkout errors were flat but completed orders dropped 30% after a deploy. A business-metric alert caught it: a front-end change hid the pay button on one browser. RED metrics alone would never have shown it.
+   - **Sources:** [Brendan Gregg: The USE method](https://www.brendangregg.com/usemethod.html); [Grafana: The RED method](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
 71. **How do I design dashboards that help during incidents?** [ref · Intermediate · Observability, Operations]
-   - One top-level health view, then drill-down by service and dependency. Put symptoms first, show deploy markers, and keep the layout the same across services.
+   - **Thesis:** Incident dashboards answer three questions fast: are users hurting, where, and what changed? Start with one top-level health view of symptoms, drill down by service and dependency, show deploys and config changes on every graph, and keep the layout identical across services so responders aren't learning a new screen at 3 a.m.
+   - **60-second answer:** I'd design a hierarchy. The top-level dashboard shows user-facing health for key journeys: success rate, latency percentiles against SLOs, and business throughput, by region. If something is red, it links to the service dashboard, which follows a standard template for every service: RED metrics per endpoint, then saturation of its resources, then each dependency's error rate and latency, then recent deploys, config changes and feature-flag flips as annotations. From there, links go to traces filtered to the time window and logs with the same filters. I'd remove vanity panels, keep time ranges and axes consistent, and show 'same time last week' as a comparison line. And test dashboards in game days: if responders can't find the cause using them, change them.
+   - **Key points:**
+     1. **Top-level health first.** One screen with user-facing SLIs per journey and region. It answers 'is this real and how big?' within seconds.
+     2. **Standard service template.** Every service dashboard has the same layout: traffic, errors, latency, saturation, dependencies, changes. Familiarity speeds diagnosis.
+     3. **Dependencies visible.** Per-dependency latency and error panels show immediately whether the problem is upstream or downstream.
+     4. **Change annotations.** Deploys, config pushes, flag changes and infrastructure events overlaid on graphs. 'What changed?' is the most productive incident question.
+     5. **Comparison baselines.** Overlays for last week or yesterday make anomalies obvious without memorising normal values.
+     6. **Links to traces and logs.** Pre-filtered by service and time range, so drilling down doesn't mean retyping queries.
+     7. **Few panels, clear purpose.** Each panel answers a question. Remove panels nobody uses in incidents.
+   - **When to choose what:** A top-level journey health dashboard, a templated dashboard per service generated from code, and links between them and to traces and logs. Dashboards are reviewed after incidents like runbooks.
+   - **Numbers:**
+     - Target: a responder should go from page to the affected service and dependency within a few minutes using dashboards alone; measure it in game days.
+   - **Pitfalls:**
+     - Fifty-panel dashboards where nobody knows which panel matters.
+     - Every team's dashboard laid out differently.
+     - No deploy markers, so correlations with changes are missed.
+     - Dashboards built by hand that drift and break; generate them from code.
+   - **Follow-ups:**
+     - _How do you keep dashboards consistent across 50 services?_ Generate them from a template in code (dashboards as code) using standard metric names from shared instrumentation libraries.
+     - _What goes on a status page for customers?_ Only user-facing components and their state, updated by the incident commander; not internal metrics.
+     - _How do dashboards relate to alerts?_ Alerts tell you something is wrong; the alert should link to the dashboard that shows where.
+   - **Example:** During an outage, the top-level dashboard showed payment success dropping in one region only. The payments service dashboard showed the fraud-check dependency's latency rising at the same time as a config annotation. Rolling back the config resolved it in 12 minutes.
+   - **Sources:** [Google SRE book: Monitoring distributed systems](https://sre.google/sre-book/monitoring-distributed-systems/); [Grafana: Dashboard best practices](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/best-practices/)
 
 ### Latency debugging
 72. **p50 is flat but p99 doubled. How do you debug it?** [mine + ref · Advanced · Latency, Observability]
-   - Look for queueing, GC, noisy neighbors, a slow shard, retries, lock contention. Compare by instance, endpoint and dependency. Use exemplars to jump from a metric to a trace.
-   - Compare percentiles by instance, endpoint and dependency, look for queueing, GC, retries and hot shards, and use traces to find the slow span. Hedged requests can mask but not fix it.
+   - **Thesis:** A flat median with a rising tail means most requests are fine and a minority are hitting something slow. Narrow down who that minority is (which instance, endpoint, tenant, dependency or shard) by comparing percentiles across dimensions, then jump from the metric to example traces to find the slow span.
+   - **60-second answer:** I'd start by asking what changed when p99 moved: a deploy, config change, traffic shift, or new tenant. Then slice: p99 by instance, zone, endpoint, tenant, client version and downstream dependency. If one instance is slow, think noisy neighbour, a bad host, or garbage collection on that JVM. If one endpoint, think a new query or a payload-size change. If one tenant, think a large account hitting a slow path. If one dependency, think its own tail or a hot shard behind it. Common tail causes: queueing when utilisation creeps up, since latency rises sharply as utilisation approaches saturation; GC pauses; lock contention; retries, where a timed-out first attempt plus a retry lands in the tail; cache misses for a subset of keys; and fan-out, where waiting on many calls makes the slowest one dominate. Exemplars on the latency histogram link straight to slow traces; I'd look at several and see which span grew.
+   - **Key points:**
+     1. **What changed?.** Line up the start of the regression with deploys, config changes, traffic patterns, dependency changes and infrastructure events.
+     2. **Slice by dimension.** Compare p99 per instance, zone, endpoint, tenant, payload size and dependency. The dimension where one value stands out points to the cause.
+     3. **Queueing near saturation.** As utilisation rises, waiting time grows sharply even if the median service time is unchanged. Check pool and queue wait times.
+     4. **GC and runtime pauses.** Stop-the-world pauses hit a fraction of requests. Check GC logs and pause-time metrics on slow instances.
+     5. **Retries and timeouts.** Requests that time out once and succeed on retry land squarely in the tail. Count retries per request.
+     6. **Partial cache misses and hot shards.** A subset of keys missing cache or living on a hot shard produces a slow minority.
+     7. **Fan-out amplification.** If a request waits on 20 calls, its latency is the max of 20, so each call's p99 becomes the request's common case.
+     8. **Exemplars to traces.** Click from the histogram to example slow traces and compare their spans with normal traces to see which step grew.
+   - **When to choose what:** Diagnose by elimination with dimensional slicing and traces before tuning anything. Fixes depend on cause: capacity or concurrency limits for queueing, GC tuning, query fixes, reduced fan-out, or hedged requests for idempotent reads as a mitigation.
+   - **Numbers:**
+     - Fan-out math: if each backend call has a 1% chance of being slow, a request that waits on 100 calls has 1 − 0.99^100 ≈ 63% chance of hitting at least one slow call.
+     - Queueing intuition: in simple queueing models, average wait grows roughly in proportion to u / (1 − u); going from 70% to 90% utilisation roughly quadruples it.
+   - **Pitfalls:**
+     - Looking only at averages or medians.
+     - Averaging p99 across instances, hiding the one slow host.
+     - Adding hedged requests or bigger timeouts without finding the cause.
+     - Ignoring client-side retries that inflate observed latency.
+   - **Follow-ups:**
+     - _Hedged requests: fix or mask?_ A mitigation. Sending a second request after the p95 delay cuts the tail for idempotent reads at modest extra load, but the underlying slow path is still there.
+     - _p99 doubled only for one tenant. What next?_ Look at that tenant's data shape (much larger result sets, more items, a hot partition) and their request pattern; consider limits or dedicated capacity.
+     - _How do you prevent tail regressions?_ Track p99 per endpoint as part of SLOs, include tail latency in load-test gates, and alert on p99 regressions after deploys.
+   - **Example:** Checkout p99 rose from 400 to 900 ms with flat p50 after a deploy. Slicing showed it only on instances in one zone, where a new sidecar version added connection setup on 2% of calls. Exemplar traces pointed straight to the sidecar span; pinning the old version fixed it.
+   - **Sources:** [Jeff Dean and Luiz Barroso: The tail at scale](https://research.google/pubs/the-tail-at-scale/); [Brendan Gregg: The USE method](https://www.brendangregg.com/usemethod.html)
    - _Also asked as:_ How do I debug high tail latency in a distributed system?
 
 ### Runbooks & failure drills
 73. **Rehearse failure before production does it for you.** [mine + ref · Intermediate · Reliability, Observability]
-   - Game days, dependency fault injection, region evacuation drills, restore-from-backup tests. Start in staging with a hypothesis and a stop condition.
-   - Fault injection for dependencies and infrastructure, game days, load and soak tests, and restore drills, starting with a hypothesis and a clear abort condition.
+   - **Thesis:** Run failure deliberately, with a hypothesis and a stop condition: inject dependency faults, kill instances and zones, restore from backup, and run game days where people practise the response. Start in staging, move to production in small, controlled steps, and fix what you find.
+   - **60-second answer:** I'd treat failure rehearsal as experiments. Each one starts with a hypothesis, like 'if the recommendation service returns errors, checkout success stays above 99.5%', a blast radius such as one zone or 1% of traffic, and a stop condition such as an SLO burn threshold, with a one-click abort. Types: dependency fault injection, adding latency or errors to calls; infrastructure failure, killing instances, failing a zone, failing over a database; data drills, restoring a backup to a clean environment and verifying it; and game days, where a team responds to a simulated incident using real dashboards and runbooks, testing people and process as well as systems. I'd start in staging, then run small production experiments during business hours with the owning team present, and expand as confidence grows. Every finding becomes a tracked fix, and successful experiments can be automated to run continuously.
+   - **Key points:**
+     1. **Hypothesis first.** State expected behaviour in terms of user-facing metrics. An experiment without a hypothesis is just breaking things.
+     2. **Control the blast radius.** Limit to a percentage of traffic, one zone, one cell or internal users. Expand only after success.
+     3. **Stop conditions and abort.** Predefined thresholds that end the experiment automatically, plus a manual kill switch.
+     4. **Dependency fault injection.** Inject latency, errors and timeouts into calls via proxies, service mesh or libraries to test timeouts, breakers and fallbacks.
+     5. **Infrastructure failure.** Terminate instances, block a zone, fail over databases, expire certificates in staging. Validates redundancy and static stability.
+     6. **Restore drills.** Restore real backups into isolated environments and verify integrity and time to restore.
+     7. **Game days for people.** Practise detection, communication, runbooks and escalation. Debrief and fix gaps in tools, docs and process.
+   - **When to choose what:** Start with game days and staging experiments; move to small production experiments for critical paths once basics (timeouts, breakers, monitoring) are in place. Automate recurring experiments where safe.
+   - **Numbers:**
+     - Cadence example: quarterly game day per critical service, monthly restore drill for core databases, continuous low-level fault injection (for example 1% added latency on a non-critical dependency) once mature.
+   - **Pitfalls:**
+     - Running chaos experiments without monitoring good enough to see the effect.
+     - No abort mechanism or stop condition.
+     - Treating findings as interesting rather than as bugs to fix.
+     - Only testing infrastructure, never people and runbooks.
+   - **Follow-ups:**
+     - _How do you convince leadership to break production on purpose?_ Start small and controlled, show findings from staging, and frame it as finding failures on our schedule rather than at 3 a.m. Track incidents prevented.
+     - _What's the first experiment you'd run?_ Kill one instance of a stateless service during business hours and confirm no user impact; then add latency to an optional dependency.
+     - _How do you test a regional failover safely?_ Practise in staging, then shift a small share of production traffic, then full planned failovers during low-traffic windows with rollback ready.
+   - **Example:** A game day simulated the credit bureau timing out. Checkout's breaker worked, but the runbook pointed to a dashboard that no longer existed and on-call didn't have permission to enable the cached-score fallback. Both were fixed the same week.
+   - **Sources:** [Principles of Chaos Engineering](https://principlesofchaos.org/); [AWS Well-Architected: Test reliability](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/test-reliability.html)
    - _Also asked as:_ How do I simulate failures before they hit production?
 74. **Write a runbook the on-call engineer can follow at 3 a.m.** [mine + ref · Fundamental · Operations, Observability, Reliability]
-   - Symptom first, then checks in order, then safe actions with exact commands, then when to escalate. Tested by someone who did not write it.
-   - Start from the alert, give ordered checks, exact commands, safe mitigations, escalation paths, and keep them tested and reviewed after incidents.
+   - **Thesis:** A good runbook starts from the alert's symptom, lists checks in order, gives exact commands and links, offers safe mitigations before risky ones, says when to escalate, and has been tested by someone who didn't write it. It's written for a tired person who has never seen this failure before.
+   - **60-second answer:** I'd structure every runbook the same way. What this alert means in user terms and how bad it is. Quick checks in order, each with an exact command or dashboard link and what 'bad' looks like: is it all regions or one; did something deploy recently; is a dependency failing. Then mitigations from safest to riskiest: roll back the last deploy, flip this feature flag, shift traffic away from a zone, scale up, restart, with exact commands and expected effects. Then when to escalate and to whom, with a time limit, like 'if not mitigated in 20 minutes, page the database team'. Then communication: where to post updates and when to declare an incident. I'd keep it short, version it next to the code or alert definition, link it from the alert, and have someone outside the team follow it in a game day. After each incident, update it.
+   - **Key points:**
+     1. **Start from the symptom.** What the alert means, who is affected, and how to judge severity. The responder arrives from the page, not from the architecture doc.
+     2. **Ordered checks.** The first few checks that split the problem space: scope, recent changes, dependency health. Each with a direct link or command and what to look for.
+     3. **Mitigate before diagnosing.** Restore service first: rollback, feature flag, traffic shift, scaling. Root cause can wait.
+     4. **Exact commands.** Copy-pasteable commands with placeholders clearly marked, required permissions noted, and expected output described.
+     5. **Safe to risky.** Order actions by risk; warn explicitly about anything that could make things worse (restarting a primary, clearing a cache).
+     6. **Escalation and communication.** Who to page and after how long, where to post updates, when to declare a formal incident.
+     7. **Tested and maintained.** Someone who didn't write it follows it in a game day. Updated after every incident where it was used; reviewed when the system changes.
+   - **When to choose what:** Every paging alert links to a runbook following one template. Runbooks live with the code or alert definitions and are tested during game days and onboarding.
+   - **Numbers:**
+     - Target: a responder new to the service should reach a mitigation within 15 minutes using the runbook alone; measure it in drills.
+   - **Pitfalls:**
+     - Runbooks that explain architecture instead of telling the responder what to do.
+     - Stale commands, dashboards or permissions.
+     - Mitigations that require access on-call doesn't have.
+     - Runbooks stored somewhere that's down during the incident.
+   - **Follow-ups:**
+     - _Should runbooks be automated?_ Automate safe, frequently used steps (scripts, buttons, auto-remediation) and keep the runbook as the decision guide around them.
+     - _How do you keep runbooks current?_ Link them from alerts, review them in post-incident actions, and run them during onboarding so new engineers find stale steps.
+     - _What if the runbook doesn't cover the situation?_ Escalate early, follow incident process, and add the new scenario to the runbook afterwards.
+   - **Example:** Runbook for 'Payment success rate burn': step 1, check the regional health dashboard (link); step 2, check deploys in the last hour (command); mitigation A, roll back (command); mitigation B, disable new-provider routing flag (link); escalate to the payments lead after 20 minutes; post updates in #inc every 15 minutes.
+   - **Sources:** [Google SRE book: Being on-call](https://sre.google/sre-book/being-on-call/); [Google SRE book: Managing incidents](https://sre.google/sre-book/managing-incidents/)
    - _Also asked as:_ How do I design runbooks so on-call engineers can act fast?
 
 ## Evolution, Cost & Trade-offs (8)

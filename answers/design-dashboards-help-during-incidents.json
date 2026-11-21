@@ -1,0 +1,75 @@
+{
+  "thesis": "Incident dashboards answer three questions fast: are users hurting, where, and what changed? Start with one top-level health view of symptoms, drill down by service and dependency, show deploys and config changes on every graph, and keep the layout identical across services so responders aren't learning a new screen at 3 a.m.",
+  "pitch": "I'd design a hierarchy. The top-level dashboard shows user-facing health for key journeys: success rate, latency percentiles against SLOs, and business throughput, by region. If something is red, it links to the service dashboard, which follows a standard template for every service: RED metrics per endpoint, then saturation of its resources, then each dependency's error rate and latency, then recent deploys, config changes and feature-flag flips as annotations. From there, links go to traces filtered to the time window and logs with the same filters. I'd remove vanity panels, keep time ranges and axes consistent, and show 'same time last week' as a comparison line. And test dashboards in game days: if responders can't find the cause using them, change them.",
+  "points": [
+    {
+      "h": "Top-level health first",
+      "d": "One screen with user-facing SLIs per journey and region. It answers 'is this real and how big?' within seconds."
+    },
+    {
+      "h": "Standard service template",
+      "d": "Every service dashboard has the same layout: traffic, errors, latency, saturation, dependencies, changes. Familiarity speeds diagnosis."
+    },
+    {
+      "h": "Dependencies visible",
+      "d": "Per-dependency latency and error panels show immediately whether the problem is upstream or downstream."
+    },
+    {
+      "h": "Change annotations",
+      "d": "Deploys, config pushes, flag changes and infrastructure events overlaid on graphs. 'What changed?' is the most productive incident question."
+    },
+    {
+      "h": "Comparison baselines",
+      "d": "Overlays for last week or yesterday make anomalies obvious without memorising normal values."
+    },
+    {
+      "h": "Links to traces and logs",
+      "d": "Pre-filtered by service and time range, so drilling down doesn't mean retyping queries."
+    },
+    {
+      "h": "Few panels, clear purpose",
+      "d": "Each panel answers a question. Remove panels nobody uses in incidents."
+    }
+  ],
+  "decision": "A top-level journey health dashboard, a templated dashboard per service generated from code, and links between them and to traces and logs. Dashboards are reviewed after incidents like runbooks.",
+  "numbers": [
+    "Target: a responder should go from page to the affected service and dependency within a few minutes using dashboards alone; measure it in game days."
+  ],
+  "pitfalls": [
+    "Fifty-panel dashboards where nobody knows which panel matters.",
+    "Every team's dashboard laid out differently.",
+    "No deploy markers, so correlations with changes are missed.",
+    "Dashboards built by hand that drift and break; generate them from code."
+  ],
+  "followups": [
+    {
+      "q": "How do you keep dashboards consistent across 50 services?",
+      "a": "Generate them from a template in code (dashboards as code) using standard metric names from shared instrumentation libraries."
+    },
+    {
+      "q": "What goes on a status page for customers?",
+      "a": "Only user-facing components and their state, updated by the incident commander; not internal metrics."
+    },
+    {
+      "q": "How do dashboards relate to alerts?",
+      "a": "Alerts tell you something is wrong; the alert should link to the dashboard that shows where."
+    }
+  ],
+  "example": "During an outage, the top-level dashboard showed payment success dropping in one region only. The payments service dashboard showed the fraud-check dependency's latency rising at the same time as a config annotation. Rolling back the config resolved it in 12 minutes.",
+  "related": [
+    "design-metrics-actually-tell-me",
+    "alert-user-pain-not-noise",
+    "write-runbook-call-engineer-follow",
+    "p50-flat-but-p99-doubled"
+  ],
+  "sources": [
+    {
+      "title": "Google SRE book: Monitoring distributed systems",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/"
+    },
+    {
+      "title": "Grafana: Dashboard best practices",
+      "url": "https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/best-practices/"
+    }
+  ]
+}

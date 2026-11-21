@@ -1,0 +1,74 @@
+{
+  "thesis": "Every layer emits structured logs carrying a shared request or trace id, recording what a responder needs: what was requested, what was decided, what failed, with enough context to act. Never log secrets, credentials, full card numbers or unnecessary personal data. Control volume with levels and sampling, and retain by sensitivity.",
+  "pitch": "I'd standardise structured JSON logs with common fields: timestamp, service, environment, version, trace and request id, tenant, and a stable event name. Per layer: the edge logs request line, status, latency, client identity and bytes; the gateway logs authentication outcomes and rate-limit decisions; services log business decisions and their reasons, like 'loan declined, policy rule X', calls to dependencies with latency and outcome, and errors with stack traces and relevant identifiers; data access logs slow queries and errors, not every query. What must never be logged: passwords, tokens, API keys, session cookies, full card numbers and CVVs, national ids, and free-text personal data you don't need. I'd enforce that with allow-lists of fields, redaction in the logging library, and scanning in the pipeline. Volume is controlled by log levels, sampling of high-volume success logs, and moving high-cardinality analytics to metrics or traces. Retention depends on sensitivity and regulation, with access controlled because logs are data.",
+  "points": [
+    {
+      "h": "Structured logs with correlation ids",
+      "d": "JSON with consistent field names and a trace or request id propagated across services, so one request's logs can be joined."
+    },
+    {
+      "h": "Edge and gateway",
+      "d": "Access logs: method, path template, status, latency, bytes, client id, user agent, rate-limit and auth outcomes."
+    },
+    {
+      "h": "Services",
+      "d": "Business decisions with reasons, state transitions, dependency calls with latency and result, and errors with stack traces and entity ids."
+    },
+    {
+      "h": "Data layer",
+      "d": "Slow queries above a threshold, errors, deadlocks and connection pool exhaustion, not every successful query."
+    },
+    {
+      "h": "Never log sensitive data",
+      "d": "Credentials, tokens, secrets, full payment card data, government ids, health data and raw personal free text. Mask or tokenise identifiers where needed."
+    },
+    {
+      "h": "Enforce, don't hope",
+      "d": "Logging libraries with field allow-lists and redaction, linting for risky patterns, and pipeline scanners that detect secrets and card numbers."
+    },
+    {
+      "h": "Volume and retention",
+      "d": "Levels, sampling of high-volume success paths, retention tiers by sensitivity, and access controls on log stores."
+    }
+  ],
+  "decision": "Logs for discrete events and debugging context, metrics for aggregates, traces for request flow. Log decisions and failures richly; sample successes; never log secrets or unneeded personal data.",
+  "numbers": [
+    "Cost check: 10,000 req/s × 1 KB of logs per request ≈ 860 GB/day. Sampling successful request logs at 10% cuts most of that while keeping all errors."
+  ],
+  "pitfalls": [
+    "Logging full request and response bodies, capturing tokens and personal data.",
+    "Unstructured messages that can't be searched or aggregated.",
+    "No correlation id, so incidents become log archaeology.",
+    "Debug logging left on in production, blowing up cost and drowning signal."
+  ],
+  "followups": [
+    {
+      "q": "A secret was logged. What do you do?",
+      "a": "Rotate the secret immediately, purge or restrict the affected logs, find and fix the code path, and add a redaction rule and test so it can't recur."
+    },
+    {
+      "q": "How do you debug a specific customer's issue without logging personal data?",
+      "a": "Log stable pseudonymous ids (customer id, not name or email), and look up details in the source system with proper access controls."
+    },
+    {
+      "q": "Logs or traces for latency debugging?",
+      "a": "Traces show where time went across services; logs give detail within a span. Link them by trace id."
+    }
+  ],
+  "example": "A lending service logs 'decision_made' with application id, policy version, outcome and reason codes, but not bureau data or income values. A redaction filter masks any field matching card or token patterns, and success logs are sampled at 5% while all errors are kept.",
+  "related": [
+    "trace-request-across-50-services",
+    "design-metrics-actually-tell-me",
+    "design-retention-soft-delete-legal"
+  ],
+  "sources": [
+    {
+      "title": "OWASP: Logging cheat sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+    },
+    {
+      "title": "OpenTelemetry: Logs",
+      "url": "https://opentelemetry.io/docs/concepts/signals/logs/"
+    }
+  ]
+}

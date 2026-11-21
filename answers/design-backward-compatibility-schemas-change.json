@@ -1,0 +1,75 @@
+{
+  "thesis": "Schema changes stay compatible when you add rather than change: new optional fields with defaults, readers that ignore unknown fields and supply defaults for missing ones, and never reusing or repurposing a field. Enforce it with compatibility checks in CI, not good intentions.",
+  "pitch": "Whether it's a database schema, an API payload or a message format, the rules are the same. Add fields as optional with sensible defaults; never remove, rename or change the type of a field that's in use; never reuse a field name or Protobuf field number for something else; and make readers tolerant, ignoring fields they don't know and defaulting fields that are missing. With Protobuf that means reserving retired field numbers; with Avro, giving new fields defaults; with JSON, documenting optionality and not failing on unknown properties. Changing meaning is the subtle failure: a field that switches from dollars to cents breaks consumers silently, so it needs a new name. I'd enforce compatibility with automated checks: schema registry compatibility modes, buf breaking for Protobuf, or OpenAPI diff tools in CI. And for databases, expand-and-contract across releases.",
+  "points": [
+    {
+      "h": "Add optional fields with defaults",
+      "d": "Old writers don't send them, old readers ignore them, new readers default them. Safe in every direction."
+    },
+    {
+      "h": "Never remove or rename in-use fields",
+      "d": "Deprecate first, stop reading, stop writing, then remove after all readers are gone."
+    },
+    {
+      "h": "Never reuse names or field numbers",
+      "d": "In Protobuf, reserve retired field numbers and names. Reusing them makes old data decode as the wrong field."
+    },
+    {
+      "h": "Tolerant readers",
+      "d": "Ignore unknown fields; default missing ones; handle unknown enum values gracefully."
+    },
+    {
+      "h": "Meaning changes need new fields",
+      "d": "Units, formats, time zones and business meaning. Changing them in place passes every schema check and breaks every consumer."
+    },
+    {
+      "h": "Automate compatibility checks",
+      "d": "Registry compatibility modes, buf breaking, OpenAPI diff, and migration linting in CI."
+    },
+    {
+      "h": "Databases: expand and contract",
+      "d": "Additive migration, dual write, backfill, switch reads, drop old later."
+    }
+  ],
+  "decision": "Additive-only evolution as the rule, automated checks as the enforcement, and versioned replacements (new field, new type, new endpoint) when something must truly change.",
+  "numbers": [
+    "Check cost: compatibility checks run in seconds in CI and catch breaking changes before review, far cheaper than a production incident."
+  ],
+  "pitfalls": [
+    "Changing a field's type from int to string because 'it's more flexible'.",
+    "Reusing a Protobuf field number for a new field.",
+    "Strict JSON deserialisers that reject unknown properties.",
+    "Changing semantics without changing the name."
+  ],
+  "followups": [
+    {
+      "q": "How do you make a required field optional, or vice versa?",
+      "a": "Making a required input optional is usually safe for servers; making an optional input required breaks old clients. For outputs, it's the reverse. Think about which side reads it."
+    },
+    {
+      "q": "What's the difference between backward and forward compatibility?",
+      "a": "Backward: new code reads old data. Forward: old code reads new data. Independent deployments need both."
+    },
+    {
+      "q": "How do you clean up deprecated fields eventually?",
+      "a": "Track readers (telemetry, consumer inventory), remove reads, then writes, then the field, reserving its name or number."
+    }
+  ],
+  "example": "A Protobuf message replaced 'amount' (double) with 'amount_minor' (int64). 'amount' was deprecated, still populated for a year, then removed with its field number reserved. buf breaking in CI blocked an attempt to reuse that number six months later.",
+  "related": [
+    "evolve-event-schema-breaking-consumers",
+    "version-public-api-cannot-force",
+    "schema-changes-downtime",
+    "design-backward-compatibility-older-clients"
+  ],
+  "sources": [
+    {
+      "title": "Protocol Buffers documentation: Updating a message type",
+      "url": "https://protobuf.dev/programming-guides/proto3/#updating"
+    },
+    {
+      "title": "Confluent documentation: Schema evolution and compatibility",
+      "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+    }
+  ]
+}

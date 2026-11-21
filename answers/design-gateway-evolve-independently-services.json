@@ -1,0 +1,75 @@
+{
+  "thesis": "Keep the gateway thin and generic: routing, authentication, rate limits, request validation at the edge, and observability, all driven by configuration. No business logic, no knowledge of service internals. Then services and the gateway can change on their own schedules.",
+  "pitch": "A gateway becomes a bottleneck when it accumulates business logic: aggregation for one client, special-case transforms, feature rules. Then every product change needs a gateway change, and one team owns everyone's roadmap. I'd limit it to cross-cutting concerns: TLS termination, authentication and token validation, coarse authorisation, rate limiting and quotas, routing by path and version, request size limits, and consistent logging, metrics and tracing. Routes are declarative configuration, reviewed and deployed independently of gateway code, ideally owned by the service teams for their own paths. Canary and traffic-splitting support lets services roll out new versions behind stable public paths. If clients need aggregation, I'd use a backend-for-frontend owned by the client team rather than putting it in the shared gateway. And the gateway needs its own SLO and failure budget, because it's in front of everything.",
+  "points": [
+    {
+      "h": "Cross-cutting concerns only",
+      "d": "TLS, authentication, rate limits, routing, size limits, CORS, observability. Everything that's the same across services."
+    },
+    {
+      "h": "No business logic",
+      "d": "No aggregation, domain transforms or feature rules. Those belong in services or backends-for-frontend."
+    },
+    {
+      "h": "Declarative, team-owned routes",
+      "d": "Routes as configuration in version control, owned by the teams whose services they point to, validated and deployed without a gateway release."
+    },
+    {
+      "h": "Versioned public paths",
+      "d": "Public paths and versions are stable; the gateway maps them to whichever internal service version serves them, allowing services to move."
+    },
+    {
+      "h": "Traffic management",
+      "d": "Canary releases, weighted routing and shadowing let services ship safely behind unchanged public endpoints."
+    },
+    {
+      "h": "Backends-for-frontend for aggregation",
+      "d": "Mobile and web clients with different needs get their own thin aggregation layer, owned by the client team."
+    },
+    {
+      "h": "Treat the gateway as critical infrastructure",
+      "d": "Own SLO, redundancy across zones, careful config rollout with validation and fast rollback; a bad route config can take down everything."
+    }
+  ],
+  "decision": "One thin edge gateway for cross-cutting concerns; per-client BFFs for aggregation; services own their APIs and route config. Avoid custom code in the gateway unless it's genuinely universal.",
+  "numbers": [
+    "Overhead target: gateway adds low single-digit milliseconds at p99; anything more suggests too much work at the edge."
+  ],
+  "pitfalls": [
+    "Gateway aggregation logic for one client, which every other team then has to work around.",
+    "A central team as the only one allowed to change routes, creating a queue.",
+    "Config pushed globally without validation or canary, turning a typo into an outage.",
+    "Gateway that knows internal service URLs and versions in code."
+  ],
+  "followups": [
+    {
+      "q": "Where does authorisation belong?",
+      "a": "Coarse checks (valid token, scope for this API) at the gateway; fine-grained resource-level authorisation in the service that owns the resource."
+    },
+    {
+      "q": "API gateway or service mesh?",
+      "a": "The gateway handles north-south traffic from clients; a mesh handles east-west traffic between services (mTLS, retries, telemetry). They complement each other."
+    },
+    {
+      "q": "How do you roll out a route change safely?",
+      "a": "Schema validation in CI, a canary to a fraction of traffic or one region, automatic rollback on error-rate increase."
+    }
+  ],
+  "example": "A fintech moved card-specific response shaping out of the gateway into a mobile BFF. Route configs moved into each service's repository; gateway releases dropped from weekly to monthly, while services deployed daily behind unchanged public paths.",
+  "related": [
+    "draw-service-boundaries-lending-platform",
+    "version-public-api-cannot-force",
+    "design-per-tenant-rate-limits",
+    "design-systems-multiple-teams-safely"
+  ],
+  "sources": [
+    {
+      "title": "Sam Newman: Backends for frontends pattern",
+      "url": "https://samnewman.io/patterns/architectural/bff/"
+    },
+    {
+      "title": "microservices.io: API gateway pattern",
+      "url": "https://microservices.io/patterns/apigateway.html"
+    }
+  ]
+}

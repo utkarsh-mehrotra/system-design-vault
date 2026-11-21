@@ -1,0 +1,74 @@
+{
+  "thesis": "Older clients will keep calling for longer than you expect, so build compatibility into the server: a published support window, telemetry on client versions, capability negotiation so clients and servers agree on features, and server-side shims for the oldest supported versions. Know the conditions under which you can finally drop one.",
+  "pitch": "Mobile apps, embedded devices and partner integrations upgrade slowly or never. I'd first set a support policy: which client versions are supported and for how long. Clients send their version and capabilities on every request, which feeds telemetry on how many users are on each version and lets the server tailor responses. Instead of forking endpoints, the server negotiates features: a client that doesn't support a new card type gets a fallback rendering; a client that doesn't know a new payment method doesn't see it offered. For the oldest supported versions, small server-side shims translate responses into shapes they understand. And I'd keep a minimum-supported-version mechanism, a forced upgrade prompt, for security-critical cases, used sparingly. A version can be retired when its usage is below an agreed threshold and the support window has passed.",
+  "points": [
+    {
+      "h": "Support window policy",
+      "d": "For example, support the last N app versions or versions released in the past 18 months. Publish it internally so teams know what they must keep working."
+    },
+    {
+      "h": "Client identification on every request",
+      "d": "App version, platform, SDK version and declared capabilities in headers. Without this you can't measure, negotiate or retire."
+    },
+    {
+      "h": "Capability negotiation",
+      "d": "Clients declare what they can render or handle; servers only send features the client supports, with sensible fallbacks."
+    },
+    {
+      "h": "Server-side shims",
+      "d": "Small adapters that transform responses for specific old versions, kept separate from core logic and deleted when the version is retired."
+    },
+    {
+      "h": "Never repurpose fields or values",
+      "d": "Old clients interpret them the old way. Add new fields instead."
+    },
+    {
+      "h": "Minimum version enforcement",
+      "d": "A forced upgrade path for security or legal reasons, with clear user messaging. Using it for convenience burns user trust."
+    },
+    {
+      "h": "Retirement criteria",
+      "d": "Usage below a threshold (for example under 0.5% of active users) and the support window elapsed."
+    }
+  ],
+  "decision": "Telemetry plus capability negotiation as the default mechanism; shims for the oldest versions; forced upgrades only for security. Review the supported-version list quarterly.",
+  "numbers": [
+    "Retirement example: drop a version when it's below 0.5% of weekly active users and older than 18 months, after in-app prompts for 60 days."
+  ],
+  "pitfalls": [
+    "Server changes tested only against the latest client.",
+    "No version header, so you can't tell which clients break.",
+    "Shims accumulating forever because nobody tracks retirement.",
+    "Forced upgrades for minor features, frustrating users."
+  ],
+  "followups": [
+    {
+      "q": "How do you test against old clients?",
+      "a": "Keep recorded request and response contracts per supported version and run them in CI against the new server; also keep old app builds for manual or automated smoke tests."
+    },
+    {
+      "q": "What if an old client has a bug that misbehaves with new data?",
+      "a": "Detect the version and avoid sending the triggering data, or use a shim to sanitise it, until the version is retired."
+    },
+    {
+      "q": "How is this different from API versioning?",
+      "a": "Versioning creates explicit API versions; this handles many client versions within one API version through negotiation and shims, which suits apps with continuous releases."
+    }
+  ],
+  "example": "A lending app sends app-version and a capabilities header. When a new 'instant payout' option launched, only clients declaring that capability saw it; older ones still saw standard bank transfer. A shim for app versions older than 4.0 converted new date formats until those versions dropped below 0.3% of users.",
+  "related": [
+    "version-public-api-cannot-force",
+    "design-backward-compatibility-schemas-change",
+    "deprecate-endpoint-safely"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Tolerant reader",
+      "url": "https://martinfowler.com/bliki/TolerantReader.html"
+    },
+    {
+      "title": "Stripe blog: API versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    }
+  ]
+}

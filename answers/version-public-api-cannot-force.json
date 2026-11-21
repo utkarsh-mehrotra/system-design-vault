@@ -1,0 +1,75 @@
+{
+  "thesis": "Make additive change the default so most changes need no new version at all, reserve explicit versions for genuinely breaking changes, and back every version with a published support policy, per-version usage telemetry and contract tests. You can't force clients, so make staying compatible cheap and moving forward easy.",
+  "pitch": "Most API evolution should be additive: new optional fields, new endpoints, new optional parameters, with clients required to ignore unknown fields, so nothing breaks and nothing needs a version bump. For breaking changes, like removing or renaming fields, changing types or semantics, or changing error behaviour, I'd introduce an explicit version, either in the path like /v2 or in a header or dated version like Stripe's, and keep the old one working. Each version has a published support policy with dates. I'd measure usage per version and per client, so deprecation decisions are data-driven and I can contact the clients still on old versions. Contract tests, from consumer-driven contracts or recorded real traffic, catch accidental breaks before release. Internally, translating old versions into the current model at the edge keeps the core code from forking per version.",
+  "points": [
+    {
+      "h": "Additive by default",
+      "d": "New optional fields and endpoints don't break well-behaved clients. Document that clients must ignore unknown fields and tolerate new enum values."
+    },
+    {
+      "h": "Define what's breaking",
+      "d": "Removing or renaming fields, changing types or formats, making optional inputs required, changing defaults, semantics or error codes. Publish the list."
+    },
+    {
+      "h": "Choose a versioning scheme",
+      "d": "Path versions (/v2) are visible and simple; header or date-based versions (pin each client to the version at signup) allow finer-grained evolution. Be consistent."
+    },
+    {
+      "h": "Translate at the edge",
+      "d": "Keep one current internal model; adapters convert old request and response shapes. This avoids parallel codebases per version."
+    },
+    {
+      "h": "Support policy with dates",
+      "d": "How long each version is supported after its successor ships, communicated in docs and changelogs."
+    },
+    {
+      "h": "Per-version telemetry",
+      "d": "Track calls by version and client id. You can't deprecate safely without knowing who still depends on what."
+    },
+    {
+      "h": "Contract tests",
+      "d": "Consumer-driven contracts or tests replaying real requests verify that changes don't break existing clients."
+    }
+  ],
+  "decision": "Additive changes with no version bump whenever possible. A new version only for unavoidable breaking changes, with translation adapters, a dated support window, and telemetry-driven deprecation.",
+  "numbers": [
+    "Support window example: a minimum of 12 months after a successor is available for external APIs, longer for mobile apps with slow upgrade curves."
+  ],
+  "pitfalls": [
+    "Bumping the version for every change, multiplying versions to support.",
+    "Silent semantic changes within a version (same field, different meaning).",
+    "No per-client usage data, so deprecation is guesswork.",
+    "Forking the codebase per version instead of translating at the edge."
+  ],
+  "followups": [
+    {
+      "q": "Path versioning or header versioning?",
+      "a": "Path is easier to see, cache and route; header or date-based versioning suits APIs with frequent small changes and lets each client pin. Either works if applied consistently."
+    },
+    {
+      "q": "How do you handle mobile apps that never update?",
+      "a": "Long support windows, server-side translation for old versions, minimum-version enforcement only for security-critical cases, with in-app upgrade prompts."
+    },
+    {
+      "q": "How do you change an enum safely?",
+      "a": "Add values as a documented possibility; clients must handle unknown values. Never repurpose an existing value."
+    }
+  ],
+  "example": "A payments API pins each integration to the API version current at signup. Breaking changes ship as new dated versions; a translation layer converts responses for older versions. Usage dashboards show which merchants are on each version, and the team contacts the long tail before retiring anything.",
+  "related": [
+    "deprecate-endpoint-safely",
+    "design-backward-compatibility-older-clients",
+    "handle-breaking-change-scenarios-minimal",
+    "evolve-event-schema-breaking-consumers"
+  ],
+  "sources": [
+    {
+      "title": "Stripe blog: APIs as infrastructure, future-proofing Stripe with versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    },
+    {
+      "title": "Martin Fowler: Tolerant reader",
+      "url": "https://martinfowler.com/bliki/TolerantReader.html"
+    }
+  ]
+}

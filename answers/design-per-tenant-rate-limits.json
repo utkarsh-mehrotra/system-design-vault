@@ -1,0 +1,76 @@
+{
+  "thesis": "Use token buckets per tenant: a sustained rate plus a burst allowance, so short spikes from good clients pass while sustained abuse is limited. Keep counters in a fast shared store with local approximation to avoid a round trip per request, return clear 429s with Retry-After, and tier quotas by plan.",
+  "pitch": "Fixed-window limits punish bursty clients: a client that sends 100 requests in one second and nothing for the rest of the minute looks abusive. A token bucket fits better: tokens refill at the sustained rate, the bucket holds a burst capacity, and each request takes a token. Good clients with occasional bursts never notice; a client sending at a sustained high rate drains the bucket and gets limited. I'd key buckets by tenant and optionally by endpoint class, since writes or expensive endpoints get tighter limits. For a distributed fleet, the state lives in Redis or similar, updated atomically with a script, but calling Redis on every request adds latency, so I'd have each instance hold a local share of the tenant's budget and sync periodically, accepting small overshoot. Responses include 429 with Retry-After and rate-limit headers showing remaining quota. Limits come from the tenant's plan, and I'd add a global concurrency or load-shedding layer above it, because per-tenant limits don't protect you if every tenant bursts at once.",
+  "points": [
+    {
+      "h": "Token bucket semantics",
+      "d": "Refill rate = sustained limit; bucket size = burst allowance. A request consumes tokens; an empty bucket means 429."
+    },
+    {
+      "h": "Key by tenant and cost class",
+      "d": "Separate buckets for cheap reads and expensive writes or reports, or weight requests by cost."
+    },
+    {
+      "h": "Shared counters",
+      "d": "Atomic token updates in Redis (Lua scripts) give a fleet-wide view. Plan for Redis being unavailable: fail open with local limits, usually."
+    },
+    {
+      "h": "Local approximation",
+      "d": "Each instance gets a slice of the tenant's budget or syncs counts every few hundred milliseconds. Cuts latency and load on the store, at the cost of slight overshoot."
+    },
+    {
+      "h": "Clear client feedback",
+      "d": "429 with Retry-After, plus headers for limit, remaining and reset. Document the limits so clients can design for them."
+    },
+    {
+      "h": "Tiered quotas",
+      "d": "Limits by plan, with overrides for specific tenants and a process for temporary increases."
+    },
+    {
+      "h": "A global safety layer",
+      "d": "Per-tenant limits don't cap total load. Keep service-wide admission control and load shedding too."
+    }
+  ],
+  "decision": "Token bucket per tenant with burst headroom for API rate limits; concurrency limits for long-running or expensive operations; global load shedding underneath. Fail open on limiter outages for most APIs, closed for abuse-prone endpoints such as login.",
+  "numbers": [
+    "Example plan: 100 requests/s sustained with a burst of 500. A client sending 400 requests in one second after being idle passes; sustained 200 requests/s drains the bucket within a few seconds and is limited to 100/s.",
+    "Local approximation: with 20 instances syncing every 250 ms, worst-case overshoot is roughly the tokens consumed in one sync interval across instances."
+  ],
+  "pitfalls": [
+    "Fixed one-minute windows allowing double the limit around window boundaries and punishing bursts.",
+    "Per-IP limits for B2B APIs where many tenants share NAT gateways, or one tenant uses many IPs.",
+    "A Redis round trip on every request in the hot path.",
+    "429s without Retry-After, causing clients to retry immediately."
+  ],
+  "followups": [
+    {
+      "q": "Token bucket or sliding window?",
+      "a": "Sliding window counters are good for 'N per period' quotas (daily limits); token bucket is better for rate plus burst behaviour. Many systems use both: a token bucket for rate, a daily quota for volume."
+    },
+    {
+      "q": "What happens when Redis is down?",
+      "a": "Fall back to per-instance local limits (limit divided by instance count) so you neither block everyone nor remove protection entirely."
+    },
+    {
+      "q": "How do you rate-limit fairly when overloaded?",
+      "a": "Combine per-tenant limits with weighted fair queueing or shedding by tenant share, so a big tenant can't take all remaining capacity."
+    }
+  ],
+  "example": "A B2B API moved from 6,000 requests per minute fixed windows to a token bucket of 100/s with a 1,000-token burst. Batch jobs that sent spikes at the top of each hour stopped getting 429s, while a misbehaving client looping at 400/s was held to 100/s.",
+  "related": [
+    "design-admission-control-service-stays",
+    "handle-multi-tenant-data-isolation",
+    "design-gateway-evolve-independently-services",
+    "retries-amplifying-outage-design-retries"
+  ],
+  "sources": [
+    {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    },
+    {
+      "title": "RFC 6585: Additional HTTP status codes (429 Too Many Requests)",
+      "url": "https://www.rfc-editor.org/rfc/rfc6585"
+    }
+  ]
+}

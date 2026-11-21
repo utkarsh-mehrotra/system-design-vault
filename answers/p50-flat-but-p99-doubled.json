@@ -1,0 +1,80 @@
+{
+  "thesis": "A flat median with a rising tail means most requests are fine and a minority are hitting something slow. Narrow down who that minority is (which instance, endpoint, tenant, dependency or shard) by comparing percentiles across dimensions, then jump from the metric to example traces to find the slow span.",
+  "pitch": "I'd start by asking what changed when p99 moved: a deploy, config change, traffic shift, or new tenant. Then slice: p99 by instance, zone, endpoint, tenant, client version and downstream dependency. If one instance is slow, think noisy neighbour, a bad host, or garbage collection on that JVM. If one endpoint, think a new query or a payload-size change. If one tenant, think a large account hitting a slow path. If one dependency, think its own tail or a hot shard behind it. Common tail causes: queueing when utilisation creeps up, since latency rises sharply as utilisation approaches saturation; GC pauses; lock contention; retries, where a timed-out first attempt plus a retry lands in the tail; cache misses for a subset of keys; and fan-out, where waiting on many calls makes the slowest one dominate. Exemplars on the latency histogram link straight to slow traces; I'd look at several and see which span grew.",
+  "points": [
+    {
+      "h": "What changed?",
+      "d": "Line up the start of the regression with deploys, config changes, traffic patterns, dependency changes and infrastructure events."
+    },
+    {
+      "h": "Slice by dimension",
+      "d": "Compare p99 per instance, zone, endpoint, tenant, payload size and dependency. The dimension where one value stands out points to the cause."
+    },
+    {
+      "h": "Queueing near saturation",
+      "d": "As utilisation rises, waiting time grows sharply even if the median service time is unchanged. Check pool and queue wait times."
+    },
+    {
+      "h": "GC and runtime pauses",
+      "d": "Stop-the-world pauses hit a fraction of requests. Check GC logs and pause-time metrics on slow instances."
+    },
+    {
+      "h": "Retries and timeouts",
+      "d": "Requests that time out once and succeed on retry land squarely in the tail. Count retries per request."
+    },
+    {
+      "h": "Partial cache misses and hot shards",
+      "d": "A subset of keys missing cache or living on a hot shard produces a slow minority."
+    },
+    {
+      "h": "Fan-out amplification",
+      "d": "If a request waits on 20 calls, its latency is the max of 20, so each call's p99 becomes the request's common case."
+    },
+    {
+      "h": "Exemplars to traces",
+      "d": "Click from the histogram to example slow traces and compare their spans with normal traces to see which step grew."
+    }
+  ],
+  "decision": "Diagnose by elimination with dimensional slicing and traces before tuning anything. Fixes depend on cause: capacity or concurrency limits for queueing, GC tuning, query fixes, reduced fan-out, or hedged requests for idempotent reads as a mitigation.",
+  "numbers": [
+    "Fan-out math: if each backend call has a 1% chance of being slow, a request that waits on 100 calls has 1 − 0.99^100 ≈ 63% chance of hitting at least one slow call.",
+    "Queueing intuition: in simple queueing models, average wait grows roughly in proportion to u / (1 − u); going from 70% to 90% utilisation roughly quadruples it."
+  ],
+  "pitfalls": [
+    "Looking only at averages or medians.",
+    "Averaging p99 across instances, hiding the one slow host.",
+    "Adding hedged requests or bigger timeouts without finding the cause.",
+    "Ignoring client-side retries that inflate observed latency."
+  ],
+  "followups": [
+    {
+      "q": "Hedged requests: fix or mask?",
+      "a": "A mitigation. Sending a second request after the p95 delay cuts the tail for idempotent reads at modest extra load, but the underlying slow path is still there."
+    },
+    {
+      "q": "p99 doubled only for one tenant. What next?",
+      "a": "Look at that tenant's data shape (much larger result sets, more items, a hot partition) and their request pattern; consider limits or dedicated capacity."
+    },
+    {
+      "q": "How do you prevent tail regressions?",
+      "a": "Track p99 per endpoint as part of SLOs, include tail latency in load-test gates, and alert on p99 regressions after deploys."
+    }
+  ],
+  "example": "Checkout p99 rose from 400 to 900 ms with flat p50 after a deploy. Slicing showed it only on instances in one zone, where a new sidecar version added connection setup on 2% of calls. Exemplar traces pointed straight to the sidecar span; pinning the old version fixed it.",
+  "related": [
+    "trace-request-across-50-services",
+    "design-metrics-actually-tell-me",
+    "walk-one-request-dns-database",
+    "size-system-50-000-requests"
+  ],
+  "sources": [
+    {
+      "title": "Jeff Dean and Luiz Barroso: The tail at scale",
+      "url": "https://research.google/pubs/the-tail-at-scale/"
+    },
+    {
+      "title": "Brendan Gregg: The USE method",
+      "url": "https://www.brendangregg.com/usemethod.html"
+    }
+  ]
+}

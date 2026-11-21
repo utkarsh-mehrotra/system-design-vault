@@ -1,0 +1,75 @@
+{
+  "thesis": "Measure each service the way users experience it (rate, errors, duration) and each resource by how close it is to its limit (utilisation, saturation, errors), with histograms rather than averages, broken down by dependency, and alongside a few business metrics. Health is 'users succeed quickly and nothing is near its limit'.",
+  "pitch": "I'd combine two well-known methods. For every service and endpoint, the RED method: request rate, error rate, and duration as a histogram so you can read p50, p95 and p99. For every resource, like CPU, memory, connection pools, thread pools, queues and disks, the USE method: utilisation, saturation such as queue length or waiting, and errors. Saturation is the early warning that averages hide. Then per-dependency metrics: rate, errors and latency for every outbound call, so you can see which dependency is slow without guessing. Then business metrics, such as applications submitted, payments completed and sign-ups, because they catch problems that technical metrics miss, like a broken button that produces no errors at all. I'd keep label cardinality under control and put deploy markers on every graph.",
+  "points": [
+    {
+      "h": "RED for services",
+      "d": "Rate, Errors, Duration per endpoint. Duration as histograms, never only averages; percentiles reveal tail behaviour."
+    },
+    {
+      "h": "USE for resources",
+      "d": "Utilisation, Saturation, Errors for CPU, memory, disks, network, pools and queues. Saturation (waiting work) predicts trouble before utilisation hits 100%."
+    },
+    {
+      "h": "Per-dependency client metrics",
+      "d": "Each outbound call: rate, errors, latency, timeouts and circuit-breaker state. Tells you who's slow during an incident."
+    },
+    {
+      "h": "Business metrics",
+      "d": "Orders per minute, sign-ups, conversion. A drop with no technical errors often means a functional bug or upstream problem."
+    },
+    {
+      "h": "Histograms and percentiles",
+      "d": "Averages hide the tail. Use histograms so percentiles can be computed and aggregated correctly."
+    },
+    {
+      "h": "Control cardinality",
+      "d": "Labels like endpoint, status class, region and version are fine; user ids and raw URLs are not. High cardinality explodes cost and slows queries."
+    },
+    {
+      "h": "Context on graphs",
+      "d": "Deploy and config-change markers, and SLO thresholds drawn on charts."
+    }
+  ],
+  "decision": "RED plus USE plus per-dependency plus a handful of business metrics for every service, using shared libraries so naming and labels are consistent. SLOs are built on the RED metrics of key journeys.",
+  "numbers": [
+    "Cardinality math: a metric with labels endpoint (50) × status (5) × region (3) × version (2) = 1,500 series; adding a user_id label with 1 million users makes it 1.5 billion."
+  ],
+  "pitfalls": [
+    "Average latency as the main metric.",
+    "Only resource metrics, so you know CPU is high but not whether users are affected.",
+    "Unbounded label values (ids, full URLs) causing cost explosions.",
+    "No business metrics, missing silent functional failures."
+  ],
+  "followups": [
+    {
+      "q": "Why can't you average percentiles across instances?",
+      "a": "Percentiles aren't additive; averaging per-instance p99s gives a meaningless number. Aggregate histograms, then compute percentiles."
+    },
+    {
+      "q": "What's a saturation metric for a thread pool?",
+      "a": "Queue length or time tasks spend waiting for a thread, plus active threads versus maximum."
+    },
+    {
+      "q": "How do you spot a functional regression with metrics?",
+      "a": "Business metrics compared with the same time last week; a drop in completions without a rise in errors suggests a broken flow."
+    }
+  ],
+  "example": "Checkout errors were flat but completed orders dropped 30% after a deploy. A business-metric alert caught it: a front-end change hid the pay button on one browser. RED metrics alone would never have shown it.",
+  "related": [
+    "alert-user-pain-not-noise",
+    "design-dashboards-help-during-incidents",
+    "define-slos-lending-platform-derive",
+    "measure-whether-cache-actually-helping"
+  ],
+  "sources": [
+    {
+      "title": "Brendan Gregg: The USE method",
+      "url": "https://www.brendangregg.com/usemethod.html"
+    },
+    {
+      "title": "Grafana: The RED method",
+      "url": "https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "thesis": "Deprecation is a process driven by data: find every real caller from logs, announce with a date, signal in-band with Deprecation and Sunset headers, run brownouts to flush out stragglers, and remove only when traffic is gone or the date has passed with everyone informed.",
+  "pitch": "I'd start with telemetry: who actually calls this endpoint, how often, and from which client versions, from access logs keyed by API key or client id. Then announce: docs, changelog, and direct contact with known callers, with a sunset date and a migration guide. In-band signals help automated clients notice: a Deprecation header and a Sunset header with the date, defined in RFC 8594, plus warnings in SDKs. Then brownouts: scheduled short windows where the endpoint returns an error, first in staging, then briefly in production, which reveals callers who ignored the emails. Track traffic weekly; chase the remaining callers individually. Remove after the date if traffic is at or near zero; if a critical caller remains, negotiate an extension rather than break them, but keep the pressure on. Afterwards, return a clear 410 Gone with a pointer to the replacement rather than a confusing 404.",
+  "points": [
+    {
+      "h": "Find real callers",
+      "d": "Access logs by client id, API key, user agent and version. Unknown callers are the biggest risk; make every client identifiable before you need to deprecate."
+    },
+    {
+      "h": "Announce with a date and a path",
+      "d": "Docs, changelog, email to owners of active keys, and a migration guide with examples for the replacement."
+    },
+    {
+      "h": "In-band signals",
+      "d": "Deprecation and Sunset (RFC 8594) headers, plus a Link to the migration docs. SDKs log warnings when deprecated calls are made."
+    },
+    {
+      "h": "Brownouts",
+      "d": "Planned short failure windows (minutes, then hours) announced in advance. Callers who missed the emails discover the dependency while there's still time."
+    },
+    {
+      "h": "Track and chase",
+      "d": "Weekly traffic reports; personal outreach to the remaining callers, sorted by volume and importance."
+    },
+    {
+      "h": "Remove with a clear response",
+      "d": "After the sunset date, return 410 Gone with a message pointing to the replacement. Keep monitoring for surprise callers."
+    }
+  ],
+  "decision": "Every deprecation follows the same playbook with dates set by caller population: weeks for internal endpoints with known callers, months or more for public APIs and mobile clients.",
+  "numbers": [
+    "Example timeline for a public endpoint: announce at T, Deprecation header from T, brownouts at T+3 and T+5 months, removal at T+6 months, extended only for documented exceptions."
+  ],
+  "pitfalls": [
+    "Deprecating based on assumptions about who uses an endpoint.",
+    "Announcing once and then removing on the date without checking traffic.",
+    "Anonymous clients that can't be contacted.",
+    "Removing the endpoint and returning 404, leaving callers confused about why."
+  ],
+  "followups": [
+    {
+      "q": "A large customer can't migrate by the date. What do you do?",
+      "a": "Agree an extension for their key only, with a firm new date and engineering help, while removing access for everyone else as planned."
+    },
+    {
+      "q": "How do you deprecate fields rather than endpoints?",
+      "a": "Same steps: telemetry on field usage (harder; requires logging which fields clients read or send), docs, SDK warnings, and removal in a new version."
+    },
+    {
+      "q": "Internal endpoints?",
+      "a": "Service-to-service calls are easier to find via tracing; the same process applies, faster, and owners of calling services get tickets."
+    }
+  ],
+  "example": "Retiring /v1/transactions: logs showed 14 active clients. After emails, headers and two one-hour brownouts, 12 migrated; the remaining two were contacted directly and moved within a month. The endpoint now returns 410 with a link to /v2.",
+  "related": [
+    "version-public-api-cannot-force",
+    "handle-breaking-change-scenarios-minimal",
+    "design-backward-compatibility-older-clients"
+  ],
+  "sources": [
+    {
+      "title": "RFC 8594: The Sunset HTTP header field",
+      "url": "https://www.rfc-editor.org/rfc/rfc8594"
+    },
+    {
+      "title": "IETF: The Deprecation HTTP header field (RFC 9745)",
+      "url": "https://www.rfc-editor.org/rfc/rfc9745"
+    }
+  ]
+}

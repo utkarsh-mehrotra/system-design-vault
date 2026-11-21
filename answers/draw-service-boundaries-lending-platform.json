@@ -1,0 +1,75 @@
+{
+  "thesis": "Draw boundaries around data ownership and rate of change, not around nouns. Origination, underwriting, servicing and collections are good candidates because each owns distinct data and decisions and changes for different reasons, but the loan itself has one owner for its state machine, and everyone else reacts to its events.",
+  "pitch": "I'd map each area to the decisions it makes and the data it must own. Origination owns the application journey: applicant data, documents, consent, offers. Underwriting owns the credit decision: bureau data, models, policy rules, and the decision record, which must be auditable and reproducible. Servicing owns the active loan: the repayment schedule, balances, payments and the loan's lifecycle state machine. Collections owns arrears handling: contact strategies, promises to pay, hardship plans. The critical question is where the loan's state lives: I'd put it in servicing from disbursal onward, with origination owning it before that, so there's one writer at each stage. Other services consume events like LoanDisbursed, PaymentMissed and LoanSettled and keep their own read models. Some data is copied by event, such as collections holding a local view of balances; some is queried live, like the current payoff amount at the moment a customer pays. And I'd keep the ledger, the money truth, as its own component.",
+  "points": [
+    {
+      "h": "Boundaries by ownership and change",
+      "d": "A good boundary owns its data, makes its own decisions, and changes for its own reasons (regulation, models, operations). If two areas always change together, they're one service."
+    },
+    {
+      "h": "Origination",
+      "d": "Application flow, applicant data, KYC and documents, offers and acceptance. High change rate driven by product and marketing."
+    },
+    {
+      "h": "Underwriting",
+      "d": "Decision engine: data retrieval (bureaus, bank data), models, policy rules. Produces an auditable decision record with inputs and versions. Changes with risk policy."
+    },
+    {
+      "h": "Servicing",
+      "d": "Owns the loan after disbursal: schedule, interest, payments, fees, lifecycle state (active, in arrears, settled, written off). Changes slowly and must be correct."
+    },
+    {
+      "h": "Collections",
+      "d": "Strategies and workflows for arrears: contact cadence, promises to pay, hardship and forbearance. Reads loan state; owns its own case data."
+    },
+    {
+      "h": "The ledger is separate",
+      "d": "Double-entry ledger as the money source of truth, used by servicing and finance. Keeps accounting invariants in one place."
+    },
+    {
+      "h": "Copy by event vs query live",
+      "d": "Copy data that's needed often and can lag (collections' view of arrears). Query live where correctness at the moment matters (payoff amount at payment time)."
+    }
+  ],
+  "decision": "One owner per piece of data and per state machine at each lifecycle stage, events for everything others need to know, synchronous queries only where freshness is required. Start with these as modules in one deployable if the team is small; split when ownership and deployment needs diverge.",
+  "numbers": [
+    "Sanity check: if a typical feature touches more than two of these services, the boundaries are probably wrong or too fine."
+  ],
+  "pitfalls": [
+    "A shared 'loan' table written by several services.",
+    "Boundaries by entity (customer service, loan service, payment service) that force every feature to change several services.",
+    "Underwriting decisions without stored inputs and model versions, which breaks auditability.",
+    "Collections calling servicing synchronously for every case view, coupling availability."
+  ],
+  "followups": [
+    {
+      "q": "Who owns the customer?",
+      "a": "Usually a separate customer or identity service owns core identity and contact details; each domain keeps the customer data relevant to it, referenced by customer id."
+    },
+    {
+      "q": "How does a hardship plan in collections change the repayment schedule?",
+      "a": "Collections requests a schedule change through servicing's API or a command; servicing owns and applies it, then emits ScheduleChanged."
+    },
+    {
+      "q": "How do you keep underwriting reproducible?",
+      "a": "Store the decision with all inputs (bureau responses, features), the model and policy version, and the outcome, so it can be replayed for audit or disputes."
+    }
+  ],
+  "example": "LoanDisbursed is emitted by servicing when funds are sent. Collections subscribes to PaymentMissed to open cases, while finance consumes ledger postings. A customer paying early calls servicing synchronously for an exact payoff amount, because a stale copy could mis-settle the loan.",
+  "related": [
+    "splitting-monolith-pay-itself",
+    "design-gateway-evolve-independently-services",
+    "eventual-consistency-acceptable-payments-flow",
+    "replace-two-phase-commit-across"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Bounded context",
+      "url": "https://martinfowler.com/bliki/BoundedContext.html"
+    },
+    {
+      "title": "Team Topologies: Key concepts",
+      "url": "https://teamtopologies.com/key-concepts"
+    }
+  ]
+}

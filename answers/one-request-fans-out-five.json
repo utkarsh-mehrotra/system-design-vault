@@ -1,0 +1,75 @@
+{
+  "thesis": "Classify each call as required or optional before you build the endpoint. If a required call fails, fail the request clearly (or compensate if it wrote something); if optional calls fail, return a degraded response with markers saying what's missing. Per-call timeouts make sure the slowest optional call never holds the response hostage.",
+  "pitch": "I'd decide in advance which of the five calls the response can't exist without and which are enrichments. Say a product page needs product details and price (required) and adds reviews, recommendations and stock badges (optional). Calls run in parallel with individual timeouts inside the overall deadline. If an optional call fails or times out, I return the response without that section and mark it, for example a field saying reviews are unavailable, so clients render a placeholder instead of guessing. If a required call fails, the request fails with a clear error, but only after retrying idempotent reads within budget, maybe serving a cached copy if that's acceptable. If the fan-out includes writes, a partial failure leaves some steps done, so the operation needs compensation or should be a saga with an idempotency key so the client can retry safely. And I'd measure degraded responses as a metric, because a feature silently degraded for a week is an incident nobody noticed.",
+  "points": [
+    {
+      "h": "Required vs optional, decided up front",
+      "d": "Document per endpoint which dependencies are required. This drives timeouts, error handling and client expectations."
+    },
+    {
+      "h": "Parallel calls with per-call timeouts",
+      "d": "Independent calls run concurrently; each has a timeout below the overall deadline. Optional calls get tighter timeouts."
+    },
+    {
+      "h": "Degraded responses with markers",
+      "d": "Return what you have and say what's missing (a 'partial' flag or per-section status) so clients render accordingly."
+    },
+    {
+      "h": "Fallbacks for required data",
+      "d": "Cached or stale data, if acceptable, can turn a failure into a degraded success. Otherwise fail clearly."
+    },
+    {
+      "h": "Partial writes need compensation",
+      "d": "If some calls wrote state, failing the request leaves inconsistency. Use idempotency keys, sagas or compensations so retries and failures converge."
+    },
+    {
+      "h": "Status codes",
+      "d": "Success with partial content flagged in the body is common for reads; avoid returning 500 when the core data is present. Fail with 5xx or 503 when required data is missing."
+    },
+    {
+      "h": "Observe degradation",
+      "d": "Count degraded responses per dependency and alert on sustained degradation."
+    }
+  ],
+  "decision": "Reads: degrade on optional failures, fail on required failures after bounded retries or cache fallback. Writes: avoid multi-service fan-out in one request where possible; otherwise saga plus idempotency key and a clear pending or failed status.",
+  "numbers": [
+    "Budget example: 300 ms overall; required calls 200 ms timeout; optional calls 100 ms; response assembled by 250 ms with whatever arrived."
+  ],
+  "pitfalls": [
+    "Waiting for every call, so the slowest optional service sets the response time.",
+    "Returning 500 because one widget failed.",
+    "Silent partial responses that clients interpret as 'no reviews exist'.",
+    "Fan-out writes without idempotency, so client retries duplicate the steps that succeeded."
+  ],
+  "followups": [
+    {
+      "q": "Two required services failed. What do you return?",
+      "a": "A clear error (503 if transient, with Retry-After), never a misleading partial success. Log which dependencies failed for debugging."
+    },
+    {
+      "q": "How should clients handle partial responses?",
+      "a": "Render available sections and placeholders for missing ones; optionally retry the missing section separately."
+    },
+    {
+      "q": "GraphQL makes this easier?",
+      "a": "GraphQL returns data plus an errors array per field, which models partial failure naturally, but you still need timeouts and required/optional decisions in resolvers."
+    }
+  ],
+  "example": "A loan dashboard calls loan details and balance (required) plus offers, documents and rewards (optional). Rewards times out; the response includes loans and balances, omits rewards, and sets rewards.status = 'unavailable'. The app shows 'Rewards temporarily unavailable'.",
+  "related": [
+    "design-graceful-degradation-instead-hard",
+    "choose-size-circuit-breakers-bulkheads",
+    "replace-two-phase-commit-across",
+    "size-system-50-000-requests"
+  ],
+  "sources": [
+    {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    },
+    {
+      "title": "Jeff Dean and Luiz Barroso: The tail at scale",
+      "url": "https://research.google/pubs/the-tail-at-scale/"
+    }
+  ]
+}

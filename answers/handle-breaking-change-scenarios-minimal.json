@@ -1,0 +1,75 @@
+{
+  "thesis": "When a breaking change is unavoidable, run old and new side by side, migrate clients with tooling and dates, measure who still uses the old path, and keep a rollback during cutover. The disruption comes from surprises, so remove them.",
+  "pitch": "I'd first confirm the change really must break, because often an additive alternative exists. If it must, I'd ship the new behaviour alongside the old: a new endpoint, version or field, with the old one unchanged. Then make migration easy: a guide with before-and-after examples, updated SDKs, maybe a compatibility mode or automated codemod for SDK users. Communicate the timeline with dates. Track usage of the old path per client, and contact heavy users directly. During cutover, move traffic gradually, for example by client cohort or behind a flag, and keep the ability to switch back quickly. Only remove the old path when usage is near zero and the date has passed. For internal breaking changes, the same applies but faster: change consumers first if possible, or expand-and-contract so both shapes work during the transition.",
+  "points": [
+    {
+      "h": "Challenge the need",
+      "d": "Can it be additive (new field, new endpoint) instead? Many 'breaking' changes are really naming preferences."
+    },
+    {
+      "h": "Run old and new in parallel",
+      "d": "New version or endpoint alongside the old. Both work against the same underlying data and logic where possible."
+    },
+    {
+      "h": "Make migration cheap",
+      "d": "Migration guides, SDK updates with deprecation warnings, examples, test environments, and help for large customers."
+    },
+    {
+      "h": "Dates and communication",
+      "d": "Announce the timeline, repeat it in-band (headers), and send reminders as dates approach."
+    },
+    {
+      "h": "Measure old-path usage",
+      "d": "Dashboards by client; outreach sorted by impact."
+    },
+    {
+      "h": "Gradual cutover with rollback",
+      "d": "Shift clients or traffic in cohorts, keep the old path warm, and have a switch to revert if the new path misbehaves."
+    },
+    {
+      "h": "Internal changes: expand and contract",
+      "d": "Producers support both shapes; consumers migrate; then the old shape is removed."
+    }
+  ],
+  "decision": "Breaking changes are rare, scheduled events with parallel running, tooling and telemetry. Internal changes use expand-and-contract; external changes use versions with long overlap.",
+  "numbers": [
+    "Overlap example: 6–12 months of parallel running for external APIs, a few weeks for internal services with known consumers."
+  ],
+  "pitfalls": [
+    "Big-bang switch with no parallel period.",
+    "Underestimating client effort; a 'small' change can mean a mobile release cycle for them.",
+    "No rollback path during cutover.",
+    "Leaving the old path running indefinitely because nobody owns removal."
+  ],
+  "followups": [
+    {
+      "q": "How do you handle a security fix that requires a breaking change quickly?",
+      "a": "Shorten timelines, communicate urgently, provide a mitigation in the old path if possible, and enforce on a date with direct outreach to affected clients."
+    },
+    {
+      "q": "How do you share logic between old and new paths?",
+      "a": "One internal implementation with adapters for each external shape, so fixes apply to both."
+    },
+    {
+      "q": "How do you know cutover is safe?",
+      "a": "Error rates and business metrics for migrated cohorts compared with the old path, plus contract tests."
+    }
+  ],
+  "example": "Changing money amounts from decimal strings to integer minor units: v2 shipped with the new format, v1 kept working via an adapter, SDKs added conversion helpers, and usage dashboards drove outreach. v1 was removed 9 months later after traffic fell to zero.",
+  "related": [
+    "version-public-api-cannot-force",
+    "deprecate-endpoint-safely",
+    "plan-rollback-release-has-already",
+    "evolve-event-schema-breaking-consumers"
+  ],
+  "sources": [
+    {
+      "title": "Martin Fowler: Parallel change (expand and contract)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    },
+    {
+      "title": "Stripe blog: API versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    }
+  ]
+}

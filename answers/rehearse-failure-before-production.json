@@ -1,0 +1,75 @@
+{
+  "thesis": "Run failure deliberately, with a hypothesis and a stop condition: inject dependency faults, kill instances and zones, restore from backup, and run game days where people practise the response. Start in staging, move to production in small, controlled steps, and fix what you find.",
+  "pitch": "I'd treat failure rehearsal as experiments. Each one starts with a hypothesis, like 'if the recommendation service returns errors, checkout success stays above 99.5%', a blast radius such as one zone or 1% of traffic, and a stop condition such as an SLO burn threshold, with a one-click abort. Types: dependency fault injection, adding latency or errors to calls; infrastructure failure, killing instances, failing a zone, failing over a database; data drills, restoring a backup to a clean environment and verifying it; and game days, where a team responds to a simulated incident using real dashboards and runbooks, testing people and process as well as systems. I'd start in staging, then run small production experiments during business hours with the owning team present, and expand as confidence grows. Every finding becomes a tracked fix, and successful experiments can be automated to run continuously.",
+  "points": [
+    {
+      "h": "Hypothesis first",
+      "d": "State expected behaviour in terms of user-facing metrics. An experiment without a hypothesis is just breaking things."
+    },
+    {
+      "h": "Control the blast radius",
+      "d": "Limit to a percentage of traffic, one zone, one cell or internal users. Expand only after success."
+    },
+    {
+      "h": "Stop conditions and abort",
+      "d": "Predefined thresholds that end the experiment automatically, plus a manual kill switch."
+    },
+    {
+      "h": "Dependency fault injection",
+      "d": "Inject latency, errors and timeouts into calls via proxies, service mesh or libraries to test timeouts, breakers and fallbacks."
+    },
+    {
+      "h": "Infrastructure failure",
+      "d": "Terminate instances, block a zone, fail over databases, expire certificates in staging. Validates redundancy and static stability."
+    },
+    {
+      "h": "Restore drills",
+      "d": "Restore real backups into isolated environments and verify integrity and time to restore."
+    },
+    {
+      "h": "Game days for people",
+      "d": "Practise detection, communication, runbooks and escalation. Debrief and fix gaps in tools, docs and process."
+    }
+  ],
+  "decision": "Start with game days and staging experiments; move to small production experiments for critical paths once basics (timeouts, breakers, monitoring) are in place. Automate recurring experiments where safe.",
+  "numbers": [
+    "Cadence example: quarterly game day per critical service, monthly restore drill for core databases, continuous low-level fault injection (for example 1% added latency on a non-critical dependency) once mature."
+  ],
+  "pitfalls": [
+    "Running chaos experiments without monitoring good enough to see the effect.",
+    "No abort mechanism or stop condition.",
+    "Treating findings as interesting rather than as bugs to fix.",
+    "Only testing infrastructure, never people and runbooks."
+  ],
+  "followups": [
+    {
+      "q": "How do you convince leadership to break production on purpose?",
+      "a": "Start small and controlled, show findings from staging, and frame it as finding failures on our schedule rather than at 3 a.m. Track incidents prevented."
+    },
+    {
+      "q": "What's the first experiment you'd run?",
+      "a": "Kill one instance of a stateless service during business hours and confirm no user impact; then add latency to an optional dependency."
+    },
+    {
+      "q": "How do you test a regional failover safely?",
+      "a": "Practise in staging, then shift a small share of production traffic, then full planned failovers during low-traffic windows with rollback ready."
+    }
+  ],
+  "example": "A game day simulated the credit bureau timing out. Checkout's breaker worked, but the runbook pointed to a dashboard that no longer existed and on-call didn't have permission to enable the cached-score fallback. Both were fixed the same week.",
+  "related": [
+    "write-runbook-call-engineer-follow",
+    "fail-over-between-two-regions",
+    "make-rebuild-scratch-possible-if",
+    "design-graceful-degradation-instead-hard"
+  ],
+  "sources": [
+    {
+      "title": "Principles of Chaos Engineering",
+      "url": "https://principlesofchaos.org/"
+    },
+    {
+      "title": "AWS Well-Architected: Test reliability",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/test-reliability.html"
+    }
+  ]
+}
