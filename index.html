@@ -87,10 +87,6 @@ body.resizing{cursor:col-resize;user-select:none}
 .pill .n{font:500 10.5px "JetBrains Mono",monospace;color:var(--faint)}
 .pill[aria-pressed=true]{border-color:var(--accent);background:var(--accent-bg);color:var(--ink)}
 .pill[aria-pressed=true] .n{color:var(--accent)}
-.statusseg{display:grid;grid-template-columns:repeat(4,auto);padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
-.statusseg button{border:0;background:none;padding:5px 6px;border-radius:5px;font:500 12px "Inter",sans-serif;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
-.statusseg button .n{font:500 10.5px "JetBrains Mono",monospace;color:var(--faint)}
-.statusseg button[aria-checked=true]{background:var(--raised);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
 .frow{display:flex;gap:8px;align-items:center}
 .dd{position:relative}
 .ddbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font:500 12.5px "Inter",sans-serif;color:var(--ink2);cursor:pointer}
@@ -278,7 +274,6 @@ body.resizing{cursor:col-resize;user-select:none}
   <aside class="side" aria-label="Question index">
     <div class="ctl">
       <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input type="search" id="q" placeholder="Search questions, traps, domains" aria-label="Search questions"><kbd id="kkey" aria-hidden="true">⌘K</kbd></label>
-      <div class="statusseg" id="statusseg" role="radiogroup" aria-label="Status"></div>
       <div class="frow">
         <div class="dd"><button type="button" class="ddbtn" id="dd-cat" aria-expanded="false" aria-controls="pn-cat"><span id="catlbl">Category</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-cat" hidden></div></div>
         <div class="dd"><button type="button" class="ddbtn" id="dd-lvl" aria-expanded="false" aria-controls="pn-lvl">Level<span class="ddn" id="n-lvl"></span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="ddpanel" id="pn-lvl" hidden></div></div>
@@ -356,7 +351,7 @@ function readURL(){
   const p=new URLSearchParams(location.search);
   st.q=(p.get("q")||"").toLowerCase();st.cat=cats[p.get("cat")]?p.get("cat"):"";st.lvl=LV[p.get("lvl")]?p.get("lvl"):"";
   st.tags={};(p.get("tags")||"").split(",").forEach(t=>{if(tagCount[t])st.tags[t]=1});
-  st.status=STATUS[p.get("status")]?p.get("status"):(p.get("todo")==="1"?"unseen":"all");
+  st.status="all";
   if(p.get("mode")==="drill")mode="drill";
 }
 function writeURL(){
@@ -398,12 +393,7 @@ function drawPills(){
   $("catlbl").textContent=st.cat?(SHORT[st.cat]||cats[st.cat].name):"Category";
   $("dd-cat").classList.toggle("on",!!st.cat);
 }
-function drawStatus(){
-  $("statusseg").innerHTML=Object.keys(STATUS).map(k=>{
-    const n=items.filter(x=>{if(!match(x,"status"))return false;const s=status(x.id);return k==="all"||(k==="unseen"&&s==="unseen")||(k==="solid"&&s==="solid")||(k==="review"&&(s==="missed"||s==="shaky"))}).length;
-    return'<button type="button" role="radio" data-status="'+k+'" aria-checked="'+(st.status===k)+'" tabindex="'+(st.status===k?0:-1)+'">'+STATUS[k]+'<span class="n">'+n+'</span></button>';
-  }).join("");
-}
+function drawStatus(){}
 const opt=(attrs,checked,label,count,radio)=>'<button type="button" class="opt" role="menuitem'+(radio?"radio":"checkbox")+'" aria-checked="'+(checked?"true":"false")+'" '+attrs+'><span class="box'+(radio?" r":"")+'"></span>'+label+(count!=null?'<span class="oc">'+count+'</span>':"")+'</button>';
 let tagQ="";
 $("pn-tags").innerHTML='<input class="ddsearch" id="tagq" type="search" placeholder="Find a tag" aria-label="Find a tag"><div id="taglist"></div><div class="ddfoot"><button type="button" class="link" data-act="cleartags">Clear tags</button></div>';
@@ -434,8 +424,6 @@ function closeDD(){if(!openDD)return;$("pn-"+openDD).hidden=true;$("dd-"+openDD)
   });
 });
 document.addEventListener("click",e=>{if(openDD&&!e.target.closest(".dd"))closeDD()});
-$("statusseg").addEventListener("click",e=>{const b=e.target.closest("[data-status]");if(!b)return;st.status=b.dataset.status;update()});
-$("statusseg").addEventListener("keydown",e=>{if(e.key!=="ArrowLeft"&&e.key!=="ArrowRight")return;e.preventDefault();e.stopPropagation();const ks=Object.keys(STATUS),i=ks.indexOf(st.status);st.status=ks[(i+(e.key==="ArrowRight"?1:ks.length-1))%ks.length];update();$("statusseg").querySelector('[aria-checked="true"]').focus()});
 $("active").addEventListener("click",e=>{
   const b=e.target.closest("[data-rm],[data-act]");if(!b)return;
   if(b.getAttribute("data-act")==="clearall"){st=blank();$("q").value="";update();return}
