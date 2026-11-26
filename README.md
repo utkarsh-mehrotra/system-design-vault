@@ -1,5 +1,7 @@
 # System Design Vault
 
+**Live:** [Vercel](https://system-design-vault.vercel.app/) · [GitHub Pages](https://utkarsh-mehrotra.github.io/system-design-vault/)
+
 Staff-level system design **trap-question** prep: 187 questions in 14 categories (including Security, Delivery & Infrastructure, AI & LLM Systems, and Domain Traps across 12 industries). Each card has the trap (tempting wrong answer and what to say instead), a 60-second answer, key points, numbers, pitfalls and follow-ups. **Trap drill** mode quizzes traps and follow-ups with spaced repetition.
 
 ## Files
@@ -21,7 +23,7 @@ Staff-level system design **trap-question** prep: 187 questions in 14 categories
 
 ## Deploy
 
-Vercel: `npx vercel --prod` from this folder (static, no framework).
+Vercel: `npx vercel --prod` from this folder (static, no framework). GitHub Pages serves `main` from the repo root and redeploys on every push.
 
 ## Roadmap
 
